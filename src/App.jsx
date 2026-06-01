@@ -288,13 +288,15 @@ function MapboxStyleMap({center,zoom,width:W,height:H,stages=[],courses=[],userP
 });
 
     });
+    setTimeout(()=>map.current&&map.current.resize(),500);
+
     return()=>{if(map.current){map.current.remove();map.current=null;}};
   },[]);
 
   useEffect(()=>{
     if(!map.current)return;
     setTimeout(()=>map.current&&map.current.resize(),50);
-  },[W,H]);
+  },[W,H,zoom]);
 
   return(
     <div style={{position:"absolute",inset:0}}>
