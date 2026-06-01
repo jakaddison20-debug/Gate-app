@@ -284,7 +284,7 @@ function MapboxStyleMap({center,zoom,stages=[],courses=[],userPos,onStagePress})
       });
     });
     return()=>{if(map.current){map.current.remove();map.current=null;}};
-  },[]);
+  
 
   return(
     <div style={{position:"absolute",inset:0}}>
