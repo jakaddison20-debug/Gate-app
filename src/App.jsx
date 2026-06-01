@@ -632,25 +632,33 @@ function RaceScreen({course,stages,onFinish}){
   // Simulate GPS toward gate
   useEffect(()=>{
     if(phase!=="transfer")return;
-    let progress=0;
-    gpsRef.current=setInterval(()=>{
-      progress=Math.min(progress+0.018,1);
-      const gate=currentStage.start;
-      const lat=DEFAULT_CENTER.lat+(Math.random()-0.5)*0.005+(gate.lat-DEFAULT_CENTER.lat)*progress;
-      const lng=DEFAULT_CENTER.lng+(Math.random()-0.5)*0.005+(gate.lng-DEFAULT_CENTER.lng)*progress;
-      const dist=haversine({lat,lng},gate);
+    if(!navigator.geolocation)return;
+    const gate=currentStage.start;
+    const id=navigator.geolocation.watchPosition(pos=>{
+      const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};
+      const dist=haversine(loc,gate);
       setDistToGate(Math.round(dist));
-      if(dist<=FAT_GATE_RADIUS){clearInterval(gpsRef.current);setGateStatus("entered");setTimeout(()=>startCountdown(),300);}
+      if(dist<=FAT_GATE_RADIUS){navigator.geolocation.clearWatch(id);setGateStatus("entered");setTimeout(()=>startCountdown(),300);}
       else if(dist<=50)setGateStatus("near");
       else setGateStatus("waiting");
-    },400);
-    return()=>clearInterval(gpsRef.current);
+    },err=>console.log(err),{enableHighAccuracy:true,maximumAge:0,timeout:10000});
+    return()=>navigator.geolocation.clearWatch(id);
   },[phase,stageIndex]);
 
   const startCountdown=()=>{
     setGateStatus("waiting");setPhase("countdown");setCountdown(3);let c=3;
-    countRef.current=setInterval(()=>{c--;setCountdown(c);if(c<=0){clearInterval(countRef.current);setTimerMs(0);setPhase("racing");timerRef.current=setInterval(()=>setTimerMs(t=>t+10),10);}},1000);
+    countRef.current=setInterval(()=>{c--;setCountdown(c);if(c<=0){clearInterval(countRef.current);setTimerMs(0);setPhase("racing");timerRef.current=setInterval(()=>setTimerMs(t=>t+10),10);
+    setTimeout(()=>{
+      if(timerRef.current){
+        clearInterval(timerRef.current);
+        setPhase("transfer");
+        setTimerMs(0);
+        alert("Run cancelled — finish gate not reached in time");
+      }
+    },60000);
+    }},1000);
   };
+
 
   const stopStage=()=>{
     clearInterval(timerRef.current);
