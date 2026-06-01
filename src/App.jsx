@@ -279,9 +279,14 @@ function MapboxStyleMap({center,zoom,width:W,height:H,stages=[],courses=[],userP
           const el2=document.createElement('div');
           el2.style.cssText='width:14px;height:14px;borderRadius:2px;background:#DC2626;border:2px solid white;boxShadow:0 1px 4px rgba(0,0,0,0.3);';
           new mapboxgl.Marker({element:el2}).setLngLat([stage.finish.lng,stage.finish.lat]).addTo(map.current);
+
         });
       });
       map.current.on('resize',()=>map.current.resize());
+      map.current.on('zoomend',()=>{
+  if(map.current)map.current.resize();
+});
+
     });
     return()=>{if(map.current){map.current.remove();map.current=null;}};
   },[]);
