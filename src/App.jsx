@@ -1084,7 +1084,8 @@ export default function App(){
   const containerRef=useRef(null);
   const [mapSize,setMapSize]=useState({w:390,h:844});
   const [userPos,setUserPos]=useState(DEFAULT_CENTER);
-  const angle=useRef(0);
+  useEffect(()=>{if(!navigator.geolocation)return;const id=navigator.geolocation.watchPosition(pos=>setUserPos({lat:pos.coords.latitude,lng:pos.coords.longitude}),err=>console.log(err),{enableHighAccuracy:true,maximumAge:2000,timeout:10000});return()=>navigator.geolocation.clearWatch(id);},[]);
+
 
   useEffect(()=>{const id=setInterval(()=>{if(!recording)return;angle.current+=0.015;setUserPos({lat:DEFAULT_CENTER.lat+Math.sin(angle.current)*0.003,lng:DEFAULT_CENTER.lng+Math.cos(angle.current)*0.004});},300);return()=>clearInterval(id);},[recording]);
   useEffect(()=>{const el=containerRef.current;if(!el)return;const ro=new ResizeObserver(e=>setMapSize({w:e[0].contentRect.width,h:e[0].contentRect.height}));ro.observe(el);setMapSize({w:el.clientWidth,h:el.clientHeight});return()=>ro.disconnect();},[]);
