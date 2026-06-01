@@ -1147,8 +1147,8 @@ export default function App(){
       )}
 
       {/* MAP */}
-      {tab==="map"&&(
-        <div style={{position:"absolute",inset:0}}>
+<div style={{display:tab==="map"?"block":"none",position:"absolute",inset:0}}>
+
           <div style={{position:"absolute",inset:0,cursor:"grab",touchAction:"none"}} onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onWheel={onWheel}>
             <MapboxStyleMap center={mapCenter} zoom={zoom} width={mapSize.w} height={mapSize.h} stages={stages} courses={courses} userPos={userPos} onStagePress={s=>setSelectedStage(s)}/>
           </div>
@@ -1168,7 +1168,7 @@ export default function App(){
             <><div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.25)",zIndex:39}} onClick={()=>setSheet(null)}/><div className="slide-up" style={{position:"absolute",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:40,maxHeight:"82vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><StageBuilderSheet onClose={()=>setSheet(null)} onSave={s=>{setStages(prev=>[...prev,s]);setSheet(null);}}/></div></>
           )}
         </div>
-      )}
+    
 
       {/* STAGES */}
       {tab==="stages"&&(
