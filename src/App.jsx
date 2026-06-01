@@ -271,7 +271,8 @@ function MapboxStyleMap({center,zoom,width:W,height:H,stages=[],courses=[],userP
         attributionControl:false,
       });
       map.current.on('load',()=>{
-        stages.forEach(stage=>{
+  setTimeout(()=>{if(map.current)map.current.resize();},200);
+
           const el=document.createElement('div');
           el.style.cssText='width:14px;height:14px;borderRadius:50%;background:#15803D;border:2px solid white;boxShadow:0 1px 4px rgba(0,0,0,0.3);cursor:pointer;';
           el.onclick=()=>onStagePress&&onStagePress(stage);
