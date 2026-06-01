@@ -18,14 +18,9 @@ const COURSE_MODES=[
   {id:"mashup",label:"Mashup",icon:"⚡",desc:"Unlimited runs. Best time on each stage combined into your total."},
 ];
 
-// ── Sample data ───────────────────────────────────────────────────────────────
-const SAMPLE_STAGES=[
-  {id:1,name:"Top Wood Descent",privacy:"public",note:"Rock garden at bottom — stay left",start:{lat:51.514,lng:-0.121},finish:{lat:51.510,lng:-0.116},time:142800,cr:true,crHolder:"Tom H.",crDate:"12 Jan 2025"},
-  {id:2,name:"Ridge Line Sprint",privacy:"group",note:"",start:{lat:51.507,lng:-0.124},finish:{lat:51.503,lng:-0.119},time:98400,cr:false,crHolder:"Jake M.",crDate:"3 Mar 2025"},
-  {id:3,name:"Lower Woodlands",privacy:"private",note:"Loose over the roots",start:{lat:51.500,lng:-0.127},finish:{lat:51.497,lng:-0.122},time:null,cr:false,crHolder:null,crDate:null},
-  {id:4,name:"North Shore Drop",privacy:"public",note:"Step down at the end",start:{lat:51.495,lng:-0.130},finish:{lat:51.492,lng:-0.125},time:76200,cr:false,crHolder:"Sarah K.",crDate:"20 Feb 2025"},
-  {id:5,name:"Fireroad Flat",privacy:"public",note:"Pedal hard",start:{lat:51.490,lng:-0.128},finish:{lat:51.488,lng:-0.122},time:null,cr:false,crHolder:null,crDate:null},
-];
+const SAMPLE_STAGES=[];
+
+
 
 const LEADERBOARD_DATA={
   1:[{pos:1,name:"Tom H.",time:138200,avatar:"TH",date:"12 Jan"},{pos:2,name:"You",time:142800,avatar:"ME",date:"18 Jan"},{pos:3,name:"Jake M.",time:145600,avatar:"JM",date:"5 Feb"},{pos:4,name:"Sarah K.",time:149200,avatar:"SK",date:"12 Feb"},{pos:5,name:"Alex R.",time:152400,avatar:"AR",date:"15 Feb"},{pos:6,name:"Dan P.",time:156800,avatar:"DP",date:"18 Feb"},{pos:7,name:"Mia T.",time:158200,avatar:"MT",date:"20 Feb"},{pos:8,name:"Chris W.",time:161400,avatar:"CW",date:"22 Feb"},{pos:9,name:"Jess L.",time:164600,avatar:"JL",date:"1 Mar"},{pos:10,name:"Rob S.",time:167800,avatar:"RS",date:"5 Mar"}],
