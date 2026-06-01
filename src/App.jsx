@@ -253,7 +253,7 @@ function SettingsScreen({settings,onSave,onBack}){
   );
 }
 
-function MapboxStyleMap({center,zoom,width:W,height:H,stages=[],courses=[],userPos,onStagePress}){
+function MapboxStyleMap({center,zoom,stages=[],courses=[],userPos,onStagePress}){
   const mapContainer=useRef(null);
   const map=useRef(null);
 
@@ -271,33 +271,20 @@ function MapboxStyleMap({center,zoom,width:W,height:H,stages=[],courses=[],userP
         attributionControl:false,
       });
       map.current.on('load',()=>{
-  setTimeout(()=>{if(map.current)map.current.resize();},200);
-
+        setTimeout(()=>{if(map.current)map.current.resize();},200);
+        stages.forEach(stage=>{
           const el=document.createElement('div');
-          el.style.cssText='width:14px;height:14px;borderRadius:50%;background:#15803D;border:2px solid white;boxShadow:0 1px 4px rgba(0,0,0,0.3);cursor:pointer;';
+          el.style.cssText='width:14px;height:14px;border-radius:50%;background:#15803D;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);cursor:pointer;';
           el.onclick=()=>onStagePress&&onStagePress(stage);
           new mapboxgl.Marker({element:el}).setLngLat([stage.start.lng,stage.start.lat]).addTo(map.current);
           const el2=document.createElement('div');
-          el2.style.cssText='width:14px;height:14px;borderRadius:2px;background:#DC2626;border:2px solid white;boxShadow:0 1px 4px rgba(0,0,0,0.3);';
+          el2.style.cssText='width:14px;height:14px;border-radius:2px;background:#DC2626;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);';
           new mapboxgl.Marker({element:el2}).setLngLat([stage.finish.lng,stage.finish.lat]).addTo(map.current);
-
         });
       });
-      map.current.on('resize',()=>map.current.resize());
-      map.current.on('zoomend',()=>{
-  if(map.current)map.current.resize();
-});
-
     });
-    setTimeout(()=>map.current&&map.current.resize(),500);
-
     return()=>{if(map.current){map.current.remove();map.current=null;}};
   },[]);
-
-  useEffect(()=>{
-    if(!map.current)return;
-    setTimeout(()=>map.current&&map.current.resize(),50);
-  },[W,H,zoom]);
 
   return(
     <div style={{position:"absolute",inset:0}}>
@@ -305,8 +292,6 @@ function MapboxStyleMap({center,zoom,width:W,height:H,stages=[],courses=[],userP
     </div>
   );
 }
-
-
 
 
 // ── Avatar ────────────────────────────────────────────────────────────────────
