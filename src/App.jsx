@@ -1154,7 +1154,8 @@ export default function App(){
       {/* MAP */}
 <div style={{display:tab==="map"?"block":"none",position:"absolute",inset:0}}>
 
-          <div style={{position:"absolute",inset:0,cursor:"grab",touchAction:"none",overflow:"hidden"}}
+       <div style={{position:"absolute",inset:0,cursor:"grab",touchAction:"none",overflow:"hidden"}} onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onWheel={onWheel}>
+
 
             <MapboxStyleMap center={mapCenter} zoom={zoom} width={mapSize.w} height={mapSize.h} stages={stages} courses={courses} userPos={userPos} onStagePress={s=>setSelectedStage(s)}/>
           </div>
