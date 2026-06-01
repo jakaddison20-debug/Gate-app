@@ -251,58 +251,47 @@ function SettingsScreen({settings,onSave,onBack}){
   );
 }
 
-// ── Map ───────────────────────────────────────────────────────────────────────
 function MapboxStyleMap({center,zoom,width:W,height:H,stages=[],courses=[],userPos,onStagePress}){
-  const seed=Math.floor(center.lat*1000)*10000+Math.floor(center.lng*1000);
-  const r=n=>((seed*9301+n*49297+n*n*7)%233280)/233280;
-  const proj=c=>project(c,center,zoom,W,H);
-  const highways=Array.from({length:3},(_,i)=>({pts:Array.from({length:5},(_,j)=>({x:r(i*20+j*2)*W,y:r(i*20+j*2+1)*H}))}));
-  const majorRoads=Array.from({length:8},(_,i)=>({x1:r(i*6+100)*W,y1:r(i*6+101)*H,x2:r(i*6+102)*W,y2:r(i*6+103)*H}));
-  const minorRoads=Array.from({length:18},(_,i)=>({x1:r(i*4+200)*W,y1:r(i*4+201)*H,x2:r(i*4+202)*W,y2:r(i*4+203)*H}));
-  const parks=Array.from({length:4},(_,i)=>({x:r(i*5+300)*W,y:r(i*5+301)*H,rx:r(i*5+302)*120+50,ry:r(i*5+302)*80+30,rot:r(i*5+303)*60-30}));
-  const waterBodies=Array.from({length:2},(_,i)=>({x:r(i*7+400)*W,y:r(i*7+401)*H,rx:r(i*7+402)*100+30,ry:r(i*7+402)*40+15}));
-  const buildings=Array.from({length:30},(_,i)=>({x:r(i*4+500)*W,y:r(i*4+501)*H,w:r(i*4+502)*28+8,h:r(i*4+503)*20+6,rot:r(i*4+504)*20-10}));
-  const polyPts=pts=>pts.map(p=>`${p.x},${p.y}`).join(" ");
-  const showStages=zoom>=12,showDetail=zoom>=15;
+  const mapContainer=useRef(null);
+  const map=useRef(null);
+  const markersRef=useRef([]);
+
+  useEffect(()=>{
+    if(map.current)return;
+    const token=import.meta.env.VITE_MAPBOX_TOKEN;
+    if(!token)return;
+    import('https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js').then(()=>{
+      const mapboxgl=window.mapboxgl;
+      mapboxgl.accessToken=token;
+      map.current=new mapboxgl.Map({
+        container:mapContainer.current,
+        style:'mapbox://styles/mapbox/outdoors-v12',
+        center:[center.lng,center.lat],
+        zoom:zoom,
+      });
+      map.current.on('load',()=>{
+        // Add stages as lines
+        stages.forEach(stage=>{
+          new mapboxgl.Marker({color:'#15803D'}).setLngLat([stage.start.lng,stage.start.lat]).addTo(map.current);
+          new mapboxgl.Marker({color:'#DC2626'}).setLngLat([stage.finish.lng,stage.finish.lat]).addTo(map.current);
+        });
+        // User dot
+        if(userPos){
+          new mapboxgl.Marker({color:'#2563EB'}).setLngLat([userPos.lng,userPos.lat]).addTo(map.current);
+        }
+      });
+    });
+  },[]);
 
   return(
-    <svg width={W} height={H} style={{position:"absolute",inset:0}}>
-      <defs>
-        <filter id="bldShadow"><feDropShadow dx="0" dy="1" stdDeviation="1" floodOpacity="0.08"/></filter>
-        <filter id="stageGlow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-      </defs>
-      <rect width={W} height={H} fill={C.mapBase}/>
-      {parks.map((p,i)=><ellipse key={i} cx={p.x} cy={p.y} rx={p.rx} ry={p.ry} fill={i%2===0?C.mapPark:C.mapParkDark} opacity="0.85" transform={`rotate(${p.rot},${p.x},${p.y})`}/>)}
-      {waterBodies.map((w,i)=><ellipse key={i} cx={w.x} cy={w.y} rx={w.rx} ry={w.ry} fill={C.mapWater} stroke={C.mapWaterDark} strokeWidth="0.5"/>)}
-      {zoom>=13&&buildings.map((b,i)=><rect key={i} x={b.x} y={b.y} width={b.w} height={b.h} rx="1" fill={C.mapBuilding} stroke={C.mapBuildingBorder} strokeWidth="0.5" filter="url(#bldShadow)" transform={`rotate(${b.rot},${b.x+b.w/2},${b.y+b.h/2})`}/>)}
-      {minorRoads.map((r,i)=><line key={`mrb${i}`} x1={r.x1} y1={r.y1} x2={r.x2} y2={r.y2} stroke={C.mapMinorBorder} strokeWidth="4" strokeLinecap="round"/>)}
-      {minorRoads.map((r,i)=><line key={`mr${i}`} x1={r.x1} y1={r.y1} x2={r.x2} y2={r.y2} stroke={C.mapMinorRoad} strokeWidth="2.5" strokeLinecap="round"/>)}
-      {majorRoads.map((r,i)=><line key={`Mrb${i}`} x1={r.x1} y1={r.y1} x2={r.x2} y2={r.y2} stroke={C.mapMajorBorder} strokeWidth="7" strokeLinecap="round"/>)}
-      {majorRoads.map((r,i)=><line key={`Mr${i}`} x1={r.x1} y1={r.y1} x2={r.x2} y2={r.y2} stroke={C.mapMajorRoad} strokeWidth="5" strokeLinecap="round"/>)}
-      {highways.map((h,i)=><g key={i}><polyline points={polyPts(h.pts)} fill="none" stroke={C.mapHighwayBorder} strokeWidth="10" strokeLinecap="round" strokeLinejoin="round"/><polyline points={polyPts(h.pts)} fill="none" stroke={C.mapHighway} strokeWidth="7" strokeLinecap="round" strokeLinejoin="round"/></g>)}
-      {zoom>=12&&[{x:W*0.2,y:H*0.3,text:"Hampstead Heath",size:9},{x:W*0.6,y:H*0.55,text:"Highgate",size:8},{x:W*0.75,y:H*0.25,text:"Muswell Hill",size:9}].map((l,i)=><text key={i} x={l.x} y={l.y} fontSize={l.size} fill={C.mapLabel} fontFamily="Inter,sans-serif" fontWeight="500" textAnchor="middle" opacity="0.75">{l.text}</text>)}
-      {courses.map(course=>course.stageIds.slice(0,-1).map((sid,i)=>{const s1=stages.find(s=>s.id===sid),s2=stages.find(s=>s.id===course.stageIds[i+1]);if(!s1||!s2||!showStages)return null;const p1=proj(s1.finish),p2=proj(s2.start);return <line key={`cl${i}`} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke="#555" strokeWidth="2" strokeDasharray="7 5" strokeLinecap="round" opacity="0.55"/>;}))}
-      {showStages&&stages.map(stage=>{
-        const ps=proj(stage.start),pf=proj(stage.finish);
-        return(
-          <g key={stage.id} style={{cursor:"pointer"}} onClick={e=>{e.stopPropagation();onStagePress&&onStagePress(stage);}}>
-            <line x1={ps.x} y1={ps.y} x2={pf.x} y2={pf.y} stroke={C.blue} strokeWidth={showDetail?5:3.5} strokeLinecap="round"/>
-            <circle cx={ps.x} cy={ps.y} r={showDetail?10:7} fill="white" stroke={C.green} strokeWidth="2"/>
-            <circle cx={ps.x} cy={ps.y} r={showDetail?6:4} fill={C.green}/>
-            <circle cx={pf.x} cy={pf.y} r={showDetail?10:7} fill="white" stroke={C.red} strokeWidth="2"/>
-            <rect x={pf.x-(showDetail?5:3)} y={pf.y-(showDetail?5:3)} width={showDetail?10:6} height={showDetail?10:6} rx="1" fill={C.red}/>
-            {showDetail&&<><rect x={ps.x+13} y={ps.y-11} width={stage.name.length*5.8+10} height={18} rx="5" fill="white" opacity="0.96" filter="url(#bldShadow)"/><text x={ps.x+18} y={ps.y+2} fontSize="9.5" fill={C.text} fontFamily="Inter,sans-serif" fontWeight="600">{stage.name}</text></>}
-            <line x1={ps.x} y1={ps.y} x2={pf.x} y2={pf.y} stroke="transparent" strokeWidth="20"/>
-          </g>
-        );
-      })}
-      {userPos&&(()=>{const p=proj(userPos);return(<g><circle cx={p.x} cy={p.y} r="9" fill="white"/><circle cx={p.x} cy={p.y} r="6" fill={C.blue}/><circle cx={p.x} cy={p.y} r="2.5" fill="white"/></g>);})()}
-      <g transform={`translate(${W-44},52)`}><circle r="16" fill="white" opacity="0.95" stroke={C.border} strokeWidth="1"/><path d="M0,-12 L-4,2 L0,-1 L4,2 Z" fill={C.red}/><path d="M0,12 L-4,-2 L0,1 L4,-2 Z" fill={C.muted}/></g>
-      <g transform={`translate(16,${H-28})`}><rect width="50" height="3" rx="1.5" fill="#666" opacity="0.45"/><text y="13" fontSize="9" fill={C.muted} fontFamily="Inter,sans-serif">{zoom>=15?"100m":zoom>=13?"500m":zoom>=11?"2km":"10km"}</text></g>
-      {!showStages&&<g transform={`translate(${W/2},${H/2})`}><rect x="-90" y="-18" width="180" height="36" rx="10" fill="white" opacity="0.9" filter="url(#bldShadow)"/><text textAnchor="middle" y="5" fontSize="12" fill={C.muted} fontFamily="Inter,sans-serif">Zoom in to see stages</text></g>}
-    </svg>
+    <div style={{position:"absolute",inset:0}}>
+      <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet"/>
+      <div ref={mapContainer} style={{width:"100%",height:"100%"}}/>
+    </div>
   );
 }
+
+
 
 // ── Avatar ────────────────────────────────────────────────────────────────────
 function Avatar({initials,size=40,bg=C.orange,color="#fff",fontSize=13}){
