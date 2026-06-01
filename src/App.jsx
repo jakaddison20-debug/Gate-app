@@ -256,7 +256,6 @@ function SettingsScreen({settings,onSave,onBack}){
 function MapboxStyleMap({center,zoom,stages=[],courses=[],userPos,onStagePress}){
   const mapContainer=useRef(null);
   const map=useRef(null);
-
   useEffect(()=>{
     if(map.current||!mapContainer.current)return;
     const token=import.meta.env.VITE_MAPBOX_TOKEN;
@@ -282,10 +281,10 @@ function MapboxStyleMap({center,zoom,stages=[],courses=[],userPos,onStagePress})
           new mapboxgl.Marker({element:el2}).setLngLat([stage.finish.lng,stage.finish.lat]).addTo(map.current);
         });
       });
+      setTimeout(()=>{if(map.current)map.current.resize();},500);
     });
     return()=>{if(map.current){map.current.remove();map.current=null;}};
   },[]);
-
   return(
     <div style={{position:"absolute",inset:0}}>
       <div ref={mapContainer} style={{width:"100%",height:"100%"}}/>
