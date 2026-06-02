@@ -675,6 +675,21 @@ function RaceScreen({course,stages,onFinish}){
     setPhase("split");
   };
 
+   useEffect(()=>{
+    if(phase!=="racing")return;
+    if(!navigator.geolocation)return;
+    const gate=currentStage.finish;
+    const id=navigator.geolocation.watchPosition(pos=>{
+      const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};
+      const dist=haversine(loc,gate);
+      if(dist<=FAT_GATE_RADIUS){
+        navigator.geolocation.clearWatch(id);
+        stopStage();
+      }
+    },err=>console.log(err),{enableHighAccuracy:true,maximumAge:0,timeout:10000});
+    return()=>navigator.geolocation.clearWatch(id);
+  },[phase,stageIndex]);
+
   const nextStage=()=>{
     if(isLastStage){
       setRunCount(r=>r+1);
