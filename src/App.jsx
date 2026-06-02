@@ -1175,6 +1175,12 @@ export default function App(){
   const filteredStages=stages.filter(s=>stagesFilter==="all"||s.privacy===stagesFilter);
 
   const TABS=[{id:"home",label:"Home",Ic:Icon.Home},{id:"map",label:"Map",Ic:Icon.Map},{id:"record",label:"",Ic:null},{id:"stages",label:"Stages",Ic:Icon.Lightning},{id:"profile",label:"Profile",Ic:Icon.User}];
+  if(!user)return(
+    <div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",overflow:"hidden"}}>
+      <style>{STYLES}</style>
+      <AuthScreen/>
+    </div>
+  );
 
   // Settings screen overlay
   if(showSettings)return(
