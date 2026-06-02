@@ -1164,7 +1164,8 @@ export default function App(){
 },[]);
 useEffect(()=>{
   if(!user)return;
-  supabase.from('stages').select('*').then(({data})=>{
+  supabase.from('stages').select('*').or(`privacy.eq.public,created_by.eq.${user.id}`).then(({data})=>{
+
     if(data)setStages(data.map(s=>({
       id:s.id,
       name:s.name,
