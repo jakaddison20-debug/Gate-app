@@ -1099,6 +1099,8 @@ export default function App(){
   const [selectedStage,setSelectedStage]=useState(null);
   const [showSettings,setShowSettings]=useState(false);
   const [settings,setSettings]=useState(DEFAULT_SETTINGS);
+  const [user,setUser]=useState(null);
+  const [showAuth,setShowAuth]=useState(false);
 
   const timerRef=useRef(null);
   const containerRef=useRef(null);
@@ -1113,6 +1115,11 @@ export default function App(){
   useEffect(()=>{const id=setInterval(()=>{if(!recording)return;angle.current+=0.015;setUserPos({lat:DEFAULT_CENTER.lat+Math.sin(angle.current)*0.003,lng:DEFAULT_CENTER.lng+Math.cos(angle.current)*0.004});},300);return()=>clearInterval(id);},[recording]);
   useEffect(()=>{const el=containerRef.current;if(!el)return;const ro=new ResizeObserver(e=>setMapSize({w:e[0].contentRect.width,h:e[0].contentRect.height}));ro.observe(el);setMapSize({w:el.clientWidth,h:el.clientHeight});return()=>ro.disconnect();},[]);
   useEffect(()=>{if(timerRunning){timerRef.current=setInterval(()=>setTimerMs(t=>t+10),10);}else clearInterval(timerRef.current);return()=>clearInterval(timerRef.current);},[timerRunning]);
+  useEffect(()=>{
+  supabase.auth.getSession().then(({data:{session}})=>setUser(session?.user??null));
+  const {data:{subscription}}=supabase.auth.onAuthStateChange((_,session)=>setUser(session?.user??null));
+  return()=>subscription.unsubscribe();
+},[]);
 
   const dragRef=useRef(null),pinchRef=useRef(null);
   const onTouchStart=useCallback(e=>{if(e.touches.length===2){const dx=e.touches[0].clientX-e.touches[1].clientX,dy=e.touches[0].clientY-e.touches[1].clientY;pinchRef.current={dist:Math.sqrt(dx*dx+dy*dy),zoom};dragRef.current=null;}else{dragRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY,center:{...mapCenter}};pinchRef.current=null;}},[mapCenter,zoom]);
