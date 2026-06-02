@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { createClient } from '@supabase/supabase-js';
+const supabase=createClient(import.meta.env.VITE_SUPABASE_URL,import.meta.env.VITE_SUPABASE_ANON_KEY);
 
 const DEFAULT_CENTER={lat:51.5074,lng:-0.1278};
 const FAT_GATE_RADIUS=10;
