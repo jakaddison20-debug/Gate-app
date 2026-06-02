@@ -1162,6 +1162,21 @@ export default function App(){
   const {data:{subscription}}=supabase.auth.onAuthStateChange((_,session)=>setUser(session?.user??null));
   return()=>subscription.unsubscribe();
 },[]);
+useEffect(()=>{
+  if(!user)return;
+  supabase.from('stages').select('*').then(({data})=>{
+    if(data)setStages(data.map(s=>({
+      id:s.id,
+      name:s.name,
+      note:s.note||'',
+      privacy:s.privacy,
+      start:{lat:s.start_lat,lng:s.start_lng},
+      finish:{lat:s.finish_lat,lng:s.finish_lng},
+      time:null,
+      cr:false,
+    })));
+  });
+},[user]);
 
   const dragRef=useRef(null),pinchRef=useRef(null);
   const onTouchStart=useCallback(e=>{if(e.touches.length===2){const dx=e.touches[0].clientX-e.touches[1].clientX,dy=e.touches[0].clientY-e.touches[1].clientY;pinchRef.current={dist:Math.sqrt(dx*dx+dy*dy),zoom};dragRef.current=null;}else{dragRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY,center:{...mapCenter}};pinchRef.current=null;}},[mapCenter,zoom]);
