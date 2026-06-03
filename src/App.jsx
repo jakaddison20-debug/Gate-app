@@ -410,7 +410,8 @@ function ProfileView({stages,settings,onSettingsPress}){
   const modeLabel=mode=>mode==="mashup"?"⚡ Mashup":mode==="practice"?"🎯 Practice":"🏁 Race";
   return(
     <div>
-      <div style={{background:C.orange,padding:"24px 20px 20px"}}>
+      <div style={{background:"#0F172A",padding:"24px 20px 20px"}}>
+
         <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:18}}>
           <div style={{width:60,height:60,borderRadius:"50%",background:"rgba(255,255,255,0.25)",border:"2px solid rgba(255,255,255,0.5)",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon.User size={28} color="#fff"/></div>
           <div style={{flex:1}}><div style={{fontSize:20,fontWeight:800,color:"#fff"}}>{settings.displayName}</div><div style={{fontSize:13,color:"rgba(255,255,255,0.75)",marginTop:2}}>Member since 2024</div></div>
