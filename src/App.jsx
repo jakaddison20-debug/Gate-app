@@ -24,26 +24,11 @@ const COURSE_MODES=[
 
 const SAMPLE_STAGES=[];
 
+const LEADERBOARD_DATA={};
+const SAMPLE_COURSES_DONE=[];
+const SAMPLE_FEED=[];
 
 
-const LEADERBOARD_DATA={
-  1:[{pos:1,name:"Tom H.",time:138200,avatar:"TH",date:"12 Jan"},{pos:2,name:"You",time:142800,avatar:"ME",date:"18 Jan"},{pos:3,name:"Jake M.",time:145600,avatar:"JM",date:"5 Feb"},{pos:4,name:"Sarah K.",time:149200,avatar:"SK",date:"12 Feb"},{pos:5,name:"Alex R.",time:152400,avatar:"AR",date:"15 Feb"},{pos:6,name:"Dan P.",time:156800,avatar:"DP",date:"18 Feb"},{pos:7,name:"Mia T.",time:158200,avatar:"MT",date:"20 Feb"},{pos:8,name:"Chris W.",time:161400,avatar:"CW",date:"22 Feb"},{pos:9,name:"Jess L.",time:164600,avatar:"JL",date:"1 Mar"},{pos:10,name:"Rob S.",time:167800,avatar:"RS",date:"5 Mar"}],
-  2:[{pos:1,name:"Jake M.",time:94200,avatar:"JM",date:"3 Mar"},{pos:2,name:"Tom H.",time:96800,avatar:"TH",date:"8 Mar"},{pos:3,name:"You",time:98400,avatar:"ME",date:"10 Mar"},{pos:4,name:"Sarah K.",time:102600,avatar:"SK",date:"12 Mar"},{pos:5,name:"Alex R.",time:108200,avatar:"AR",date:"15 Mar"}],
-  4:[{pos:1,name:"Sarah K.",time:72400,avatar:"SK",date:"20 Feb"},{pos:2,name:"You",time:76200,avatar:"ME",date:"25 Feb"},{pos:3,name:"Jake M.",time:78800,avatar:"JM",date:"1 Mar"}],
-};
-
-const SAMPLE_COURSES_DONE=[
-  {id:1,name:"Sunday Enduro",date:"18 Jan 2025",stages:3,totalTime:384800,pos:2,riders:12,mode:"race"},
-  {id:2,name:"Ridge Series Round 1",date:"10 Mar 2025",stages:4,totalTime:512400,pos:1,riders:8,mode:"race"},
-  {id:3,name:"Mid-week Blast",date:"2 Apr 2025",stages:2,totalTime:241600,pos:3,riders:6,mode:"mashup"},
-  {id:4,name:"Club Championship",date:"15 Apr 2025",stages:5,totalTime:698200,pos:5,riders:20,mode:"race"},
-];
-
-const SAMPLE_FEED=[
-  {id:1,user:"Jake M.",avatar:"JM",type:"Mountain Bike Ride",name:"Sunday Morning Blast",dist:"34.2km",elev:"820m",time:"1:52:30",ago:"2h ago",kudos:12,stage:"Top Wood Descent",stageTime:"2:22.8",cr:false},
-  {id:2,user:"Sarah K.",avatar:"SK",type:"Trail Run",name:"Enduro Recon",dist:"12.4km",elev:"340m",time:"1:04:10",ago:"5h ago",kudos:8,stage:null,stageTime:null,cr:false},
-  {id:3,user:"Tom H.",avatar:"TH",type:"Mountain Bike Ride",name:"Ridge Line Attack",dist:"28.7km",elev:"650m",time:"1:38:20",ago:"Yesterday",kudos:24,stage:"Ridge Line Sprint",stageTime:"1:37.2",cr:true},
-];
 
 // Default settings
 const DEFAULT_SETTINGS={
