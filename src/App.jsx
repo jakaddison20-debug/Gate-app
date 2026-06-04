@@ -2,7 +2,8 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { createClient } from '@supabase/supabase-js';
 const supabase=createClient(import.meta.env.VITE_SUPABASE_URL,import.meta.env.VITE_SUPABASE_ANON_KEY);
 
-const DEFAULT_CENTER={lat:51.5074,lng:-0.1278};
+const DEFAULT_CENTER={lat:53.4919264,lng:-0.3294266};
+
 const FAT_GATE_RADIUS=10;
 
 function haversine(a,b){const R=6371000,dLat=((b.lat-a.lat)*Math.PI)/180,dLng=((b.lng-a.lng)*Math.PI)/180,s=Math.sin(dLat/2)**2+Math.cos((a.lat*Math.PI)/180)*Math.cos((b.lat*Math.PI)/180)*Math.sin(dLng/2)**2;return R*2*Math.atan2(Math.sqrt(s),Math.sqrt(1-s));}
