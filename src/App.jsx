@@ -478,7 +478,8 @@ function StageBuilderSheet({onClose,onSave}){
   const [start,setStart]=useState(null);
   const [finish,setFinish]=useState(null);
   const [note,setNote]=useState("");
-  const simulatePlace=()=>{if(!start)setStart({lat:DEFAULT_CENTER.lat+(Math.random()-0.5)*0.02,lng:DEFAULT_CENTER.lng+(Math.random()-0.5)*0.02});else if(!finish)setFinish({lat:DEFAULT_CENTER.lat+(Math.random()-0.5)*0.02,lng:DEFAULT_CENTER.lng+(Math.random()-0.5)*0.02});};
+  const simulatePlace=()=>{if(!navigator.geolocation){alert("GPS not available");return;}navigator.geolocation.getCurrentPosition(pos=>{const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};if(!start)setStart(loc);else if(!finish)setFinish(loc);},err=>alert("Could not get location — make sure GPS is on"),{enableHighAccuracy:true,timeout:10000});};
+
   const canSave=name.trim()&&start&&finish;
   const dist=start&&finish?haversine(start,finish):null;
   return(
