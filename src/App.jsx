@@ -1160,7 +1160,7 @@ export default function App(){
 
 
 
-  useEffect(()=>{const id=setInterval(()=>{if(!recording)return;angle.current+=0.015;setUserPos({lat:DEFAULT_CENTER.lat+Math.sin(angle.current)*0.003,lng:DEFAULT_CENTER.lng+Math.cos(angle.current)*0.004});},300);return()=>clearInterval(id);},[recording]);
+  
   useEffect(()=>{const el=containerRef.current;if(!el)return;const ro=new ResizeObserver(e=>setMapSize({w:e[0].contentRect.width,h:e[0].contentRect.height}));ro.observe(el);setMapSize({w:el.clientWidth,h:el.clientHeight});return()=>ro.disconnect();},[]);
   useEffect(()=>{if(timerRunning){timerRef.current=setInterval(()=>setTimerMs(t=>t+10),10);}else clearInterval(timerRef.current);return()=>clearInterval(timerRef.current);},[timerRunning]);
   useEffect(()=>{
