@@ -474,11 +474,13 @@ function ProfileView({stages,settings,onSettingsPress}){
         <button className="tap" onClick={onSettingsPress} style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 0",borderBottom:`1px solid ${C.border}`,background:"none",color:C.text,fontSize:14,fontWeight:500}}>
           Settings<Icon.ChevronRight/>
         </button>
-        {["Connected Apps","Privacy","Sign Out"].map((item,i)=>(
-          <button key={item} className="tap" style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 0",borderBottom:i<2?`1px solid ${C.border}`:"none",background:"none",color:item==="Sign Out"?C.red:C.text,fontSize:14,fontWeight:500}}>
+       {["Connected Apps","Privacy"].map((item,i)=>(
+          <button key={item} className="tap" style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 0",borderBottom:i<1?`1px solid ${C.border}`:"none",background:"none",color:C.text,fontSize:14,fontWeight:500}}>
             {item}<Icon.ChevronRight/>
           </button>
         ))}
+        <button className="tap" onClick={()=>supabase.auth.signOut()} style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 0",background:"none",color:C.red,fontSize:14,fontWeight:500,border:"none"}}>Sign Out<Icon.ChevronRight/></button>
+          
       </div>
     </div>
   );
