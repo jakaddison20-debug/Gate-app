@@ -478,7 +478,11 @@ function StageBuilderSheet({onClose,onSave}){
   const [start,setStart]=useState(null);
   const [finish,setFinish]=useState(null);
   const [note,setNote]=useState("");
-  const simulatePlace=()=>{if(!navigator.geolocation){alert("GPS not available");return;}navigator.geolocation.getCurrentPosition(pos=>{const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};if(!start)setStart(loc);else if(!finish)setFinish(loc);},err=>alert("Could not get location — make sure GPS is on"),{enableHighAccuracy:true,timeout:10000});};
+  const [recording,setRecording]=useState(false);
+  const [lineCoords,setLineCoords]=useState([]);
+  const trackRef=useRef(null);
+  const simulatePlace=()=>{if(!navigator.geolocation){alert("GPS not available");return;}navigator.geolocation.getCurrentPosition(pos=>{const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};if(!start){setStart(loc);setLineCoords([loc]);setRecording(true);trackRef.current=navigator.geolocation.watchPosition(p=>setLineCoords(prev=>[...prev,{lat:p.coords.latitude,lng:p.coords.longitude}]),err=>console.log(err),{enableHighAccuracy:true,maximumAge:0});}else if(!finish){setFinish(loc);setRecording(false);navigator.geolocation.clearWatch(trackRef.current);}},err=>alert("Could not get location — make sure GPS is on"),{enableHighAccuracy:true,timeout:10000});};
+
 
   const canSave=name.trim()&&start&&finish;
   const dist=start&&finish?haversine(start,finish):null;
