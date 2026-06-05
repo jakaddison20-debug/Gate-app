@@ -258,7 +258,13 @@ function MapboxStyleMap({center,zoom,width:W,height:H,stages=[],courses=[],userP
         stages.forEach(stage=>{
           new mapboxgl.Marker({color:'#15803D'}).setLngLat([stage.start.lng,stage.start.lat]).addTo(map.current);
           new mapboxgl.Marker({color:'#DC2626'}).setLngLat([stage.finish.lng,stage.finish.lat]).addTo(map.current);
+          if(stage.line_coords&&stage.line_coords.length>1){
+            const id='line-'+stage.id;
+            map.current.addSource(id,{type:'geojson',data:{type:'Feature',geometry:{type:'LineString',coordinates:stage.line_coords.map(c=>[c.lng,c.lat])}}});
+            map.current.addLayer({id,type:'line',source:id,paint:{'line-color':'#F59E0B','line-width':3,'line-opacity':0.9}});
+          }
         });
+
         // User dot
         if(userPos){
           new mapboxgl.Marker({color:'#2563EB'}).setLngLat([userPos.lng,userPos.lat]).addTo(map.current);
