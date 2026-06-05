@@ -1179,6 +1179,7 @@ useEffect(()=>{
       privacy:s.privacy,
       start:{lat:s.start_lat,lng:s.start_lng},
       finish:{lat:s.finish_lat,lng:s.finish_lng},
+      line_coords:s.line_coords||null,
       time:null,
       cr:false,
     })));
