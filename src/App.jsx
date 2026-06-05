@@ -514,7 +514,8 @@ function StageBuilderSheet({onClose,onSave}){
         ))}
       </div>
       <textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Notes — hazards, line choice…" rows={2} style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"12px 14px",fontSize:13,color:C.text,background:C.surface,marginBottom:20}}/>
-      <button className="tap" onClick={()=>canSave&&onSave({id:Date.now(),name:name.trim(),start,finish,privacy,note,time:null,cr:false,crHolder:null,crDate:null})} style={{width:"100%",background:canSave?C.orange:C.surface,border:"none",borderRadius:12,padding:15,color:canSave?"#fff":C.muted,fontSize:15,fontWeight:700,transition:"all 0.2s"}}>
+       <button className="tap" onClick={()=>canSave&&onSave({id:Date.now(),name:name.trim(),start,finish,privacy,note,time:null,cr:false,crHolder:null,crDate:null,lineCoords})}
+        style={{width:"100%",background:canSave?C.orange:C.surface,border:"none",borderRadius:12,padding:15,color:canSave?"#fff":C.muted,fontSize:15,fontWeight:700,transition:"all 0.2s"}}>
         {canSave?"Create Stage":"Complete all fields"}
       </button>
     </div>
