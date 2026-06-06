@@ -1283,7 +1283,8 @@ useEffect(()=>{
               ))}
             </div>}
           </div>
-          {coursesFilter==="stages"&&(filteredStages.length===0?<div style={{textAlign:"center",padding:"48px 20px",color:C.muted}}><Icon.Lightning size={36} color={C.mutedL}/><div style={{fontSize:15,fontWeight:500,marginBottom:4,marginTop:12}}>No stages</div></div>:filteredStages.map(s=><SegmentRow key={s.id} stage={s} onPress={s=>{setSelectedStage(s);setTab("map");}}/>))}
+        {coursesFilter==="stages"&&(filteredStages.length===0?<div style={{textAlign:"center",padding:"48px 20px",color:C.muted}}><Icon.Lightning size={36} color={C.mutedL}/><div style={{fontSize:15,fontWeight:500,marginBottom:4,marginTop:12}}>No stages</div></div>:filteredStages.map(s=><SegmentRow key={s.id} stage={s} onPress={s=>{setSelectedStage(s);setMapCenter({lat:s.start.lat,lng:s.start.lng});setZoom(15);setTab("map");}}/>))}
+
           {coursesFilter==="courses"&&(
             <div style={{padding:"16px"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
