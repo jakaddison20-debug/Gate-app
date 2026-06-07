@@ -1187,6 +1187,17 @@ useEffect(()=>{
 },[user]);
 
   useEffect(()=>{if(!user)return;supabase.from('courses').select('*').then(({data})=>{if(data)setCourses(data.map(c=>({id:c.id,name:c.name,privacy:c.privacy,mode:c.mode,stageIds:c.stage_ids,times:{},bestPerStage:{}})));});},[user]);
+  useEffect(()=>{
+  if(!user||stages.length===0)return;
+  supabase.from('stage_times').select('stage_id,time_ms').eq('user_id',user.id).then(({data})=>{
+    if(!data)return;
+    const bests={};
+    data.forEach(t=>{
+      if(!bests[t.stage_id]||t.time_ms<bests[t.stage_id])bests[t.stage_id]=t.time_ms;
+    });
+    setStages(prev=>prev.map(s=>({...s,time:bests[s.id]||null})));
+  });
+},[user,stages.length]);
 
   const dragRef=useRef(null),pinchRef=useRef(null);
   const onTouchStart=useCallback(e=>{if(e.touches.length===2){const dx=e.touches[0].clientX-e.touches[1].clientX,dy=e.touches[0].clientY-e.touches[1].clientY;pinchRef.current={dist:Math.sqrt(dx*dx+dy*dy),zoom};dragRef.current=null;}else{dragRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY,center:{...mapCenter}};pinchRef.current=null;}},[mapCenter,zoom]);
