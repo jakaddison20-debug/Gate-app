@@ -1168,9 +1168,7 @@ export default function App(){
   const {data:{subscription}}=supabase.auth.onAuthStateChange((_,session)=>setUser(session?.user??null));
   return()=>subscription.unsubscribe();
 },[]);
-useEffect(()=>{
-  if(!user)return;
-  supabase.from('stages').select('*').or(`privacy.eq.public,created_by.eq.${user.id}`).then(({data})=>{
+useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.eq.public,created_by.eq.${user.id}`).then(async({data})=>{if(!data)return;const{data:times}=await supabase.from('stage_times').select('stage_id,time_ms').eq('user_id',user.id);const bests={};if(times)times.forEach(t=>{if(!bests[t.stage_id]||t.time_ms<bests[t.stage_id])bests[t.stage_id]=t.time_ms;});setStages(data.map(s=>({id:s.id,name:s.name,note:s.note||'',privacy:s.privacy,start:{lat:s.start_lat,lng:s.start_lng},finish:{lat:s.finish_lat,lng:s.finish_lng},line_coords:s.line_coords||null,time:bests[s.id]||null,cr:false})));});},[user]);
 
     if(data)setStages(data.map(s=>({
       id:s.id,
@@ -1187,17 +1185,7 @@ useEffect(()=>{
 },[user]);
 
   useEffect(()=>{if(!user)return;supabase.from('courses').select('*').then(({data})=>{if(data)setCourses(data.map(c=>({id:c.id,name:c.name,privacy:c.privacy,mode:c.mode,stageIds:c.stage_ids,times:{},bestPerStage:{}})));});},[user]);
-  useEffect(()=>{
-  if(!user||stages.length===0)return;
-  supabase.from('stage_times').select('stage_id,time_ms').eq('user_id',user.id).then(({data})=>{
-    if(!data)return;
-    const bests={};
-    data.forEach(t=>{
-      if(!bests[t.stage_id]||t.time_ms<bests[t.stage_id])bests[t.stage_id]=t.time_ms;
-    });
-    setStages(prev=>prev.map(s=>({...s,time:bests[s.id]||null})));
-  });
-},[user,stages.length]);
+  
 
   const dragRef=useRef(null),pinchRef=useRef(null);
   const onTouchStart=useCallback(e=>{if(e.touches.length===2){const dx=e.touches[0].clientX-e.touches[1].clientX,dy=e.touches[0].clientY-e.touches[1].clientY;pinchRef.current={dist:Math.sqrt(dx*dx+dy*dy),zoom};dragRef.current=null;}else{dragRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY,center:{...mapCenter}};pinchRef.current=null;}},[mapCenter,zoom]);
