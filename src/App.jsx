@@ -660,7 +660,7 @@ function RaceScreen({course,stages,user,onFinish}){
         setTimerMs(0);
         alert("Run cancelled — finish gate not reached in time");
       }
-    },60000);
+    },600000);
     }},1000);
   };
 
