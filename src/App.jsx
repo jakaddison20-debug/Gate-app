@@ -380,7 +380,8 @@ function ActivityCard({item}){
 }
 
 // ── Segment Row ───────────────────────────────────────────────────────────────
-function SegmentRow({stage,onPress}){
+function SegmentRow({stage,onPress,onDelete,userId}){
+
   const dist=haversine(stage.start,stage.finish);
   const privIcon=stage.privacy==="public"?<Icon.Globe size={12} color={C.mutedL}/>:stage.privacy==="group"?<Icon.Users size={12} color={C.mutedL}/>:<Icon.Lock size={12} color={C.mutedL}/>;
   return(
