@@ -289,7 +289,8 @@ function Avatar({initials,size=40,bg=C.orange,color="#fff",fontSize=13}){
 }
 
 // ── Stage Detail Sheet ────────────────────────────────────────────────────────
-function StageDetailSheet({stage,onClose}){
+  function StageDetailSheet({stage,onClose,onRace}){
+
   const lb=LEADERBOARD_DATA[stage.id]||[];
   const dist=haversine(stage.start,stage.finish);
   const myEntry=lb.find(e=>e.avatar==="ME");
@@ -329,6 +330,8 @@ function StageDetailSheet({stage,onClose}){
             </div>
           );
         })}
+        
+        <button className="tap" onClick={onRace} style={{width:"100%",background:C.orange,border:"none",borderRadius:10,padding:"12px 16px",color:"white",fontSize:14,fontWeight:700,marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><Icon.Flag size={16} color="white"/>Race This Stage</button>
         <div style={{background:"linear-gradient(135deg,#1A1A1A,#2A2A2A)",borderRadius:14,padding:"16px",marginTop:8,textAlign:"center"}}>
           <div style={{fontSize:14,fontWeight:700,color:"white",marginBottom:4}}>Unlock Full Leaderboard</div>
           <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginBottom:12}}>See all riders, filter by date, export results</div>
