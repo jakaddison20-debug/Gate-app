@@ -256,7 +256,7 @@ function MapboxStyleMap({center,zoom,width:W,height:H,stages=[],courses=[],userP
       map.current.on('load',()=>{
         // Add stages as lines
         stages.forEach(stage=>{
-          const startEl=document.createElement('div');startEl.innerHTML='<div style="width:28px;height:28px;border-radius:50%;background:#F59E0B;border:2.5px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center"><svg width="10" height="12" viewBox="0 0 10 12" fill="white"><polygon points="0,0 10,6 0,12"/></svg></div>';
+          const startEl=document.createElement('div');startEl.innerHTML='<div style="width:28px;height:28px;border-radius:50%;background:#F59E0B;border:2.5px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3)"></div>';
           new mapboxgl.Marker({element:startEl}).setLngLat([stage.start.lng,stage.start.lat]).addTo(map.current);
           const finishEl=document.createElement('div');finishEl.innerHTML='<div style="width:28px;height:28px;border-radius:50%;background:white;border:2.5px solid #1A1A1A;box-shadow:0 2px 8px rgba(0,0,0,0.3);overflow:hidden"><svg width="23" height="23" viewBox="0 0 8 8"><rect width="2" height="2" fill="#1A1A1A"/><rect x="4" width="2" height="2" fill="#1A1A1A"/><rect x="2" y="2" width="2" height="2" fill="#1A1A1A"/><rect x="6" y="2" width="2" height="2" fill="#1A1A1A"/><rect y="4" width="2" height="2" fill="#1A1A1A"/><rect x="4" y="4" width="2" height="2" fill="#1A1A1A"/><rect x="2" y="6" width="2" height="2" fill="#1A1A1A"/><rect x="6" y="6" width="2" height="2" fill="#1A1A1A"/></svg></div>';
           new mapboxgl.Marker({element:finishEl}).setLngLat([stage.finish.lng,stage.finish.lat]).addTo(map.current);
