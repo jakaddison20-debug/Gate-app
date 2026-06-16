@@ -1160,9 +1160,9 @@ export default function App(){
   const [selectedStage,setSelectedStage]=useState(null);
   const [showSettings,setShowSettings]=useState(false);
   const [settings,setSettings]=useState(DEFAULT_SETTINGS);
-  useEffect(()=>{if(!user)return;supabase.from('profiles').select('display_name').eq('id',user.id).single().then(({data})=>{if(data?.display_name)setSettings(prev=>({...prev,displayName:data.display_name}));});},[user]);
   const [user,setUser]=useState(null);
   const [showAuth,setShowAuth]=useState(false);
+  useEffect(()=>{if(!user)return;supabase.from('profiles').select('display_name').eq('id',user.id).single().then(({data})=>{if(data?.display_name)setSettings(prev=>({...prev,displayName:data.display_name}));});},[user]);
 
   const timerRef=useRef(null);
   const containerRef=useRef(null);
