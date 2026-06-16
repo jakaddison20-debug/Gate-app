@@ -1217,6 +1217,14 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
     </div>
   );
 
+useEffect(()=>{
+  if(activeRace&&'wakeLock'in navigator){
+    navigator.wakeLock.request('screen').then(lock=>{wakeLockRef.current=lock;}).catch(err=>console.log(err));
+  }
+  return()=>{if(wakeLockRef.current){wakeLockRef.current.release();wakeLockRef.current=null;}};
+},[activeRace]);
+
+  
   if(activeRace)return(
     <div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif"}}>
       <style>{STYLES}</style>
