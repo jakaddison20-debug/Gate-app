@@ -1172,6 +1172,12 @@ export default function App(){
 
   useEffect(()=>{if(!navigator.geolocation)return;let centered=false;const id=navigator.geolocation.watchPosition(pos=>{const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};setUserPos(loc);if(!centered){setMapCenter(loc);centered=true;}},err=>console.log(err),{enableHighAccuracy:true,maximumAge:2000,timeout:10000});return()=>navigator.geolocation.clearWatch(id);},[]);
 
+useEffect(()=>{
+  if(activeRace&&'wakeLock'in navigator){
+    navigator.wakeLock.request('screen').then(lock=>{wakeLockRef.current=lock;}).catch(err=>console.log(err));
+  }
+  return()=>{if(wakeLockRef.current){wakeLockRef.current.release();wakeLockRef.current=null;}};
+},[activeRace]);
 
 
 
@@ -1219,12 +1225,7 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
     </div>
   );
 
-useEffect(()=>{
-  if(activeRace&&'wakeLock'in navigator){
-    navigator.wakeLock.request('screen').then(lock=>{wakeLockRef.current=lock;}).catch(err=>console.log(err));
-  }
-  return()=>{if(wakeLockRef.current){wakeLockRef.current.release();wakeLockRef.current=null;}};
-},[activeRace]);
+
 
   
   if(activeRace)return(
