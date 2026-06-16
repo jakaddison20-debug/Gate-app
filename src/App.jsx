@@ -1164,6 +1164,7 @@ export default function App(){
 
   const timerRef=useRef(null);
   const containerRef=useRef(null);
+  const wakeLockRef=useRef(null);
   const [mapSize,setMapSize]=useState({w:390,h:844});
   const [userPos,setUserPos]=useState(DEFAULT_CENTER);
 
