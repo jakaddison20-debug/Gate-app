@@ -679,7 +679,7 @@ function RaceScreen({course,stages,user,onFinish}){
    
     const stopStage=async()=>{
     clearInterval(timerRef.current);
-    const finalTime=timerMs;
+    const finalTime=timerMsRef.current;
     await supabase.from('stage_times').insert({stage_id:currentStage.id,user_id:user.id,time_ms:finalTime});
 
 
