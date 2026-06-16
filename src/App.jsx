@@ -1143,7 +1143,6 @@ function AuthScreen({onAuth}){
 }
 
 // ── Main App ──────────────────────────────────────────────────────────────────
-window.addEventListener('error',e=>alert('Error: '+e.message));
 
 export default function App(){
   const [tab,setTab]=useState("home");
