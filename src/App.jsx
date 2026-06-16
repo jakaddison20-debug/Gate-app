@@ -855,7 +855,7 @@ function RaceScreen({course,stages,user,onFinish}){
           </div>
         )}
         <div style={{padding:"16px 20px 40px"}}>
-          <button className="tap" onClick={startCountdown} style={{width:"100%",background:"#1A1A1A",border:"none",borderRadius:14,padding:14,color:"rgba(255,255,255,0.5)",fontSize:14}}>Override — start manually</button>
+        
         </div>
       </div>
     );
