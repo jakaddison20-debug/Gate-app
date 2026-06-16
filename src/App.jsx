@@ -629,6 +629,7 @@ function RaceScreen({course,stages,user,onFinish}){
   const [phase,setPhase]=useState("modeIntro"); // modeIntro | transfer | countdown | racing | split | done
   const [countdown,setCountdown]=useState(3);
   const [timerMs,setTimerMs]=useState(0);
+  const timerMsRef=useRef(0);
   const [splits,setSplits]=useState([]); // current run splits
   const [bestPerStage,setBestPerStage]=useState({}); // mashup: best time per stage id
   const [runCount,setRunCount]=useState(0); // how many full runs completed
