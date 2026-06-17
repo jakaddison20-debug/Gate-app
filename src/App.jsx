@@ -402,7 +402,7 @@ function SegmentRow({stage,onPress,onDelete,userId}){
 }
 
 // ── Profile ───────────────────────────────────────────────────────────────────
-function ProfileView({stages,settings,onSettingsPress}){
+function ProfileView({stages,settings,onSettingsPress,onStatPress}){
   const timed=stages.filter(s=>s.time);
   const bars=[28,0,52,34,0,89,65],days=["M","T","W","T","F","S","S"];
   const medalColor=pos=>pos===1?"#FFD700":pos===2?"#C0C0C0":pos===3?"#CD7F32":null;
