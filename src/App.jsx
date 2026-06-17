@@ -1350,6 +1350,30 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
         <><div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:45}} onClick={()=>setSheet(null)}/><div className="slide-up" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:46,maxHeight:"82vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><LobbySheet onClose={()=>setSheet(null)}/></div></>
       )}
 
+      {sheet&&sheet.startsWith('stat-')&&(
+        <><div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:45}} onClick={()=>setSheet(null)}/><div className="slide-up" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:46,maxHeight:"82vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div>
+          <div style={{padding:"0 16px 40px"}}>
+            <div style={{fontSize:17,fontWeight:700,color:C.text,marginBottom:16}}>{sheet==='stat-fastest'?'Fastest Stages':sheet==='stat-courses'?'Best Courses':sheet==='stat-completed'?'Stages Completed':'Course Records'}</div>
+            {(sheet==='stat-fastest'||sheet==='stat-records')&&stages.filter(s=>s.cr).map(s=>(
+              <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 0",borderBottom:`1px solid ${C.border}`}}>
+                <Icon.Crown size={18} color="#92400E"/>
+                <div style={{flex:1,fontSize:14,fontWeight:600,color:C.text}}>{s.name}</div>
+                <div style={{fontSize:14,fontWeight:700,color:"#92400E"}}>{formatTime(s.time)}</div>
+              </div>
+            ))}
+            {sheet==='stat-completed'&&stages.filter(s=>s.time).map(s=>(
+              <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 0",borderBottom:`1px solid ${C.border}`}}>
+                <Icon.Lightning size={18} color={C.orange}/>
+                <div style={{flex:1,fontSize:14,fontWeight:600,color:C.text}}>{s.name}</div>
+                <div style={{fontSize:14,fontWeight:700,color:C.orange}}>{formatTime(s.time)}</div>
+              </div>
+            ))}
+            {sheet==='stat-courses'&&<div style={{textAlign:"center",padding:"20px",color:C.muted,fontSize:13}}>Course history coming soon</div>}
+          </div>
+          </div></>
+      )}
+
+
       {/* Tab bar */}
       <div style={{position:"fixed",bottom:0,left:0,right:0,background:"white",borderTop:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"space-around",padding:"10px 0 24px",zIndex:50}}>
         {TABS.map(t=>{
