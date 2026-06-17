@@ -1320,7 +1320,7 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
       {/* PROFILE */}
       {tab==="profile"&&(
         <div style={{height:"calc(100vh - 44px - 83px)",overflowY:"auto"}}>
-          <ProfileView stages={stages} settings={settings} onSettingsPress={()=>setShowSettings(true)}/>
+          <ProfileView stages={stages} settings={settings} onSettingsPress={()=>setShowSettings(true)} onStatPress={key=>alert('Tapped: '+key)}/>
         </div>
       )}
 
