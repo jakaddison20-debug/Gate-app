@@ -470,9 +470,9 @@ function ProfileView({stages,settings,onSettingsPress,onStatPress}){
             <div style={{fontSize:15,fontWeight:700,color:s.cr?"#92400E":C.orange}}>{formatTime(s.time)}</div>
           </div>
         ))}
-      </div>
-
-      <div style={{padding:"0 16px 40px"}}>
+      </div> 
+      
+<div style={{padding:"0 16px 60px"}}>
         <button className="tap" onClick={onSettingsPress} style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 0",borderBottom:`1px solid ${C.border}`,background:"none",color:C.text,fontSize:14,fontWeight:500}}>
           Settings<Icon.ChevronRight/>
         </button>
