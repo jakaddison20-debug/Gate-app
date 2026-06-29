@@ -504,7 +504,7 @@ function StageBuilderSheet({onClose,onSave}){
   const canSave=name.trim()&&start&&finish;
   const dist=start&&finish?haversine(start,finish):null;
   return(
-    <div style={{padding:"0 16px 36px"}}>
+    <div style={{padding:"0 16px 60px"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0 18px"}}>
         <div style={{fontSize:17,fontWeight:700,color:C.text}}>New Stage</div>
         <button className="tap" onClick={onClose} style={{background:C.surface,borderRadius:8,padding:"6px 14px",color:C.text,fontSize:13,fontWeight:500,border:`1px solid ${C.border}`}}>Cancel</button>
