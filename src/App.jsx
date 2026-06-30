@@ -1265,7 +1265,7 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
       {tab==="map"&&(
         <div style={{position:"absolute",inset:0}}>
           <div style={{position:"absolute",inset:0,cursor:"grab",touchAction:"none"}} onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onWheel={onWheel}>
-            <MapboxStyleMap center={mapCenter} zoom={zoom} width={mapSize.w} height={mapSize.h} stages={stages} courses={courses} userPos={userPos} onStagePress={s=>setSelectedStage(s)}/>
+            <MapboxStyleMap center={mapCenter} zoom={zoom} flyToTrigger={flyToTrigger} width={mapSize.w} height={mapSize.h} stages={stages} courses={courses} userPos={userPos} onStagePress={s=>setSelectedStage(s)}/>
           </div>
           <div style={{position:"absolute",top:52,left:16,right:16,display:"flex",gap:10,zIndex:10}}>
             <div style={{flex:1,background:"white",border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:8,boxShadow:"0 2px 10px rgba(0,0,0,0.1)"}}><Icon.Search/><span style={{fontSize:14,color:C.muted}}>Search stages…</span></div>
