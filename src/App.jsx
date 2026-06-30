@@ -278,6 +278,9 @@ function MapboxStyleMap({center,zoom,width:W,height:H,stages=[],courses=[],userP
     });
   },[]);
 
+  useEffect(()=>{if(map.current)map.current.flyTo({center:[center.lng,center.lat],zoom:zoom,essential:true});},[center,zoom]);
+
+
   return(
     <div style={{position:"absolute",inset:0}}>
       <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet"/>
