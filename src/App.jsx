@@ -235,7 +235,7 @@ function SettingsScreen({settings,onSave,onBack}){
   );
 }
 
-function MapboxStyleMap({center,zoom,width:W,height:H,stages=[],courses=[],userPos,onStagePress}){
+function MapboxStyleMap({center,zoom,flyToTrigger,width:W,height:H,stages=[],courses=[],userPos,onStagePress}){
   const mapContainer=useRef(null);
   const map=useRef(null);
   const markersRef=useRef([]);
