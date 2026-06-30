@@ -277,8 +277,9 @@ function MapboxStyleMap({center,zoom,flyToTrigger,width:W,height:H,stages=[],cou
       });
     });
   },[]);
+  
 
-  useEffect(()=>{if(map.current)map.current.flyTo({center:[center.lng,center.lat],zoom:zoom,essential:true});},[center,zoom]);
+  useEffect(()=>{if(map.current&&flyToTrigger)map.current.flyTo({center:[center.lng,center.lat],zoom:zoom,essential:true});},[flyToTrigger]);
 
 
   return(
