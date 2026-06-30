@@ -1268,7 +1268,7 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
             <button className="tap" onClick={()=>setSheet("stageBuilder")} style={{background:C.orange,border:"none",borderRadius:12,padding:"10px 16px",display:"flex",alignItems:"center",gap:6,boxShadow:"0 2px 10px rgba(252,76,2,0.3)"}}><Icon.Plus/><span style={{fontSize:13,fontWeight:600,color:"#fff",whiteSpace:"nowrap"}}>Stage</span></button>
           </div>
           <div style={{position:"absolute",right:16,top:"50%",transform:"translateY(-50%)",display:"flex",flexDirection:"column",gap:6,zIndex:10}}>
-            {[{l:"+",a:()=>setZoom(z=>Math.min(18,z+1))},{l:"−",a:()=>setZoom(z=>Math.max(8,z-1))},{l:"⌖",a:()=>setMapCenter(DEFAULT_CENTER)}].map(({l,a})=>(
+            {[{l:"+",a:()=>setZoom(z=>Math.min(18,z+1))},{l:"−",a:()=>setZoom(z=>Math.max(8,z-1))},{l:"⌖",a:()=>setMapCenter(userPos)}].map(({l,a})=>(
               <button key={l} className="tap" onClick={a} style={{width:36,height:36,borderRadius:9,background:"white",border:`1px solid ${C.border}`,fontSize:l==="⌖"?14:18,display:"flex",alignItems:"center",justifyContent:"center",color:C.text,boxShadow:"0 2px 6px rgba(0,0,0,0.08)"}}>{l}</button>
             ))}
           </div>
