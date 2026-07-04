@@ -1299,7 +1299,7 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
             </div>
             {coursesFilter==="stages"&&<div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:2}}>
               {[{v:"all",l:"All"},{v:"public",l:"Public"},{v:"group",l:"Group"},{v:"private",l:"Private"}].map(f=>(
-                <button key={f.v} className="tap" onClick={()=>setStagesFilter(f.v)} style={{padding:"6px 14px",borderRadius:20,whiteSpace:"nowrap",background:stagesFilter===f.v?C.orange:C.surface,border:`1px solid ${stagesFilter===f.v?C.orange:C.border}`,color:stagesFilter===f.v?"#fff":C.text,fontSize:13,fontWeight:stagesFilter===f.v?600:400}}>{f.l}</button>
+                <button key={f.v} className="tap" onClick={()=>setStagesFilter(f.v)} style={{padding:"6px 14px",borderRadius:20,whiteSpace:"nowrap",background:stagesFilter===f.v?"white":C.surface,border:`1px solid ${stagesFilter===f.v?C.blue:C.border}`,color:stagesFilter===f.v?C.blue:C.text,fontSize:13,fontWeight:stagesFilter===f.v?600:400}}>{f.l}</button>
               ))}
             </div>}
           </div>
