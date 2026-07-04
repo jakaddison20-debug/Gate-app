@@ -422,13 +422,12 @@ function ProfileView({stages,settings,onSettingsPress,onStatPress}){
         <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:18}}>
           <div style={{width:60,height:60,borderRadius:"50%",background:"rgba(255,255,255,0.25)",border:"2px solid rgba(255,255,255,0.5)",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon.User size={28} color="#fff"/></div>
           <div style={{flex:1}}><div style={{fontSize:20,fontWeight:800,color:"#fff"}}>{settings.displayName}</div><div style={{fontSize:13,color:"rgba(255,255,255,0.75)",marginTop:2}}>Member since 2024</div></div>
-          <button className="tap" onClick={onSettingsPress} style={{width:36,height:36,borderRadius:9,background:"rgba(255,255,255,0.2)",border:"none",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon.Settings size={18} color="white"/></button>
+         <button className="tap" onClick={onSettingsPress} style={{width:36,height:36,borderRadius:9,background:"rgba(255,255,255,0.2)",border:"none",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon.Settings size={18} color="white"/></button>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-
-          {[{l:"Fastest Stages",v:stages.filter(s=>s.cr).length,key:"fastest"},{l:"Best Courses",v:"—",key:"courses"},{l:"Stages Completed",v:stages.filter(s=>s.time).length,key:"completed"},{l:"Course Records",v:stages.filter(s=>s.cr).length,key:"records"}].map(({l,v,
-          ))}<button key={key} className="tap" onClick={()=>onStatPress&&onStatPress(key)} style={{background:"#fff",border:`1px solid ${C.blue}`,borderRadius:10,padding:"12px 8px",textAlign:"center"}}><div style={{fontSize:18,fontWeight:700,color:C.text}}>{v}</div><div style={{fontSize:10,color:C.muted,marginTop:2}}>{l}</div></button>
+          {[{l:"Fastest Stages",v:stages.filter(s=>s.cr).length,key:"fastest"},{l:"Best Courses",v:"—",key:"courses"},{l:"Stages Completed",v:stages.filter(s=>s.time).length,key:"completed"},{l:"Course Records",v:stages.filter(s=>s.cr).length,key:"records"}].map(({l,v,key})=>(<button key={key} className="tap" onClick={()=>onStatPress&&onStatPress(key)} style={{background:"#fff",border:`1px solid ${C.blue}`,borderRadius:10,padding:"12px 8px",textAlign:"center"}}><div style={{fontSize:18,fontWeight:700,color:C.text}}>{v}</div><div style={{fontSize:10,color:C.muted,marginTop:2}}>{l}</div></button>))}
         </div>
+
       </div>
 
       <div style={{padding:"18px 16px 0"}}>
