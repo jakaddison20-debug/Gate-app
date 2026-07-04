@@ -425,9 +425,9 @@ function ProfileView({stages,settings,onSettingsPress,onStatPress}){
           <button className="tap" onClick={onSettingsPress} style={{width:36,height:36,borderRadius:9,background:"rgba(255,255,255,0.2)",border:"none",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon.Settings size={18} color="white"/></button>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+
           {[{l:"Fastest Stages",v:stages.filter(s=>s.cr).length,key:"fastest"},{l:"Best Courses",v:"—",key:"courses"},{l:"Stages Completed",v:stages.filter(s=>s.time).length,key:"completed"},{l:"Course Records",v:stages.filter(s=>s.cr).length,key:"records"}].map(({l,v,
           ))}<button key={key} className="tap" onClick={()=>onStatPress&&onStatPress(key)} style={{background:"#fff",border:`1px solid ${C.blue}`,borderRadius:10,padding:"12px 8px",textAlign:"center"}}><div style={{fontSize:18,fontWeight:700,color:C.text}}>{v}</div><div style={{fontSize:10,color:C.muted,marginTop:2}}>{l}</div></button>
-
         </div>
       </div>
 
