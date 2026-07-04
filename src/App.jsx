@@ -471,7 +471,7 @@ function ProfileView({stages,settings,onSettingsPress,onStatPress}){
           <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 0",borderBottom:`1px solid ${C.border}`}}>
             <div style={{width:36,height:36,borderRadius:8,background:s.cr?"#FEF3C7":C.orangeL,display:"flex",alignItems:"center",justifyContent:"center"}}>{s.cr?<Icon.Crown size={16} color="#92400E"/>:<Icon.Lightning size={16} color={C.orange}/>}</div>
             <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600,color:C.text}}>{s.name}</div><div style={{fontSize:11,color:C.muted}}>{formatDist(haversine(s.start,s.finish))}</div></div>
-            <div style={{fontSize:15,fontWeight:700,color:s.cr?"#92400E":C.orange}}>{formatTime(s.time)}</div>
+            <div style={{fontSize:15,fontWeight:700,color:s.cr?"#92400E":C.text}}>{formatTime(s.time)}</div>
           </div>
         ))}
       </div> 
@@ -1393,8 +1393,8 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
           const active=tab===t.id;
           return(
             <button key={t.id} className="tap" onClick={()=>setTab(t.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",padding:"2px 10px"}}>
-              <t.Ic size={22} color={active?C.orange:C.muted}/>
-              <span style={{fontSize:10,fontWeight:active?600:400,color:active?C.orange:C.muted}}>{t.label}</span>
+              <t.Ic size={22} color={active?C.blue:C.muted}/>
+              <span style={{fontSize:10,fontWeight:active?600:400,color:active?C.blue:C.muted}}>{t.label}</span>
             </button>
           );
         })}
