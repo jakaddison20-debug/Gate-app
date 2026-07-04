@@ -400,7 +400,7 @@ function SegmentRow({stage,onPress,onDelete,userId}){
         <div style={{display:"flex",alignItems:"center",gap:4,fontSize:12,color:C.muted}}>{privIcon}<span>{formatDist(dist)}</span></div>
       </div>
       <div style={{textAlign:"right",flexShrink:0,display:"flex",alignItems:"center",gap:8}}>
-        <div>{stage.time?<div style={{fontSize:15,fontWeight:700,color:C.orange}}>{formatTime(stage.time)}</div>:<div style={{fontSize:13,color:C.mutedL}}>—</div>}<div style={{fontSize:10,color:C.mutedL,marginTop:1}}>best</div></div>
+        <div>{stage.time?<div style={{fontSize:15,fontWeight:700,color:C.text}}>{formatTime(stage.time)}</div>:<div style={{fontSize:13,color:C.mutedL}}>—</div>}<div style={{fontSize:10,color:C.mutedL,marginTop:1}}>best</div></div>
         <Icon.ChevronRight size={14} color={C.mutedL}/>{onDelete&&stage.created_by===userId&&<button className="tap" onClick={e=>{e.stopPropagation();onDelete(stage.id);}} style={{marginLeft:4,background:"none",border:"none",padding:"4px",color:C.red,fontSize:13,fontWeight:600}}>✕</button>}
       </div>
     </button>
