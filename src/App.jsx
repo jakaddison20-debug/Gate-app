@@ -417,12 +417,12 @@ function ProfileView({stages,settings,onSettingsPress,onStatPress}){
   const modeLabel=mode=>mode==="mashup"?"⚡ Mashup":mode==="practice"?"🎯 Practice":"🏁 Race";
   return(
     <div>
-      <div style={{background:"#0F172A",padding:"24px 20px 20px"}}>
-
+      
+      <div style={{background:"#fff",padding:"24px 20px 20px",borderBottom:`1px solid ${C.border}`}}>
         <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:18}}>
           <div style={{width:60,height:60,borderRadius:"50%",background:"rgba(255,255,255,0.25)",border:"2px solid rgba(255,255,255,0.5)",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon.User size={28} color="#fff"/></div>
           <div style={{flex:1}}><div style={{fontSize:20,fontWeight:800,color:"#fff"}}>{settings.displayName}</div><div style={{fontSize:13,color:"rgba(255,255,255,0.75)",marginTop:2}}>Member since 2024</div></div>
-         <button className="tap" onClick={onSettingsPress} style={{width:36,height:36,borderRadius:9,background:"rgba(255,255,255,0.2)",border:"none",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon.Settings size={18} color="white"/></button>
+             <button className="tap" onClick={onSettingsPress} style={{width:36,height:36,borderRadius:9,background:C.surface,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon.Settings size={18} color={C.muted}/></button>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
           {[{l:"Fastest Stages",v:stages.filter(s=>s.cr).length,key:"fastest"},{l:"Best Courses",v:"—",key:"courses"},{l:"Stages Completed",v:stages.filter(s=>s.time).length,key:"completed"},{l:"Course Records",v:stages.filter(s=>s.cr).length,key:"records"}].map(({l,v,key})=>(<button key={key} className="tap" onClick={()=>onStatPress&&onStatPress(key)} style={{background:"#fff",border:`1px solid ${C.blue}`,borderRadius:10,padding:"12px 8px",textAlign:"center"}}><div style={{fontSize:18,fontWeight:700,color:C.text}}>{v}</div><div style={{fontSize:10,color:C.muted,marginTop:2}}>{l}</div></button>))}
@@ -469,7 +469,7 @@ function ProfileView({stages,settings,onSettingsPress,onStatPress}){
         {timed.map(s=>(
           <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 0",borderBottom:`1px solid ${C.border}`}}>
             <div style={{width:36,height:36,borderRadius:8,background:s.cr?"#FEF3C7":`${C.blue}12`,display:"flex",alignItems:"center",justifyContent:"center"}}>{s.cr?<Icon.Crown size={16} color="#92400E"/>:<Icon.Lightning size={16} color={C.blue}/>}</div>
-            <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600,color:C.text}}>{s.name}</div><div style={{fontSize:11,color:C.muted}}>{formatDist(haversine(s.start,s.finish))}</div></div>
+            <div style={{flex:1}}><div style={{fontSize:20,fontWeight:800,color:C.text}}>{settings.displayName}</div><div style={{fontSize:13,color:C.muted,marginTop:2}}>Member since 2024</div></div>
             <div style={{fontSize:15,fontWeight:700,color:s.cr?"#92400E":C.text}}>{formatTime(s.time)}</div>
           </div>
         ))}
