@@ -311,7 +311,7 @@ function Avatar({initials,size=40,bg=C.orange,color="#fff",fontSize=13}){
     <div style={{padding:"0 0 40px"}}>
       <div style={{background:"linear-gradient(135deg,#1A1A1A,#2A2A2A)",padding:"20px 20px 20px"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
-         <div style={{fontSize:20,fontWeight:800,color:C.text}}>{settings.displayName}</div><div style={{fontSize:12,color:"rgba(255,255,255,0.6)"}}>{formatDist(dist)} · {stage.privacy}</div></div>
+            <div><div style={{fontSize:20,fontWeight:800,color:"white",marginBottom:4}}>{stage.name}</div><div style={{fontSize:12,color:"rgba(255,255,255,0.6)"}}>{formatDist(dist)} · {stage.privacy}</div></div>
           <button className="tap" onClick={onClose} style={{background:"rgba(255,255,255,0.15)",borderRadius:8,padding:"6px 12px",color:"white",fontSize:13,border:"none"}}>Close</button>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
