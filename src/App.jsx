@@ -683,10 +683,11 @@ function RaceScreen({course,stages,user,onFinish}){
 
 
    
-    const stopStage=async()=>{
+    const stopStage=async(saveTime=false)=>{
     clearInterval(timerRef.current);
     const finalTime=timerMsRef.current;
-    const{data:existing}=await supabase.from('stage_times').select('id,time_ms').eq('stage_id',currentStage.id).eq('user_id',user.id).order('time_ms',{ascending:true}).limit(1).single();if(!existing||finalTime<existing.time_ms){if(existing){await supabase.from('stage_times').update({time_ms:finalTime}).eq('id',existing.id);}else{await supabase.from('stage_times').insert({stage_id:currentStage.id,user_id:user.id,time_ms:finalTime});}}
+    if(saveTime&&!isPractice){const{data:existing}=await supabase.from('stage_times').select('id,time_ms').eq('stage_id',currentStage.id).eq('user_id',user.id).order('time_ms',{ascending:true}).limit(1).single();if(!existing||finalTime<existing.time_ms){if(existing){await supabase.from('stage_times').update({time_ms:finalTime}).eq('id',existing.id);}else{await supabase.from('stage_times').insert({stage_id:currentStage.id,user_id:user.id,time_ms:finalTime});}}}
+
 
 
     const newSplit={stageId:currentStage.id,name:currentStage.name,time:finalTime};
