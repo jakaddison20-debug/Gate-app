@@ -300,7 +300,8 @@ function Avatar({initials,size=40,bg=C.orange,color="#fff",fontSize=13}){
 // ── Stage Detail Sheet ────────────────────────────────────────────────────────
   function StageDetailSheet({stage,onClose,onRace}){
   const [lb,setLb]=useState([]);
-  useEffect(()=>{supabase.from('stage_times').select('time_ms,user_id,profiles(display_name)').eq('stage_id',stage.id).order('time_ms',{ascending:true}).limit(10).then(({data})=>{if(data)setLb(data.map((t,i)=>({pos:i+1,name:t.profiles?.display_name||'Unknown',time:t.time_ms})))});},[stage.id]);
+  useEffect(()=>{supabase.from('stage_times').select('time_ms,user_id,profiles(display_name)').eq('stage_id',stage.id).order('time_ms',{ascending:true}).limit(10).then(({data})=>{if(data)setLb(data.map((t,i)=>({pos:i+1,name:t.profiles?.display_name||'Rider',time:t.time_ms})))
+
 
 
   const dist=haversine(stage.start,stage.finish);
