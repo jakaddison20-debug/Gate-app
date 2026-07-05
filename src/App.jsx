@@ -711,7 +711,7 @@ function RaceScreen({course,stages,user,onFinish}){
       const dist=haversine(loc,gate);
       if(dist<=FAT_GATE_RADIUS){
         navigator.geolocation.clearWatch(id);
-        stopStage();
+        stopStage(true);
       }
     },err=>console.log(err),{enableHighAccuracy:true,maximumAge:0,timeout:10000});
     return()=>navigator.geolocation.clearWatch(id);
