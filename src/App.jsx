@@ -1277,7 +1277,7 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
           </div>
           <div style={{position:"absolute",top:52,left:16,right:16,display:"flex",gap:10,zIndex:10}}>
             <div style={{flex:1,background:"white",border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:8,boxShadow:"0 2px 10px rgba(0,0,0,0.1)"}}><Icon.Search/><span style={{fontSize:14,color:C.muted}}>Search stages…</span></div>
-            <button className="tap" onClick={()=>setSheet("stageBuilder")} style={{background:C.orange,border:"none",borderRadius:12,padding:"10px 16px",display:"flex",alignItems:"center",gap:6,boxShadow:"0 2px 10px rgba(252,76,2,0.3)"}}><Icon.Plus/><span style={{fontSize:13,fontWeight:600,color:"#fff",whiteSpace:"nowrap"}}>Stage</span></button>
+            <button className="tap" onClick={()=>setSheet("stageBuilder")} style={{background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:12,padding:"10px 16px",display:"flex",alignItems:"center",gap:6,boxShadow:"0 2px 10px rgba(0,0,0,0.08)"}}><Icon.Plus size={20} color={C.blue}/><span style={{fontSize:13,fontWeight:600,color:C.blue,whiteSpace:"nowrap"}}>Stage</span></button>
           </div>
           <div style={{position:"absolute",right:16,top:"50%",transform:"translateY(-50%)",display:"flex",flexDirection:"column",gap:6,zIndex:10}}>
             {[{l:"+",a:()=>setZoom(z=>Math.min(18,z+1))},{l:"−",a:()=>setZoom(z=>Math.max(8,z-1))},{l:"⌖",a:()=>{setMapCenter(userPos);setFlyToTrigger(Date.now());}}].map(({l,a})=>(
