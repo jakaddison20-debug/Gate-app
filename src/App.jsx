@@ -160,13 +160,17 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
             <input value={s.displayName} onChange={e=>update("displayName",e.target.value)}
               style={{border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 10px",fontSize:14,color:C.text,width:140,textAlign:"right",background:C.surface}}/>
           }/>
-          <Row label="Profile Photo" sub={uploading?"Uploading...":"Tap to change"} noBorder right={
-         <div style={{position:"relative",width:40,height:40,borderRadius:"50%",overflow:"hidden",background:C.orange,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px"}}>
+          <div style={{flex:1,marginRight:12}}>
+            <div style={{fontSize:14,fontWeight:500,color:C.text}}>Profile Photo</div>
+            <div style={{fontSize:12,color:C.muted,marginTop:2}}>{uploading?"Uploading...":"Tap to change"}</div>
+          </div>
+          <div style={{position:"relative",width:40,height:40,borderRadius:"50%",overflow:"hidden",background:C.orange,display:"flex",alignItems:"center",justifyContent:"center"}}>
         {s.avatarUrl?<img src={s.avatarUrl} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<Icon.User size={20} color="white"/>}
-        <input type="file" accept="image/*" onChange={handleAvatarUpload} style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0.5,cursor:"pointer",background:"lime"}}/>
-
+        <input type="file" accept="image/*" onChange={handleAvatarUpload} style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0,cursor:"pointer"}}/>
         </div>
-          }/>
+        </div>
+
 
         
         </Section>
