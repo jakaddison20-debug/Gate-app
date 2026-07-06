@@ -666,21 +666,7 @@ function RaceScreen({course,stages,user,onFinish}){
     return()=>navigator.geolocation.clearWatch(id);
   },[phase,stageIndex]);
 
-  const startCountdown=()=>{
-    setGateStatus("waiting");setPhase("countdown");setCountdown(3);let c=3;
-    countRef.current=setInterval(()=>{c--;setCountdown(c);if(c<=0){clearInterval(countRef.current);setTimerMs(0);timerMsRef.current=0;setPhase("racing");timerRef.current=setInterval(()=>{timerMsRef.current+=10;setTimerMs(timerMsRef.current);},10);
-
-    setTimeout(()=>{
-      if(timerRef.current){
-        clearInterval(timerRef.current);
-        setPhase("transfer");
-        setTimerMs(0);
-        alert("Run cancelled — finish gate not reached in time");
-      }
-    },600000);
-    }},1000);
-  };
-
+  const startCountdown=()=>{setGateStatus("waiting");setTimerMs(0);timerMsRef.current=0;setPhase("racing");timerRef.current=setInterval(()=>{timerMsRef.current+=10;setTimerMs(timerMsRef.current);},10);setTimeout(()=>{if(timerRef.current){clearInterval(timerRef.current);setPhase("transfer");setTimerMs(0);alert("Run cancelled — finish gate not reached in time");}},600000);};
 
    
     const stopStage=async(saveTime=false)=>{
