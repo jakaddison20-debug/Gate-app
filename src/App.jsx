@@ -33,6 +33,7 @@ const SAMPLE_FEED=[];
 // Default settings
 const DEFAULT_SETTINGS={
   displayName:"Your Name",
+  avatarUrl:null,
   units:"metric",
   gpsAccuracy:"high",
   notifications:{newLeaderboard:true,sessionInvite:true,courseRecord:true,weeklyDigest:false},
