@@ -93,8 +93,12 @@ function Toggle({value,onChange}){
   return(
     <div onClick={()=>onChange(!value)} style={{width:46,height:26,borderRadius:13,background:value?C.orange:"#DDD",position:"relative",cursor:"pointer",transition:"background 0.2s",flexShrink:0}}>
       <div style={{position:"absolute",top:3,left:value?22:3,width:20,height:20,borderRadius:"50%",background:"white",boxShadow:"0 1px 4px rgba(0,0,0,0.2)",transition:"left 0.2s"}}/>
-      
-  // ── Settings Screen ───────────────────────────────────────────────────────────
+    </div>
+  );
+}
+
+// ── Settings Screen ───────────────────────────────────────────────────────────
+
 const Section=({title,children})=>(
   <div style={{marginBottom:24}}>
     <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:1,textTransform:"uppercase",marginBottom:8,paddingHorizontal:16}}>{title}</div>
