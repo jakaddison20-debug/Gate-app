@@ -337,7 +337,7 @@ function Avatar({size=40,url=null}){return <div style={{width:size,height:size,b
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
           {[{l:"Your Best",v:stage.time?formatTime(stage.time):"—",hi:true},{l:"Position",v:myPos?`${myPos===1?"🥇":myPos===2?"🥈":myPos===3?"🥉":""}${myPos}${myPos===1?"st":myPos===2?"nd":myPos===3?"rd":"th"}`:"—",hi:!!myPos},{l:"Riders",v:`${lb.length}+`}].map(({l,v,hi})=>(
             <div key={l} style={{background:"rgba(255,255,255,0.1)",borderRadius:10,padding:"10px 8px",textAlign:"center"}}>
-              <div style={{fontSize:14,fontWeight:700,color:hi?"#FC4C02":"white"}}>{v}</div>
+              <div style={{fontSize:14,fontWeight:700,color:hi?C.green:"white"}}>{v}</div>
               <div style={{fontSize:10,color:"rgba(255,255,255,0.6)",marginTop:2}}>{l}</div>
             </div>
           ))}
