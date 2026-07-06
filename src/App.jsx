@@ -101,7 +101,6 @@ function Toggle({value,onChange}){
 function SettingsScreen({settings,onSave,onBack}){
 const [s,setS]=useState(settings);
 const [uploading,setUploading]=useState(false);
-const fileInputRef=useRef(null);
 const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.target.files[0];if(!file){alert("No file selected");return;}setUploading(true);const{data:{user},error:userError}=await supabase.auth.getUser();if(userError||!user){alert("Auth error: "+(userError?.message||"no user"));setUploading(false);return;}const ext=file.name.split('.').pop();const path=`${user.id}/avatar.${ext}`;const{error:uploadError}=await supabase.storage.from('avatars').upload(path,file,{upsert:true});if(uploadError){alert("Upload error: "+uploadError.message);setUploading(false);return;}const{data:urlData}=supabase.storage.from('avatars').getPublicUrl(path);const publicUrl=urlData.publicUrl+'?t='+Date.now();const{error:updateError}=await supabase.from('profiles').update({avatar_url:publicUrl}).eq('id',user.id);if(updateError){alert("Save error: "+updateError.message);setUploading(false);return;}update("avatarUrl",publicUrl);alert("Success!");setUploading(false);}catch(err){alert("Unexpected error: "+err.message);setUploading(false);}};
 
   const update=(path,val)=>{
@@ -143,7 +142,7 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
 
   return(
     <div style={{height:"calc(100vh - 44px)",overflowY:"auto",background:C.surface}}>
-      <input type="file" accept="image/*" onChange={handleAvatarUpload} style={{display:"block",margin:20,padding:20,border:"3px solid red"}}/>
+      
       {/* Header */}
 
       <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,position:"sticky",top:0,zIndex:5,display:"flex",alignItems:"center",gap:12}}>
