@@ -93,11 +93,33 @@ function Toggle({value,onChange}){
   return(
     <div onClick={()=>onChange(!value)} style={{width:46,height:26,borderRadius:13,background:value?C.orange:"#DDD",position:"relative",cursor:"pointer",transition:"background 0.2s",flexShrink:0}}>
       <div style={{position:"absolute",top:3,left:value?22:3,width:20,height:20,borderRadius:"50%",background:"white",boxShadow:"0 1px 4px rgba(0,0,0,0.2)",transition:"left 0.2s"}}/>
-    </div>
-  );
-}
+      
+    </// ── Settings Screen ───────────────────────────────────────────────────────────
+const Section=({title,children})=>(
+  <div style={{marginBottom:24}}>
+    <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:1,textTransform:"uppercase",marginBottom:8,paddingHorizontal:16}}>{title}</div>
+    <div style={{background:"white",borderRadius:14,border:`1px solid ${C.border}`,overflow:"hidden"}}>{children}</div>
+  </div>
+);
 
-// ── Settings Screen ───────────────────────────────────────────────────────────
+const Row=({label,sub,right,noBorder=false})=>(
+  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",borderBottom:noBorder?"none":`1px solid ${C.border}`}}>
+    <div style={{flex:1,marginRight:12}}>
+      <div style={{fontSize:14,fontWeight:500,color:C.text}}>{label}</div>
+      {sub&&<div style={{fontSize:12,color:C.muted,marginTop:2}}>{sub}</div>}
+    </div>
+    {right}
+  </div>
+);
+
+const SegControl=({options,value,onChange})=>(
+  <div style={{display:"flex",background:C.surface,borderRadius:8,padding:2,gap:2}}>
+    {options.map(o=>(
+      <button key={o.val} onClick={()=>onChange(o.val)} style={{padding:"5px 10px",borderRadius:6,background:value===o.val?"white":"none",border:"none",fontSize:12,fontWeight:value===o.val?600:400,color:value===o.val?C.text:C.muted,boxShadow:value===o.val?"0 1px 3px rgba(0,0,0,0.1)":"none",transition:"all 0.15s"}}>{o.label}</button>
+    ))}
+  </div>
+);
+
 function SettingsScreen({settings,onSave,onBack}){
 const [s,setS]=useState(settings);
 const [uploading,setUploading]=useState(false);
@@ -116,31 +138,7 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
     });
   };
 
-  const Section=({title,children})=>(
-    <div style={{marginBottom:24}}>
-      <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:1,textTransform:"uppercase",marginBottom:8,paddingHorizontal:16}}>{title}</div>
-      <div style={{background:"white",borderRadius:14,border:`1px solid ${C.border}`,overflow:"hidden"}}>{children}</div>
-    </div>
-  );
-
-  const Row=({label,sub,right,noBorder=false})=>(
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",borderBottom:noBorder?"none":`1px solid ${C.border}`}}>
-      <div style={{flex:1,marginRight:12}}>
-        <div style={{fontSize:14,fontWeight:500,color:C.text}}>{label}</div>
-        {sub&&<div style={{fontSize:12,color:C.muted,marginTop:2}}>{sub}</div>}
-      </div>
-      {right}
-    </div>
-  );
-
-  const SegControl=({options,value,onChange})=>(
-    <div style={{display:"flex",background:C.surface,borderRadius:8,padding:2,gap:2}}>
-      {options.map(o=>(
-        <button key={o.val} onClick={()=>onChange(o.val)} style={{padding:"5px 10px",borderRadius:6,background:value===o.val?"white":"none",border:"none",fontSize:12,fontWeight:value===o.val?600:400,color:value===o.val?C.text:C.muted,boxShadow:value===o.val?"0 1px 3px rgba(0,0,0,0.1)":"none",transition:"all 0.15s"}}>{o.label}</button>
-      ))}
-    </div>
-  );
-
+  
   return(
     <div style={{height:"calc(100vh - 44px)",overflowY:"auto",background:C.surface}}>
       
