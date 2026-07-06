@@ -99,7 +99,11 @@ function Toggle({value,onChange}){
 
 // ── Settings Screen ───────────────────────────────────────────────────────────
 function SettingsScreen({settings,onSave,onBack}){
-  const [s,setS]=useState(settings);
+const [s,setS]=useState(settings);
+const [uploading,setUploading]=useState(false);
+const fileInputRef=useRef(null);
+const handleAvatarUpload=async(e)=>{const file=e.target.files[0];if(!file)return;setUploading(true);const{data:{user}}=await supabase.auth.getUser();const ext=file.name.split('.').pop();const path=`${user.id}/avatar.${ext}`;const{error:uploadError}=await supabase.storage.from('avatars').upload(path,file,{upsert:true});if(uploadError){alert(uploadError.message);setUploading(false);return;}const{data:urlData}=supabase.storage.from('avatars').getPublicUrl(path);const publicUrl=urlData.publicUrl+'?t='+Date.now();await supabase.from('profiles').update({avatar_url:publicUrl}).eq('id',user.id);update("avatarUrl",publicUrl);setUploading(false);};
+
   const update=(path,val)=>{
     setS(prev=>{
       const next={...prev};
