@@ -157,9 +157,13 @@ const handleAvatarUpload=async(e)=>{const file=e.target.files[0];if(!file)return
             <input value={s.displayName} onChange={e=>update("displayName",e.target.value)}
               style={{border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 10px",fontSize:14,color:C.text,width:140,textAlign:"right",background:C.surface}}/>
           }/>
-          <Row label="Profile Photo" sub="Tap to change" noBorder right={
-            <div style={{width:40,height:40,borderRadius:"50%",background:C.orange,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon.User size={20} color="white"/></div>
+          <Row label="Profile Photo" sub={uploading?"Uploading...":"Tap to change"} noBorder right={
+         <button className="tap" onClick={()=>fileInputRef.current.click()} style={{width:40,height:40,borderRadius:"50%",border:"none",padding:0,overflow:"hidden",background:C.orange,display:"flex",alignItems:"center",justifyContent:"center"}}>
+         {s.avatarUrl?<img src={s.avatarUrl} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<Icon.User size={20} color="white"/>}
+          </button>
           }/>
+          <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarUpload} style={{display:"none"}}/>
+
         </Section>
 
         {/* Units */}
