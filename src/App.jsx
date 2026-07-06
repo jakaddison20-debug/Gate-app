@@ -1156,7 +1156,7 @@ export default function App(){
   const [settings,setSettings]=useState(DEFAULT_SETTINGS);
   const [user,setUser]=useState(null);
   const [showAuth,setShowAuth]=useState(false);
-  useEffect(()=>{if(!user)return;supabase.from('profiles').select('display_name').eq('id',user.id).single().then(({data})=>{if(data?.display_name)setSettings(prev=>({...prev,displayName:data.display_name}));});},[user]);
+  useEffect(()=>{if(!user)return;supabase.from('profiles').select('display_name,avatar_url').eq('id',user.id).single().then(({data})=>{if(data)setSettings(prev=>({...prev,displayName:data.display_name||prev.displayName,avatarUrl:data.avatar_url||null}));});},[user]);
 
   const timerRef=useRef(null);
   const containerRef=useRef(null);
