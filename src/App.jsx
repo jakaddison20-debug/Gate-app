@@ -166,6 +166,7 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
             <div style={{fontSize:12,color:C.muted,marginTop:2}}>{uploading?"Uploading...":"Tap to change"}</div>
           </div>
           <div style={{position:"relative",width:40,height:40,borderRadius:"50%",overflow:"hidden",background:C.orange,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <input type="file" accept="image/*" onChange={handleAvatarUpload} style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0,cursor:"pointer",zIndex:2}}/>
         {s.avatarUrl?<img src={s.avatarUrl} style={{width:"100%",height:"100%",objectFit:"cover",zIndex:1,position:"relative",pointerEvents:"none"}}/>:<Icon.User size={20} color="white"/>}
         </div>
 
