@@ -161,12 +161,13 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
               style={{border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 10px",fontSize:14,color:C.text,width:140,textAlign:"right",background:C.surface}}/>
           }/>
           <Row label="Profile Photo" sub={uploading?"Uploading...":"Tap to change"} noBorder right={
-         <label style={{width:40,height:40,borderRadius:"50%",overflow:"hidden",background:C.orange,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+         <div style={{position:"relative",width:40,height:40,borderRadius:"50%",overflow:"hidden",background:C.orange,display:"flex",alignItems:"center",justifyContent:"center"}}>
         {s.avatarUrl?<img src={s.avatarUrl} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<Icon.User size={20} color="white"/>}
-        <input type="file" accept="image/*" onChange={handleAvatarUpload} style={{display:"none"}}/>
-        </label>
+        <input type="file" accept="image/*" onChange={handleAvatarUpload} style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0,cursor:"pointer"}}/>
+        </div>
           }/>
-          
+
+        
         </Section>
 
         {/* Units */}
