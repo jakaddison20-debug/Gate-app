@@ -143,7 +143,7 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
 
   return(
     <div style={{height:"calc(100vh - 44px)",overflowY:"auto",background:C.surface}}>
-      <input type="file" accept="image/*" onChange={()=>alert("TEST INPUT WORKS")} style={{display:"block",margin:20,padding:20,border:"3px solid red"}}/>
+      <input type="file" accept="image/*" onChange={handleAvatarUpload} style={{display:"block",margin:20,padding:20,border:"3px solid red"}}/>
       {/* Header */}
 
       <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,position:"sticky",top:0,zIndex:5,display:"flex",alignItems:"center",gap:12}}>
