@@ -1252,7 +1252,7 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
       {/* MAP */}
       {tab==="map"&&(
         <div style={{position:"absolute",inset:0}}>
-          <div style={{position:"absolute",inset:0,cursor:"grab",touchAction:"none"}} onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onWheel={onWheel}>
+          <div style={{position:"absolute",inset:0,cursor:"grab",touchAction:"none"}} onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
             <MapboxStyleMap center={mapCenter} zoom={zoom} flyToTrigger={flyToTrigger} width={mapSize.w} height={mapSize.h} stages={stages} courses={courses} userPos={userPos} onStagePress={s=>setSelectedStage(s)}/>
           </div>
           <div style={{position:"absolute",top:52,left:16,right:16,display:"flex",gap:10,zIndex:10}}>
