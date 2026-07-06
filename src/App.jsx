@@ -294,8 +294,7 @@ function MapboxStyleMap({center,zoom,flyToTrigger,width:W,height:H,stages=[],cou
 
 
 // ── Avatar ────────────────────────────────────────────────────────────────────
-function Avatar({size=40}){
-    return <div style={{width:size,height:size,borderRadius:"50%",background:C.surface,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.User size={size*0.5} color={C.muted}/></div>;
+function Avatar({size=40,url=null}){return <div style={{width:size,height:size,borderRadius:"50%",background:C.surface,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden"}}>{url?<img src={url} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<Icon.User size={size*0.5} color={C.muted}/>}</div>;
 }
 
 // ── Stage Detail Sheet ────────────────────────────────────────────────────────
