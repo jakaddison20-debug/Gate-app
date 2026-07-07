@@ -1189,22 +1189,9 @@ export default function App(){
   const [showAuth,setShowAuth]=useState(false);
   useEffect(()=>{if(!user)return;supabase.from('profiles').select('display_name,avatar_url').eq('id',user.id).single().then(({data})=>{if(data)setSettings(prev=>({...prev,displayName:data.display_name||prev.displayName,avatarUrl:data.avatar_url||null}));});},[user]);
 
-    const timerRef=useRef(null);
-  const countRef=useRef(null);
-  const gpsRef=useRef(null);
-  const [introDist,setIntroDist]=useState(null);
-
-  useEffect(()=>{
-    if(phase!=="modeIntro")return;
-    if(!navigator.geolocation)return;
-    const gate=courseStages[0]?.start;
-    if(!gate)return;
-    const id=navigator.geolocation.watchPosition(pos=>{
-      const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};
-      setIntroDist(Math.round(haversine(loc,gate)));
-    },err=>console.log(err),{enableHighAccuracy:true,maximumAge:2000,timeout:10000});
-    return()=>navigator.geolocation.clearWatch(id);
-  },[phase]);
+      const timerRef=useRef(null);
+  const containerRef=useRef(null);
+  const wakeLockRef=useRef(null);
   const [mapSize,setMapSize]=useState({w:390,h:844});
   const [userPos,setUserPos]=useState(DEFAULT_CENTER);
 
