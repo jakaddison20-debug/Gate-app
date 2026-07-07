@@ -785,13 +785,14 @@ function RaceScreen({course,stages,user,onFinish}){
               <div style={{fontSize:11,color:C.muted,marginTop:4}}>Tap "Another Run" after each completion to keep improving</div>
             </div>
           )}
-                    <div style={{textAlign:"center",padding:"10px 14px",background:introDist===null?C.surface:introDist<=20?`${C.green}15`:`${C.orange}15`,borderRadius:10,border:`1px solid ${introDist===null?C.border:introDist<=20?C.green:C.orange}`}}>
+              <div style={{textAlign:"center",padding:"10px 14px",background:introDist===null?C.surface:introDist<=20?`${C.green}15`:`${C.orange}15`,borderRadius:10,border:`1px solid ${introDist===null?C.border:introDist<=20?C.green:C.orange}`}}>
             <div style={{fontSize:13,fontWeight:600,color:introDist===null?C.muted:introDist<=20?C.green:C.orange}}>{introDist===null?"📍 Finding your location…":introDist<=20?"✓ You're at the start":`📍 ${introDist}m from the start`}</div>
+            {introDist!==null&&introDist>20&&<div style={{fontSize:11,color:C.muted,marginTop:2}}>Get within 20m to start</div>}
           </div>
-          <button className="tap" onClick={()=>{setPhase("transfer");}} style={{width:"100%",background:modeInfo.btnColor,border:"none",borderRadius:14,padding:18,color:"#fff",fontSize:16,fontWeight:700,boxShadow:`0 4px 20px ${modeInfo.btnColor}44`}}>
+          <button className="tap" onClick={()=>{if(introDist!==null&&introDist<=20)setPhase("transfer");}} style={{width:"100%",background:(introDist!==null&&introDist<=20)?modeInfo.btnColor:C.surface,border:"none",borderRadius:14,padding:18,color:(introDist!==null&&introDist<=20)?"#fff":C.mutedL,fontSize:16,fontWeight:700,boxShadow:(introDist!==null&&introDist<=20)?`0 4px 20px ${modeInfo.btnColor}44`:"none"}}>
             {modeInfo.btn} →
           </button>
-
+  
           <button className="tap" onClick={onFinish} style={{width:"100%",background:"none",border:`1px solid ${C.border}`,borderRadius:14,padding:14,color:C.muted,fontSize:14}}>
             Back
           </button>
