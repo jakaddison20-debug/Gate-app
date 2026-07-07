@@ -318,10 +318,8 @@ function Avatar({size=40,url=null}){return <div style={{width:size,height:size,b
 }
 
 // ── Stage Detail Sheet ────────────────────────────────────────────────────────
-  function StageDetailSheet({stage,onClose,onRace}){
+    function StageDetailSheet({stage,onClose,onRace}){
   const [lb,setLb]=useState([]);
-  const [distToStart,setDistToStart]=useState(null);
-  useEffect(()=>{if(!navigator.geolocation)return;const id=navigator.geolocation.watchPosition(pos=>{const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};setDistToStart(Math.round(haversine(loc,stage.start)));},err=>console.log(err),{enableHighAccuracy:true,maximumAge:2000,timeout:10000});return()=>navigator.geolocation.clearWatch(id);},[stage.id]);
  
   useEffect(()=>{supabase.from('stage_times').select('time_ms,user_id,profiles(display_name,avatar_url)').eq('stage_id',stage.id).order('time_ms',{ascending:true}).then(({data})=>{if(data){const seen={};const best=data.filter(t=>{const id=t.user_id;if(seen[id])return false;seen[id]=true;return true;});setLb(best.slice(0,10).map((t,i)=>({pos:i+1,name:t.profiles?.display_name||'Rider',avatarUrl:t.profiles?.avatar_url||null,time:t.time_ms})))}});},[stage.id]);
 
