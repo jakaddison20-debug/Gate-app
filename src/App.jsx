@@ -283,8 +283,16 @@ function MapboxStyleMap({center,zoom,flyToTrigger,width:W,height:H,stages=[],cou
           const finishEl=document.createElement('div');finishEl.innerHTML='<div style="width:18px;height:18px;border-radius:50%;background:white;border:2px solid #1A1A1A;box-shadow:0 2px 6px rgba(0,0,0,0.3);overflow:hidden"><svg width="14" height="14" viewBox="0 0 8 8"><rect width="2" height="2" fill="#1A1A1A"/><rect x="4" width="2" height="2" fill="#1A1A1A"/><rect x="2" y="2" width="2" height="2" fill="#1A1A1A"/><rect x="6" y="2" width="2" height="2" fill="#1A1A1A"/><rect y="4" width="2" height="2" fill="#1A1A1A"/><rect x="4" y="4" width="2" height="2" fill="#1A1A1A"/><rect x="2" y="6" width="2" height="2" fill="#1A1A1A"/><rect x="6" y="6" width="2" height="2" fill="#1A1A1A"/></svg></div>';
           new mapboxgl.Marker({element:finishEl}).setLngLat([stage.finish.lng,stage.finish.lat]).addTo(map.current);
 
+          const midLat=(stage.start.lat+stage.finish.lat)/2;
+          const midLng=(stage.start.lng+stage.finish.lng)/2;
+          const pinEl=document.createElement('div');
+          pinEl.style.cssText='width:34px;height:42px;cursor:pointer;position:relative;';
+          pinEl.innerHTML='<svg width="34" height="42" viewBox="0 0 34 42" style="position:absolute;top:0;left:0;"><path d="M17 0C7.6 0 0 7.6 0 17c0 11.7 17 25 17 25s17-13.3 17-25C34 7.6 26.4 0 17 0z" fill="rgba(37,99,235,0.28)"/></svg><div style="position:absolute;top:8px;left:0;width:34px;display:flex;align-items:center;justify-content:center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="#2563EB"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>';
+          pinEl.addEventListener('click',()=>{if(onStagePress)onStagePress(stage);});
+          new mapboxgl.Marker({element:pinEl,anchor:'bottom'}).setLngLat([midLng,midLat]).addTo(map.current);
 
           if(stage.line_coords&&stage.line_coords.length>1){
+
             const id='line-'+stage.id;
             map.current.addSource(id,{type:'geojson',data:{type:'Feature',geometry:{type:'LineString',coordinates:stage.line_coords.map(c=>[c.lng,c.lat])}}});
             map.current.addLayer({id,type:'line',source:id,paint:{'line-color':'#F59E0B','line-width':3,'line-opacity':0.9}});
