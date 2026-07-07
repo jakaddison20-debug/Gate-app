@@ -283,15 +283,30 @@ function MapboxStyleMap({center,zoom,flyToTrigger,width:W,height:H,stages=[],cou
           const finishEl=document.createElement('div');finishEl.innerHTML='<div style="width:18px;height:18px;border-radius:50%;background:white;border:2px solid #1A1A1A;box-shadow:0 2px 6px rgba(0,0,0,0.3);overflow:hidden"><svg width="14" height="14" viewBox="0 0 8 8"><rect width="2" height="2" fill="#1A1A1A"/><rect x="4" width="2" height="2" fill="#1A1A1A"/><rect x="2" y="2" width="2" height="2" fill="#1A1A1A"/><rect x="6" y="2" width="2" height="2" fill="#1A1A1A"/><rect y="4" width="2" height="2" fill="#1A1A1A"/><rect x="4" y="4" width="2" height="2" fill="#1A1A1A"/><rect x="2" y="6" width="2" height="2" fill="#1A1A1A"/><rect x="6" y="6" width="2" height="2" fill="#1A1A1A"/></svg></div>';
           new mapboxgl.Marker({element:finishEl}).setLngLat([stage.finish.lng,stage.finish.lat]).addTo(map.current);
 
-                    let midLat,midLng;
+                              let midLat,midLng;
           if(stage.line_coords&&stage.line_coords.length>1){
-            const midIdx=Math.floor(stage.line_coords.length/2);
-            midLat=stage.line_coords[midIdx].lat;
-            midLng=stage.line_coords[midIdx].lng;
+            const coords=stage.line_coords;
+            let totalLen=0;
+            const segLens=[];
+            for(let i=0;i<coords.length-1;i++){const d=haversine(coords[i],coords[i+1]);segLens.push(d);totalLen+=d;}
+            const halfLen=totalLen/2;
+            let acc=0,midPoint=coords[0];
+            for(let i=0;i<segLens.length;i++){
+              if(acc+segLens[i]>=halfLen){
+                const remain=halfLen-acc;
+                const frac=segLens[i]>0?remain/segLens[i]:0;
+                midPoint={lat:coords[i].lat+(coords[i+1].lat-coords[i].lat)*frac,lng:coords[i].lng+(coords[i+1].lng-coords[i].lng)*frac};
+                break;
+              }
+              acc+=segLens[i];
+            }
+            midLat=midPoint.lat;
+            midLng=midPoint.lng;
           } else {
             midLat=(stage.start.lat+stage.finish.lat)/2;
             midLng=(stage.start.lng+stage.finish.lng)/2;
           }
+
           const pinEl=document.createElement('div');
           pinEl.style.cssText='width:34px;height:42px;cursor:pointer;position:relative;';
           pinEl.innerHTML='<svg width="34" height="42" viewBox="0 0 34 42" style="position:absolute;top:0;left:0;"><path d="M17 0C7.6 0 0 7.6 0 17c0 11.7 17 25 17 25s17-13.3 17-25C34 7.6 26.4 0 17 0z" fill="rgba(37,99,235,0.35)"/></svg><div style="position:absolute;top:8px;left:0;width:34px;display:flex;align-items:center;justify-content:center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>';
