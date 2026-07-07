@@ -764,20 +764,20 @@ function RaceScreen({course,stages,user,onFinish}){
       mashup:{color:C.blue,icon:"⚡",title:"Mashup Mode",sub:"Unlimited runs. Your best time on each stage gets combined into one total. Keep going until you're happy.",btn:"Start Mashup",btnColor:C.blue},
     }[course.mode];
     return(
-      <div style={{position:"fixed",inset:0,background:"#fff",zIndex:100,display:"flex",flexDirection:"column"}}>
-        <div style={{background:modeInfo.color,padding:"52px 20px 32px",textAlign:"center",flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+              <div style={{background:"#fff",padding:"52px 20px 32px",textAlign:"center",flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
           <div style={{fontSize:72,marginBottom:16}}>{modeInfo.icon}</div>
-          <div style={{fontSize:28,fontWeight:800,color:"white",marginBottom:8}}>{course.name}</div>
-          <div style={{fontSize:18,fontWeight:600,color:"rgba(255,255,255,0.9)",marginBottom:12}}>{modeInfo.title}</div>
-          <div style={{fontSize:14,color:"rgba(255,255,255,0.75)",lineHeight:1.6,maxWidth:280,textAlign:"center",marginBottom:24}}>{modeInfo.sub}</div>
+          <div style={{fontSize:28,fontWeight:800,color:C.text,marginBottom:8}}>{course.name}</div>
+          <div style={{fontSize:18,fontWeight:600,color:C.text,marginBottom:12}}>{modeInfo.title}</div>
+          <div style={{fontSize:14,color:C.muted,lineHeight:1.6,maxWidth:280,textAlign:"center",marginBottom:24}}>{modeInfo.sub}</div>
           <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"center"}}>
             {courseStages.map((s,i)=>(
-              <div key={s.id} style={{background:"rgba(255,255,255,0.2)",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,color:"white"}}>
+              <div key={s.id} style={{background:`${C.blue}15`,border:`1px solid ${C.blue}33`,borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,color:C.blue}}>
                 {i+1}. {s.name}
               </div>
             ))}
           </div>
         </div>
+
         <div style={{padding:"24px 20px 40px",display:"flex",flexDirection:"column",gap:12}}>
           {isMashup&&(
             <div style={{background:`${C.blue}10`,border:`1px solid ${C.blue}33`,borderRadius:12,padding:"12px 16px",textAlign:"center"}}>
@@ -785,8 +785,8 @@ function RaceScreen({course,stages,user,onFinish}){
               <div style={{fontSize:11,color:C.muted,marginTop:4}}>Tap "Another Run" after each completion to keep improving</div>
             </div>
           )}
-              <div style={{textAlign:"center",padding:"10px 14px",background:introDist===null?C.surface:introDist<=20?`${C.green}15`:`${C.orange}15`,borderRadius:10,border:`1px solid ${introDist===null?C.border:introDist<=20?C.green:C.orange}`}}>
-            <div style={{fontSize:13,fontWeight:600,color:introDist===null?C.muted:introDist<=20?C.green:C.orange}}>{introDist===null?"📍 Finding your location…":introDist<=20?"✓ You're at the start":`📍 ${introDist}m from the start`}</div>
+                        <div style={{textAlign:"center",padding:"10px 14px",background:introDist===null?C.surface:introDist<=20?`${C.green}15`:`${C.blue}15`,borderRadius:10,border:`1px solid ${introDist===null?C.border:introDist<=20?C.green:C.blue}`}}>
+            <div style={{fontSize:13,fontWeight:600,color:introDist===null?C.muted:introDist<=20?C.green:C.blue}}>{introDist===null?"📍 Finding your location…":introDist<=20?"✓ You're at the start":`📍 ${introDist}m from the start`}</div>
             {introDist!==null&&introDist>20&&<div style={{fontSize:11,color:C.muted,marginTop:2}}>Get within 20m to start</div>}
           </div>
           <button className="tap" onClick={()=>{if(introDist!==null&&introDist<=20)setPhase("transfer");}} style={{width:"100%",background:(introDist!==null&&introDist<=20)?modeInfo.btnColor:C.surface,border:"none",borderRadius:14,padding:18,color:(introDist!==null&&introDist<=20)?"#fff":C.mutedL,fontSize:16,fontWeight:700,boxShadow:(introDist!==null&&introDist<=20)?`0 4px 20px ${modeInfo.btnColor}44`:"none"}}>
