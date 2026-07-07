@@ -669,13 +669,26 @@ function RaceScreen({course,stages,user,onFinish}){
   const [gateStatus,setGateStatus]=useState("waiting");
   const [distToGate,setDistToGate]=useState(null);
 
-  const timerRef=useRef(null);
+    const timerRef=useRef(null);
   const countRef=useRef(null);
   const gpsRef=useRef(null);
+  const [introDist,setIntroDist]=useState(null);
 
   const currentStage=courseStages[stageIndex];
   const totalStages=courseStages.length;
   const isLastStage=stageIndex===totalStages-1;
+
+  useEffect(()=>{
+    if(phase!=="modeIntro")return;
+    if(!navigator.geolocation)return;
+    const gate=courseStages[0]?.start;
+    if(!gate)return;
+    const id=navigator.geolocation.watchPosition(pos=>{
+      const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};
+      setIntroDist(Math.round(haversine(loc,gate)));
+    },err=>console.log(err),{enableHighAccuracy:true,maximumAge:2000,timeout:10000});
+    return()=>navigator.geolocation.clearWatch(id);
+  },[phase]);
 
   // Simulate GPS toward gate
   useEffect(()=>{
