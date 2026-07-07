@@ -364,7 +364,12 @@ function Avatar({size=40,url=null}){return <div style={{width:size,height:size,b
           );
         })}
         
-        <button className="tap" onClick={onRace} style={{width:"100%",background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"12px 16px",color:C.blue,fontSize:14,fontWeight:700,marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><Icon.Flag size={16} color={C.blue}/>Race Stage</button>
+        <div style={{textAlign:"center",marginBottom:12,padding:"10px 14px",background:distToStart===null?C.surface:distToStart<=20?`${C.green}15`:`${C.orange}15`,borderRadius:10,border:`1px solid ${distToStart===null?C.border:distToStart<=20?C.green:C.orange}`}}>
+<div style={{fontSize:13,fontWeight:600,color:distToStart===null?C.muted:distToStart<=20?C.green:C.orange}}>{distToStart===null?"📍 Finding your location…":distToStart<=20?"✓ You're at the start — ready to race!":`📍 ${distToStart}m from the start gate`}</div>
+{distToStart!==null&&distToStart>20&&<div style={{fontSize:11,color:C.muted,marginTop:2}}>Get within 20m to start racing</div>}
+</div>
+        
+<button className="tap" onClick={()=>{if(distToStart!==null&&distToStart<=20)onRace();}} style={{width:"100%",background:(distToStart!==null&&distToStart<=20)?"#fff":C.surface,border:`1.5px solid ${(distToStart!==null&&distToStart<=20)?C.blue:C.border}`,borderRadius:10,padding:"12px 16px",color:(distToStart!==null&&distToStart<=20)?C.blue:C.mutedL,fontSize:14,fontWeight:700,marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><Icon.Flag size={16} color={(distToStart!==null&&distToStart<=20)?C.blue:C.mutedL}/>Race Stage</button>
         <div style={{background:"linear-gradient(135deg,#1A1A1A,#2A2A2A)",borderRadius:14,padding:"16px",marginTop:8,textAlign:"center"}}>
           <div style={{fontSize:14,fontWeight:700,color:"white",marginBottom:4}}>Unlock Full Leaderboard</div>
           <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginBottom:12}}>See all riders, filter by date, export results</div>
