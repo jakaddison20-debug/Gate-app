@@ -311,7 +311,7 @@ function MapboxStyleMap({center,zoom,flyToTrigger,width:W,height:H,stages=[],cou
           pinEl.style.cssText='width:34px;height:42px;cursor:pointer;position:relative;';
           pinEl.innerHTML='<svg width="34" height="42" viewBox="0 0 34 42" style="position:absolute;top:0;left:0;"><path d="M17 0C7.6 0 0 7.6 0 17c0 11.7 17 25 17 25s17-13.3 17-25C34 7.6 26.4 0 17 0z" fill="rgba(37,99,235,0.35)"/></svg><div style="position:absolute;top:8px;left:0;width:34px;display:flex;align-items:center;justify-content:center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>';
           pinEl.addEventListener('click',()=>{if(onStagePress)onStagePress(stage);});
-          new mapboxgl.Marker({element:pinEl,anchor:'bottom'}).setLngLat([midLng,midLat]).addTo(map.current);
+          new mapboxgl.Marker({element:pinEl,offset:[0,-21]}).setLngLat([midLng,midLat]).addTo(map.current);
 
           if(stage.line_coords&&stage.line_coords.length>1){
 
