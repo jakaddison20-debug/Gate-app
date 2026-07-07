@@ -275,8 +275,10 @@ function MapboxStyleMap({center,zoom,flyToTrigger,width:W,height:H,stages=[],cou
         zoom:zoom,
       });
       map.current.on('load',()=>{
-        // Add stages as lines
+                // Add stages as lines
+        const midpointFeatures=[];
         stages.forEach(stage=>{
+
           
           const startEl=document.createElement('div');startEl.innerHTML='<div style="width:18px;height:18px;border-radius:50%;background:#F59E0B;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3)"></div>';
           new mapboxgl.Marker({element:startEl}).setLngLat([stage.start.lng,stage.start.lat]).addTo(map.current);
@@ -316,6 +318,17 @@ function MapboxStyleMap({center,zoom,flyToTrigger,width:W,height:H,stages=[],cou
             map.current.addLayer({id,type:'line',source:id,paint:{'line-color':'#F59E0B','line-width':3,'line-opacity':0.9}});
           }
         });
+
+              if(midpointFeatures.length>0){
+          map.current.addSource('stage-midpoints',{type:'geojson',data:{type:'FeatureCollection',features:midpointFeatures}});
+          map.current.addLayer({id:'stage-midpoints-circle',type:'circle',source:'stage-midpoints',paint:{'circle-radius':15,'circle-color':'#2563EB','circle-opacity':0.35}});
+          map.current.addLayer({id:'stage-midpoints-bolt',type:'symbol',source:'stage-midpoints',layout:{'text-field':'⚡','text-size':20,'text-allow-overlap':true}});
+          map.current.on('click','stage-midpoints-circle',e=>{
+            const stageId=e.features[0].properties.stageId;
+            const stage=stages.find(s=>String(s.id)===stageId);
+            if(stage&&onStagePress)onStagePress(stage);
+          });
+        }
 
         // User dot
         if(userPos){
