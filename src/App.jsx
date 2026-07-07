@@ -778,9 +778,13 @@ function RaceScreen({course,stages,user,onFinish}){
               <div style={{fontSize:11,color:C.muted,marginTop:4}}>Tap "Another Run" after each completion to keep improving</div>
             </div>
           )}
+                    <div style={{textAlign:"center",padding:"10px 14px",background:introDist===null?C.surface:introDist<=20?`${C.green}15`:`${C.orange}15`,borderRadius:10,border:`1px solid ${introDist===null?C.border:introDist<=20?C.green:C.orange}`}}>
+            <div style={{fontSize:13,fontWeight:600,color:introDist===null?C.muted:introDist<=20?C.green:C.orange}}>{introDist===null?"📍 Finding your location…":introDist<=20?"✓ You're at the start":`📍 ${introDist}m from the start`}</div>
+          </div>
           <button className="tap" onClick={()=>{setPhase("transfer");}} style={{width:"100%",background:modeInfo.btnColor,border:"none",borderRadius:14,padding:18,color:"#fff",fontSize:16,fontWeight:700,boxShadow:`0 4px 20px ${modeInfo.btnColor}44`}}>
             {modeInfo.btn} →
           </button>
+
           <button className="tap" onClick={onFinish} style={{width:"100%",background:"none",border:`1px solid ${C.border}`,borderRadius:14,padding:14,color:C.muted,fontSize:14}}>
             Back
           </button>
