@@ -1391,12 +1391,20 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
       {/* STAGES */}
       {tab==="stages"&&(
         <div style={{height:"calc(100vh - 44px - 83px)",overflowY:"auto"}}>
-          <div style={{padding:"12px 16px 0",position:"sticky",top:0,background:"#fff",zIndex:5,borderBottom:`1px solid ${C.border}`,paddingBottom:12}}>
+                    <div style={{padding:"12px 16px 0",position:"sticky",top:0,background:"#fff",zIndex:5,borderBottom:`1px solid ${C.border}`,paddingBottom:12}}>
             <div style={{display:"flex",background:C.surface,borderRadius:10,padding:3,marginBottom:12}}>
               {[{val:"stages",label:"Stages"},{val:"courses",label:"Courses"}].map(t=>(
                 <button key={t.val} className="tap" onClick={()=>setCoursesFilter(t.val)} style={{flex:1,padding:"9px",borderRadius:8,background:coursesFilter===t.val?"#fff":"none",border:"none",color:coursesFilter===t.val?C.text:C.muted,fontSize:14,fontWeight:coursesFilter===t.val?600:400,boxShadow:coursesFilter===t.val?"0 1px 4px rgba(0,0,0,0.08)":"none",transition:"all 0.15s"}}>{t.label}</button>
               ))}
             </div>
+            {coursesFilter==="stages"&&<div style={{display:"flex",gap:8,marginBottom:12}}>
+              {[{val:"nearby",label:"📍 Nearby",sub:"Within 20mi"},{val:"explore",label:"🌍 Explore",sub:"All stages"}].map(p=>(
+                <button key={p.val} className="tap" onClick={()=>setProximityFilter(p.val)} style={{flex:1,background:proximityFilter===p.val?`${C.blue}10`:C.surface,border:`1.5px solid ${proximityFilter===p.val?C.blue:C.border}`,borderRadius:10,padding:"10px 8px",textAlign:"center",transition:"all 0.15s"}}>
+                  <div style={{fontSize:13,fontWeight:600,color:proximityFilter===p.val?C.blue:C.text}}>{p.label}</div>
+                  <div style={{fontSize:10,color:C.muted,marginTop:1}}>{p.sub}</div>
+                </button>
+              ))}
+            </div>}
             {coursesFilter==="stages"&&<div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:2}}>
               {[{v:"all",l:"All"},{v:"public",l:"Public"},{v:"group",l:"Group"},{v:"private",l:"Private"}].map(f=>(
                 <button key={f.v} className="tap" onClick={()=>setStagesFilter(f.v)} style={{padding:"6px 14px",borderRadius:20,whiteSpace:"nowrap",background:stagesFilter===f.v?"white":C.surface,border:`1px solid ${stagesFilter===f.v?C.blue:C.border}`,color:stagesFilter===f.v?C.blue:C.text,fontSize:13,fontWeight:stagesFilter===f.v?600:400}}>{f.l}</button>
