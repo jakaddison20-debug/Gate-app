@@ -1312,7 +1312,8 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
   const onMouseMove=e=>{if(!mouseRef.current)return;const dx=e.clientX-mouseRef.current.x,dy=e.clientY-mouseRef.current.y,scale=Math.pow(2,zoom)*256,mercY=Math.log(Math.tan(Math.PI/4+(mouseRef.current.center.lat*Math.PI)/360)),newMercY=mercY+(dy/scale)*Math.PI*2;setMapCenter({lng:mouseRef.current.center.lng-(dx/scale)*360,lat:((Math.atan(Math.exp(newMercY))*2-Math.PI/2)*180)/Math.PI});};
   const onMouseUp=()=>{mouseRef.current=null;};
   const onWheel=e=>{e.preventDefault();setZoom(z=>Math.max(8,Math.min(18,z-e.deltaY*0.003)));};
-  const filteredStages=stages.filter(s=>stagesFilter==="all"||s.privacy===stagesFilter);
+    const [proximityFilter,setProximityFilter]=useState("nearby");
+  const filteredStages=stages.filter(s=>stagesFilter==="all"||s.privacy===stagesFilter).filter(s=>proximityFilter==="explore"||haversine(userPos,s.start)<=32187);
 
   const TABS=[{id:"home",label:"Home",Ic:Icon.Home},{id:"map",label:"Map",Ic:Icon.Map},{id:"record",label:"",Ic:null},{id:"stages",label:"Stages",Ic:Icon.Lightning},{id:"profile",label:"Profile",Ic:Icon.User}];
   if(!user)return(
