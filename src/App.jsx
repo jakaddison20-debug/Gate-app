@@ -274,9 +274,37 @@ function MapboxStyleMap({center,zoom,flyToTrigger,width:W,height:H,stages=[],cou
         center:[center.lng,center.lat],
         zoom:zoom,
       });
-      map.current.on('load',()=>{
-                // Add stages as lines
+            map.current.on('load',()=>{
+        const pinCanvas=document.createElement('canvas');
+        pinCanvas.width=68;pinCanvas.height=84;
+        const ctx=pinCanvas.getContext('2d');
+        ctx.beginPath();
+        ctx.moveTo(34,0);
+        ctx.bezierCurveTo(15.2,0,0,15.2,0,34);
+        ctx.bezierCurveTo(0,57.4,34,84,34,84);
+        ctx.bezierCurveTo(34,84,68,57.4,68,34);
+        ctx.bezierCurveTo(68,15.2,52.8,0,34,0);
+        ctx.closePath();
+        ctx.fillStyle='rgba(37,99,235,0.35)';
+        ctx.fill();
+        ctx.strokeStyle='#2563EB';
+        ctx.lineWidth=4.4;
+        ctx.lineJoin='round';
+        ctx.lineCap='round';
+        ctx.beginPath();
+        ctx.moveTo(38.7,20);
+        ctx.lineTo(19.3,42.7);
+        ctx.lineTo(36,42.7);
+        ctx.lineTo(33.3,60.7);
+        ctx.lineTo(52.7,36);
+        ctx.lineTo(36,36);
+        ctx.closePath();
+        ctx.stroke();
+        map.current.addImage('stage-pin',ctx.getImageData(0,0,68,84));
+
+        // Add stages as lines
         const midpointFeatures=[];
+
         stages.forEach(stage=>{
 
           
@@ -286,9 +314,15 @@ function MapboxStyleMap({center,zoom,flyToTrigger,width:W,height:H,stages=[],cou
           new mapboxgl.Marker({element:finishEl}).setLngLat([stage.finish.lng,stage.finish.lat]).addTo(map.current);
 
                               let midLat,midLng;
-          if(stage.line_coords&&stage.line_coords.length>1){
-            const coords=stage.line_coords;
+                if(stage.line_coords&&stage.line_coords.length>1){
+            const raw=stage.line_coords;
+            const coords=[raw[0]];
+            for(let i=1;i<raw.length;i++){
+              if(haversine(coords[coords.length-1],raw[i])<100){coords.push(raw[i]);}
+            }
+            if(coords.length<2)coords.push(raw[raw.length-1]);
             let totalLen=0;
+
             const segLens=[];
             for(let i=0;i<coords.length-1;i++){const d=haversine(coords[i],coords[i+1]);segLens.push(d);totalLen+=d;}
             const halfLen=totalLen/2;
@@ -321,9 +355,8 @@ function MapboxStyleMap({center,zoom,flyToTrigger,width:W,height:H,stages=[],cou
 
               if(midpointFeatures.length>0){
           map.current.addSource('stage-midpoints',{type:'geojson',data:{type:'FeatureCollection',features:midpointFeatures}});
-          map.current.addLayer({id:'stage-midpoints-circle',type:'circle',source:'stage-midpoints',paint:{'circle-radius':15,'circle-color':'#2563EB','circle-opacity':0.35}});
-          map.current.addLayer({id:'stage-midpoints-bolt',type:'symbol',source:'stage-midpoints',layout:{'text-field':'⚡','text-size':20,'text-allow-overlap':true}});
-          map.current.on('click','stage-midpoints-circle',e=>{
+          map.current.addLayer({id:'stage-midpoints-icon',type:'symbol',source:'stage-midpoints',layout:{'icon-image':'stage-pin','icon-size':0.5,'icon-anchor':'bottom','icon-allow-overlap':true}});
+          map.current.on('click','stage-midpoints-icon',e=>{
             const stageId=e.features[0].properties.stageId;
             const stage=stages.find(s=>String(s.id)===stageId);
             if(stage&&onStagePress)onStagePress(stage);
