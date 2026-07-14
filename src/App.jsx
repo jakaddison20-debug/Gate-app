@@ -1419,10 +1419,10 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
               </div>
               {courses.length===0?(
                 <div style={{textAlign:"center",padding:"48px 20px",color:C.muted}}>
-                  <div style={{width:64,height:64,borderRadius:"50%",background:C.orangeL,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><Icon.Flag size={28} color={C.orange}/></div>
+                                    <div style={{width:64,height:64,borderRadius:"50%",background:`${C.blue}15`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><Icon.Flag size={28} color={C.blue}/></div>
                   <div style={{fontSize:16,fontWeight:600,color:C.text,marginBottom:6}}>No courses yet</div>
-                  <div style={{fontSize:13,color:C.muted,marginBottom:20,lineHeight:1.5}}>Choose Practice, Race or Mashup mode when building</div>
-                  <button className="tap" onClick={()=>setSheet("courseBuilder")} style={{background:C.orange,border:"none",borderRadius:12,padding:"12px 24px",color:"white",fontSize:14,fontWeight:600}}>Build Your First Course</button>
+                  <div style={{fontSize:13,color:C.muted,marginBottom:20,lineHeight:1.5}}>Choose Race or Mashup mode when building</div>
+                  <button className="tap" onClick={()=>setSheet("courseBuilder")} style={{background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:12,padding:"12px 24px",color:C.blue,fontSize:14,fontWeight:600}}>Build Your First Course</button>
                 </div>
               ):courses.map(course=><CourseCard key={course.id} course={course} stages={stages} onStart={c=>setActiveRace(c)}/>)}
             </div>
