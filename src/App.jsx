@@ -534,12 +534,12 @@ function SegmentRow({stage,onPress,onDelete,userId}){
       {/* Courses with medals */}
       <div style={{padding:"16px 16px 0"}}>
         <div style={{fontSize:15,fontWeight:700,color:C.text,marginBottom:12}}>Courses Ridden</div>
-        {SAMPLE_COURSES_DONE.map(course=>{
-          const mc=medalColor(course.pos),top3=course.pos<=3;
+          {courseResults.length===0?<div style={{textAlign:"center",padding:"24px",color:C.muted,fontSize:13}}>No courses completed yet</div>:courseResults.map(course=>{
+          const mc=medalColor(course.pos),top3=course.pos&&course.pos<=3;
           return(
             <div key={course.id} style={{background:top3?`${mc}15`:"white",border:`1px solid ${top3?mc:C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:12}}>
-              <div style={{width:44,height:44,borderRadius:12,background:top3?mc:"#F0F0F0",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                {top3?<span style={{fontSize:22}}>{course.pos===1?"🥇":course.pos===2?"🥈":"🥉"}</span>:<span style={{fontSize:16,fontWeight:700,color:C.muted}}>{course.pos}th</span>}
+              <div style={{width:44,height:44,borderRadius:12,background:top3?mc:`${C.blue}12`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                {top3?<span style={{fontSize:22}}>{course.pos===1?"🥇":course.pos===2?"🥈":"🥉"}</span>:<Icon.Flag size={20} color={C.blue}/>}
               </div>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{course.name}</div>
