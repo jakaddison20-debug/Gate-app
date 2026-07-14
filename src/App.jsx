@@ -1163,8 +1163,8 @@ function CourseCard({course,stages,onStart}){
           </div>
         ))}
       </div>
-      <button className="tap" onClick={()=>onStart(course)} style={{width:"100%",background:modeInfo.color,border:"none",borderRadius:10,padding:"12px 16px",color:"white",fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-        <Icon.Flag size={16} color="white"/>{modeInfo.icon} Start {modeInfo.label}
+            <button className="tap" onClick={()=>onStart(course)} style={{width:"100%",background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"12px 16px",color:C.blue,fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+        <Icon.Flag size={16} color={C.blue}/>{modeInfo.icon} Start {modeInfo.label}
       </button>
     </div>
   );
