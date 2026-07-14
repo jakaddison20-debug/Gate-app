@@ -722,14 +722,17 @@ function RaceScreen({course,stages,user,onFinish}){
   const isPractice=course.mode==="practice";
   const isMashup=course.mode==="mashup";
 
-  const [stageIndex,setStageIndex]=useState(0);
-  const [phase,setPhase]=useState("modeIntro"); // modeIntro | transfer | countdown | racing | split | done
+    const progressKey=`gate_progress_${course.id}_${user.id}`;
+  const savedProgress=(()=>{try{const s=JSON.parse(localStorage.getItem(progressKey));if(s&&Date.now()-s.savedAt<12*3600*1000)return s;}catch(e){}return null;})();
+
+  const [stageIndex,setStageIndex]=useState(savedProgress?savedProgress.stageIndex:0);
+  const [phase,setPhase]=useState(savedProgress?"transfer":"modeIntro"); // modeIntro | transfer | countdown | racing | split | done
   const [countdown,setCountdown]=useState(3);
   const [timerMs,setTimerMs]=useState(0);
   const timerMsRef=useRef(0);
-  const [splits,setSplits]=useState([]); // current run splits
-  const [bestPerStage,setBestPerStage]=useState({}); // mashup: best time per stage id
-  const [runCount,setRunCount]=useState(0); // how many full runs completed
+  const [splits,setSplits]=useState(savedProgress?savedProgress.splits:[]); // current run splits
+  const [bestPerStage,setBestPerStage]=useState(savedProgress?savedProgress.bestPerStage:{}); // mashup: best time per stage id
+  const [runCount,setRunCount]=useState(savedProgress?savedProgress.runCount:0); // how many full runs completed
   const [gateStatus,setGateStatus]=useState("waiting");
   const [distToGate,setDistToGate]=useState(null);
 
