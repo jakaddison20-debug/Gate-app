@@ -658,14 +658,14 @@ function CourseBuilderSheet({stages,onClose,onSave}){
       {/* Mode selector — the key new feature */}
       <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase",marginBottom:10}}>Course Mode</div>
       <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
-        {COURSE_MODES.map(m=>(
-          <button key={m.id} className="tap" onClick={()=>setMode(m.id)} style={{display:"flex",alignItems:"flex-start",gap:12,background:mode===m.id?m.id==="mashup"?`${C.blue}10`:m.id==="practice"?`${C.green}10`:C.orangeL:C.surface,border:`1.5px solid ${mode===m.id?m.id==="mashup"?C.blue:m.id==="practice"?C.green:C.orange:C.border}`,borderRadius:14,padding:"14px 16px",textAlign:"left",transition:"all 0.15s"}}>
+             {COURSE_MODES.map(m=>(
+          <button key={m.id} className="tap" onClick={()=>setMode(m.id)} style={{display:"flex",alignItems:"flex-start",gap:12,background:mode===m.id?`${C.blue}10`:C.surface,border:`1.5px solid ${mode===m.id?C.blue:C.border}`,borderRadius:14,padding:"14px 16px",textAlign:"left",transition:"all 0.15s"}}>
             <div style={{fontSize:24,flexShrink:0}}>{m.icon}</div>
             <div style={{flex:1}}>
-              <div style={{fontSize:14,fontWeight:700,color:mode===m.id?m.id==="mashup"?C.blue:m.id==="practice"?C.green:C.orange:C.text,marginBottom:2}}>{m.label}</div>
+              <div style={{fontSize:14,fontWeight:700,color:mode===m.id?C.blue:C.text,marginBottom:2}}>{m.label}</div>
               <div style={{fontSize:12,color:C.muted,lineHeight:1.4}}>{m.desc}</div>
             </div>
-            {mode===m.id&&<Icon.Check size={18} color={m.id==="mashup"?C.blue:m.id==="practice"?C.green:C.orange}/>}
+            {mode===m.id&&<Icon.Check size={18} color={C.blue}/>}
           </button>
         ))}
       </div>
