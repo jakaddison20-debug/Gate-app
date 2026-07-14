@@ -708,8 +708,8 @@ function CourseBuilderSheet({stages,onClose,onSave}){
         ))}
       </div>
 
-      <button className="tap" onClick={()=>canSave&&onSave({id:Date.now(),name:name.trim(),stageIds:selectedIds,privacy,mode,times:{},bestPerStage:{}})} style={{width:"100%",background:canSave?C.orange:C.surface,border:"none",borderRadius:12,padding:15,color:canSave?"#fff":C.muted,fontSize:15,fontWeight:700,transition:"all 0.2s"}}>
-        {canSave?`Create ${mode==="mashup"?"Mashup":mode==="practice"?"Practice":"Race"} Course`:"Select at least 2 stages"}
+            <button className="tap" onClick={()=>canSave&&onSave({id:Date.now(),name:name.trim(),stageIds:selectedIds,privacy,mode,times:{},bestPerStage:{}})} style={{width:"100%",background:canSave?"#fff":C.surface,border:`1.5px solid ${canSave?C.blue:C.border}`,borderRadius:12,padding:15,color:canSave?C.blue:C.muted,fontSize:15,fontWeight:700,transition:"all 0.2s"}}>
+        {canSave?`Create ${mode==="mashup"?"Mashup":"Race"} Course`:"Select at least 2 stages"}
       </button>
     </div>
   );
