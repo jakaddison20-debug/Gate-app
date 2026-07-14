@@ -550,7 +550,7 @@ function SegmentRow({stage,onPress,onDelete,userId}){
               </div>
               <div style={{textAlign:"right",flexShrink:0}}>
                 <div style={{fontSize:14,fontWeight:700,color:top3?C.orange:C.text}}>{formatTime(course.totalTime)}</div>
-                <div style={{fontSize:11,color:C.muted,marginTop:1}}>{medalLabel(course.pos)}</div>
+                 {top3&&<div style={{fontSize:11,color:C.muted,marginTop:1}}>{medalLabel(course.pos)}</div>}
               </div>
             </div>
           );
