@@ -1141,7 +1141,7 @@ function RaceScreen({course,stages,user,onFinish}){
 function CourseCard({course,stages,onStart}){
   const courseStages=course.stageIds.map(id=>stages.find(s=>s.id===id)).filter(Boolean);
   const totalDist=courseStages.reduce((a,s)=>a+haversine(s.start,s.finish),0);
-  const modeInfo={practice:{color:C.green,icon:"🎯",label:"Practice"},race:{color:C.orange,icon:"🏁",label:"Race"},mashup:{color:C.blue,icon:"⚡",label:"Mashup"}}[course.mode||"race"];
+  const modeInfo={practice:{color:C.green,icon:"🎯",label:"Practice"},race:{color:C.blue,icon:"🏁",label:"Race"},mashup:{color:C.blue,icon:"⚡",label:"Mashup"}}[course.mode||"race"];
   return(
     <div style={{background:"white",border:`1px solid ${C.border}`,borderRadius:16,padding:"16px",marginBottom:12,boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
