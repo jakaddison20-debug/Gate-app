@@ -17,11 +17,9 @@ const C={orange:"#F59E0B",orangeL:"#FFF8E7",bg:"#FFFFFF",surface:"#F5F5F5",borde
 
 // ── Course modes ──────────────────────────────────────────────────────────────
 const COURSE_MODES=[
-  {id:"practice",label:"Practice",icon:"🎯",desc:"One untimed run to learn the stages. Times not saved."},
   {id:"race",label:"Race",icon:"🏁",desc:"One timed run. Times go to the leaderboard."},
   {id:"mashup",label:"Mashup",icon:"⚡",desc:"Unlimited runs. Best time on each stage combined into your total."},
 ];
-
 const SAMPLE_STAGES=[];
 
 const LEADERBOARD_DATA={};
