@@ -689,7 +689,7 @@ function CourseBuilderSheet({stages,onClose,onSave}){
             const stage=stages.find(s=>s.id===id);if(!stage)return null;
             return(
               <div key={id} style={{display:"flex",alignItems:"center",gap:10,background:"white",border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",marginBottom:6}}>
-                <div style={{width:24,height:24,borderRadius:"50%",background:C.orange,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"white",flexShrink:0}}>{i+1}</div>
+               <div style={{width:24,height:24,borderRadius:"50%",background:C.blue,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"white",flexShrink:0}}>{i+1}</div>
                 <div style={{flex:1,fontSize:13,fontWeight:500,color:C.text}}>{stage.name}</div>
                 <div style={{display:"flex",gap:4}}>
                   <button className="tap" onClick={e=>{e.stopPropagation();moveUp(i);}} style={{width:28,height:28,borderRadius:6,background:C.surface,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon.ChevronUp size={14} color={i===0?C.mutedL:C.text}/></button>
