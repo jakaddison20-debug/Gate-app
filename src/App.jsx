@@ -703,8 +703,8 @@ function CourseBuilderSheet({stages,onClose,onSave}){
       )}
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:20}}>
-        {[{val:"private",label:"Private"},{val:"group",label:"Group"},{val:"public",label:"Public"}].map(p=>(
-          <button key={p.val} className="tap" onClick={()=>setPrivacy(p.val)} style={{background:privacy===p.val?C.orangeL:C.surface,border:`1.5px solid ${privacy===p.val?C.orange:C.border}`,borderRadius:10,padding:"11px 8px",textAlign:"center",fontSize:13,fontWeight:privacy===p.val?600:400,color:privacy===p.val?C.orange:C.text,transition:"all 0.15s"}}>{p.label}</button>
+               {[{val:"private",label:"Private"},{val:"group",label:"Group"},{val:"public",label:"Public"}].map(p=>(
+          <button key={p.val} className="tap" onClick={()=>setPrivacy(p.val)} style={{background:privacy===p.val?`${C.blue}10`:C.surface,border:`1.5px solid ${privacy===p.val?C.blue:C.border}`,borderRadius:10,padding:"11px 8px",textAlign:"center",fontSize:13,fontWeight:privacy===p.val?600:400,color:privacy===p.val?C.blue:C.text,transition:"all 0.15s"}}>{p.label}</button>
         ))}
       </div>
 
