@@ -1331,9 +1331,6 @@ useEffect(()=>{
   }
   return()=>{if(wakeLockRef.current){wakeLockRef.current.release();wakeLockRef.current=null;}};
 },[activeRace]);
-
-
-
   
   useEffect(()=>{const el=containerRef.current;if(!el)return;const ro=new ResizeObserver(e=>setMapSize({w:e[0].contentRect.width,h:e[0].contentRect.height}));ro.observe(el);setMapSize({w:el.clientWidth,h:el.clientHeight});return()=>ro.disconnect();},[]);
   useEffect(()=>{if(timerRunning){timerRef.current=setInterval(()=>setTimerMs(t=>t+10),10);}else clearInterval(timerRef.current);return()=>clearInterval(timerRef.current);},[timerRunning]);
@@ -1345,10 +1342,50 @@ useEffect(()=>{
 useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.eq.public,created_by.eq.${user.id}`).then(async({data})=>{if(!data)return;const{data:times}=await supabase.from('stage_times').select('stage_id,time_ms').eq('user_id',user.id);const bests={};if(times)times.forEach(t=>{if(!bests[t.stage_id]||t.time_ms<bests[t.stage_id])bests[t.stage_id]=t.time_ms;});setStages(data.map(s=>({id:s.id,name:s.name,note:s.note||'',privacy:s.privacy,created_by:s.created_by,start:{lat:s.start_lat,lng:s.start_lng},finish:{lat:s.finish_lat,lng:s.finish_lng},line_coords:s.line_coords||null,time:bests[s.id]||null,cr:false})));});},[user]);
     
 
-    useEffect(()=>{if(!user)return;supabase.from('courses').select('*').then(({data})=>{if(data)setCourses(data.map(c=>({id:c.id,name:c.name,privacy:c.privacy,mode:c.mode,stageIds:c.stage_ids,times:{},bestPerStage:{}})));});},[user]);
+        useEffect(()=>{if(!user)return;supabase.from('courses').select('*').then(({data})=>{if(data)setCourses(data.map(c=>({id:c.id,name:c.name,privacy:c.privacy,mode:c.mode,stageIds:c.stage_ids,times:{},bestPerStage:{}})));});},[user]);
   const [courseResults,setCourseResults]=useState([]);
   useEffect(()=>{if(!user)return;supabase.from('course_results').select('id,total_time_ms,mode,completed_at,courses(name,stage_ids)').eq('user_id',user.id).order('completed_at',{ascending:false}).then(({data})=>{if(data)setCourseResults(data.map(r=>({id:r.id,name:r.courses?.name||'Course',date:new Date(r.completed_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}),stages:r.courses?.stage_ids?.length||0,mode:r.mode,totalTime:r.total_time_ms,pos:null})));});},[user]);
-  
+
+  const [recentStageTimes,setRecentStageTimes]=useState([]);
+  useEffect(()=>{if(!user)return;const since=new Date();since.setDate(since.getDate()-83);since.setHours(0,0,0,0);supabase.from('stage_times').select('stage_id,time_ms,created_at').eq('user_id',user.id).gte('created_at',since.toISOString()).then(({data})=>{if(data)setRecentStageTimes(data);});},[user]);
+
+  const weeklyActivity=useMemo(()=>{
+    const days=[];
+    for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);d.setHours(0,0,0,0);days.push(d);}
+    const dayKeys=days.map(d=>d.toDateString());
+    const dayLabels=days.map(d=>d.toLocaleDateString('en-GB',{weekday:'narrow'}));
+    const distByDay={};
+    dayKeys.forEach(k=>distByDay[k]=0);
+    recentStageTimes.forEach(t=>{
+      const stage=stages.find(s=>s.id===t.stage_id);
+      if(!stage)return;
+      const key=new Date(t.created_at).toDateString();
+      if(key in distByDay)distByDay[key]+=haversine(stage.start,stage.finish);
+    });
+    return{meters:dayKeys.map(k=>distByDay[k]),dayLabels};
+  },[stages,recentStageTimes]);
+
+  const pastWeeks=useMemo(()=>{
+    const now=new Date();
+    const buckets=[];
+    for(let w=11;w>=0;w--){
+      const end=new Date(now);
+      end.setDate(end.getDate()-w*7);
+      end.setHours(23,59,59,999);
+      const start=new Date(end);
+      start.setDate(start.getDate()-6);
+      start.setHours(0,0,0,0);
+      buckets.push({start,end,stages:0,mins:0});
+    }
+    recentStageTimes.forEach(t=>{
+      const created=new Date(t.created_at);
+      const bucket=buckets.find(b=>created>=b.start&&created<=b.end);
+      if(bucket){bucket.stages+=1;bucket.mins+=t.time_ms/60000;}
+    });
+    return buckets.map(b=>({stages:b.stages,mins:Math.round(b.mins)}));
+  },[recentStageTimes]);
+
+
   const dragRef=useRef(null),pinchRef=useRef(null);
   const onTouchStart=useCallback(e=>{if(e.touches.length===2){return;}else{dragRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY,center:{...mapCenter}};pinchRef.current=null;}},[mapCenter,zoom]);
   const onTouchMove=useCallback(e=>{e.preventDefault();if(e.touches.length===1&&dragRef.current){const dx=e.touches[0].clientX-dragRef.current.x,dy=e.touches[0].clientY-dragRef.current.y,scale=Math.pow(2,zoom)*256,mercY=Math.log(Math.tan(Math.PI/4+(dragRef.current.center.lat*Math.PI)/360)),newMercY=mercY+(dy/scale)*Math.PI*2;setMapCenter({lng:dragRef.current.center.lng-(dx/scale)*360,lat:((Math.atan(Math.exp(newMercY))*2-Math.PI/2)*180)/Math.PI});}},[zoom]);
