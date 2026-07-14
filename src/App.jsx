@@ -736,9 +736,10 @@ function RaceScreen({course,stages,user,onFinish}){
   const [gateStatus,setGateStatus]=useState("waiting");
   const [distToGate,setDistToGate]=useState(null);
 
-    const timerRef=useRef(null);
+      const timerRef=useRef(null);
   const countRef=useRef(null);
   const gpsRef=useRef(null);
+  const startTimeRef=useRef(0);
   const [introDist,setIntroDist]=useState(null);
 
     const currentStage=courseStages[stageIndex];
@@ -779,7 +780,7 @@ function RaceScreen({course,stages,user,onFinish}){
     return()=>navigator.geolocation.clearWatch(id);
   },[phase,stageIndex]);
 
-  const startCountdown=()=>{setGateStatus("waiting");setTimerMs(0);timerMsRef.current=0;setPhase("racing");timerRef.current=setInterval(()=>{timerMsRef.current+=10;setTimerMs(timerMsRef.current);},10);setTimeout(()=>{if(timerRef.current){clearInterval(timerRef.current);setPhase("transfer");setTimerMs(0);alert("Run cancelled — finish gate not reached in time");}},600000);};
+    const startCountdown=()=>{setGateStatus("waiting");setTimerMs(0);timerMsRef.current=0;startTimeRef.current=Date.now();setPhase("racing");timerRef.current=setInterval(()=>{timerMsRef.current=Date.now()-startTimeRef.current;setTimerMs(timerMsRef.current);},10);setTimeout(()=>{if(timerRef.current){clearInterval(timerRef.current);setPhase("transfer");setTimerMs(0);alert("Run cancelled — finish gate not reached in time");}},600000);};
 
    
     const stopStage=async(saveTime=false)=>{
