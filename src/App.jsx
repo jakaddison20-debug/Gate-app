@@ -1128,9 +1128,9 @@ function RaceScreen({course,stages,user,onFinish}){
         </div>
         <div style={{padding:"16px 20px 36px",display:"flex",gap:10}}>
           <button className="tap" onClick={onFinish} style={{flex:1,background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:14,color:C.text,fontSize:14,fontWeight:600}}>Back</button>
-          {isPractice
+            {isPractice
             ?<button className="tap" onClick={onFinish} style={{flex:2,background:C.green,border:"none",borderRadius:12,padding:14,color:"#fff",fontSize:14,fontWeight:700}}>Ready to Race!</button>
-            :<button className="tap" onClick={onFinish} style={{flex:2,background:isMashup?C.blue:C.orange,border:"none",borderRadius:12,padding:14,color:"#fff",fontSize:14,fontWeight:700}}>Save Results</button>
+            :<button className="tap" onClick={async()=>{const{error}=await supabase.from('course_results').insert({course_id:course.id,user_id:user.id,total_time_ms:finalTotal,mode:course.mode});if(error){alert("Couldn't save course result: "+error.message);}onFinish();}} style={{flex:2,background:isMashup?C.blue:C.orange,border:"none",borderRadius:12,padding:14,color:"#fff",fontSize:14,fontWeight:700}}>Save Results</button>
           }
         </div>
       </div>
