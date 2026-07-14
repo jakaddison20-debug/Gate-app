@@ -873,7 +873,7 @@ function RaceScreen({course,stages,user,onFinish}){
             {modeInfo.btn} →
           </button>
   
-          <button className="tap" onClick={onFinish} style={{width:"100%",background:"none",border:`1px solid ${C.border}`,borderRadius:14,padding:14,color:C.muted,fontSize:14}}>
+          <button className="tap" onClick={quitRace} style={{width:"100%",background:"none",border:`1px solid ${C.border}`,borderRadius:14,padding:14,color:C.muted,fontSize:14}}>
             Back
           </button>
         </div>
@@ -936,7 +936,7 @@ function RaceScreen({course,stages,user,onFinish}){
             <div style={{fontSize:22,fontWeight:800,color:"white"}}>{currentStage.name}</div>
             <div style={{fontSize:13,color:"rgba(255,255,255,0.6)",marginTop:4}}>{formatDist(haversine(currentStage.start,currentStage.finish))}</div>
           </div>
-          <button className="tap" onClick={onFinish} style={{background:"rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 14px",color:"rgba(255,255,255,0.7)",fontSize:13,border:"none"}}>Quit</button>
+          <button className="tap" onClick={quitRace} style={{background:"rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 14px",color:"rgba(255,255,255,0.7)",fontSize:13,border:"none"}}>Quit</button>
         </div>
         <div style={{padding:"16px 20px",background:headerBg,display:"flex",gap:6}}>
           {courseStages.map((_,i)=><div key={i} style={{flex:1,height:4,borderRadius:2,background:i<stageIndex?C.orange:i===stageIndex?"white":"rgba(255,255,255,0.2)"}}/>)}
@@ -1077,7 +1077,7 @@ function RaceScreen({course,stages,user,onFinish}){
           {!isLastStage&&<div style={{textAlign:"center",padding:"8px 0"}}><div style={{fontSize:13,color:C.muted}}>Next: <span style={{fontWeight:600,color:C.text}}>{courseStages[stageIndex+1]?.name}</span></div></div>}
         </div>
         <div style={{padding:"0 20px 40px",display:"flex",gap:10}}>
-          <button className="tap" onClick={onFinish} style={{flex:1,background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:14,color:C.muted,fontSize:14,fontWeight:500}}>Quit</button>
+          <button className="tap" onClick={quitRace} style={{flex:1,background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:14,color:C.muted,fontSize:14,fontWeight:500}}>Quit</button>
           <button className="tap" onClick={nextStage} style={{flex:2,background:isPractice?C.green:isMashup?C.blue:C.orange,border:"none",borderRadius:12,padding:14,color:"#fff",fontSize:14,fontWeight:700}}>
             {isLastStage?(isPractice?"Done — Go Again?":isMashup?"Run Complete →":"See Results →"):"Next Stage →"}
           </button>
@@ -1134,9 +1134,9 @@ function RaceScreen({course,stages,user,onFinish}){
           )}
         </div>
         <div style={{padding:"16px 20px 36px",display:"flex",gap:10}}>
-          <button className="tap" onClick={onFinish} style={{flex:1,background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:14,color:C.text,fontSize:14,fontWeight:600}}>Back</button>
+          <button className="tap" onClick={quitRace} style={{flex:1,background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:14,color:C.text,fontSize:14,fontWeight:600}}>Back</button>
             {isPractice
-            ?<button className="tap" onClick={onFinish} style={{flex:2,background:C.green,border:"none",borderRadius:12,padding:14,color:"#fff",fontSize:14,fontWeight:700}}>Ready to Race!</button>
+            ?<button className="tap" onClick={quitRace} style={{flex:2,background:C.green,border:"none",borderRadius:12,padding:14,color:"#fff",fontSize:14,fontWeight:700}}>Ready to Race!</button>
             :<button className="tap" onClick={async()=>{const{error}=await supabase.from('course_results').insert({course_id:course.id,user_id:user.id,total_time_ms:finalTotal,mode:course.mode});if(error){alert("Couldn't save course result: "+error.message);}onFinish();}} style={{flex:2,background:isMashup?C.blue:C.orange,border:"none",borderRadius:12,padding:14,color:"#fff",fontSize:14,fontWeight:700}}>Save Results</button>
           }
         </div>
