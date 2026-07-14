@@ -741,10 +741,16 @@ function RaceScreen({course,stages,user,onFinish}){
   const gpsRef=useRef(null);
   const [introDist,setIntroDist]=useState(null);
 
-  const currentStage=courseStages[stageIndex];
+    const currentStage=courseStages[stageIndex];
   const totalStages=courseStages.length;
   const isLastStage=stageIndex===totalStages-1;
 
+  useEffect(()=>{
+    if(phase==="modeIntro")return;
+    try{localStorage.setItem(progressKey,JSON.stringify({stageIndex,splits,bestPerStage,runCount,savedAt:Date.now()}));}catch(e){}
+  },[stageIndex,splits,bestPerStage,runCount,phase]);
+
+  const quitRace=()=>{try{localStorage.removeItem(progressKey);}catch(e){}onFinish();};
   useEffect(()=>{
     if(phase!=="modeIntro")return;
     if(!navigator.geolocation)return;
