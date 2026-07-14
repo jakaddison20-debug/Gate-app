@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { createClient } from '@supabase/supabase-js';
 const supabase=createClient(import.meta.env.VITE_SUPABASE_URL,import.meta.env.VITE_SUPABASE_ANON_KEY);
 
@@ -12,8 +12,7 @@ function formatDist(m){return m>=1000?`${(m/1000).toFixed(1)}km`:`${Math.round(m
 function project(coord,center,zoom,w,h){const scale=Math.pow(2,zoom)*256,mercY=c=>Math.log(Math.tan(Math.PI/4+(c*Math.PI)/360)),cx=(center.lng+180)/360,cy=(1-mercY(center.lat)/Math.PI)/2;return{x:((coord.lng+180)/360-cx)*scale+w/2,y:((1-mercY(coord.lat)/Math.PI)/2-cy)*scale+h/2};}
 function unproject(x,y,center,zoom,w,h){const scale=Math.pow(2,zoom)*256,mercY=c=>Math.log(Math.tan(Math.PI/4+(c*Math.PI)/360)),cx=(center.lng+180)/360,cy=(1-mercY(center.lat)/Math.PI)/2,lng=((x-w/2)/scale+cx)*360-180,lat=((Math.atan(Math.exp(((1-2*((y-h/2)/scale+cy))*Math.PI)))*2-Math.PI/2)*180)/Math.PI;return{lat,lng};}
 
-const C={orange:"#F59E0B",orangeL:"#FFF8E7",bg:"#FFFFFF",surface:"#F5F5F5",border:"#E6E6E6",text:"#1A1A1A",muted:"#8A8A8A",mutedL:"#C4C4C4",blue:"#2563EB",green:"#15803D",red:"#DC2626",yellow:"#B45309",mapBase:"#EAE6DF",mapWater:"#A8D3E8",mapWaterDark:"#8BBDD4",mapPark:"#D4E8D0",mapParkDark:"#BDDBB7",mapBuilding:"#D9D5CC",mapBuildingBorder:"#C8C4BB",mapHighwayBorder:"#C0B89A",mapHighway:"#F5D490",mapMajorRoad:"#FFFFFF",mapMajorBorder:"#C8C0A4",mapMinorRoad:"#FFFFFF",mapMinorBorder:"#D4CDB8",mapLabel:"#5A5A5A"};
-
+const C={orange:"#F59E0B",orangeL:"#FFF8E7",bg:"#FFFFFF",surface:"#F5F5F5",border:"#E6E6E6",text:"#1A1A1A",muted:"#6B6B6B",mutedL:"#C4C4C4",blue:"#2563EB",green:"#15803D",red:"#DC2626",yellow:"#B45309",mapBase:"#EAE6DF",mapWater:"#A8D3E8",mapWaterDark:"#8BBDD4",mapPark:"#D4E8D0",mapParkDark:"#BDDBB7",mapBuilding:"#D9D5CC",mapBuildingBorder:"#C8C4BB",mapHighwayBorder:"#C0B89A",mapHighway:"#F5D490",mapMajorRoad:"#FFFFFF",mapMajorBorder:"#C8C0A4",mapMinorRoad:"#FFFFFF",mapMinorBorder:"#D4CDB8",mapLabel:"#5A5A5A"};
 
 // ── Course modes ──────────────────────────────────────────────────────────────
 const COURSE_MODES=[
@@ -61,8 +60,9 @@ const Icon={
   Trophy:({size=20,color="#1A1A1A"})=><svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="8 21 12 17 16 21"/><line x1="12" y1="17" x2="12" y2="11"/><path d="M7 4H4a2 2 0 000 4c0 2.5 2 4 4 4"/><path d="M17 4h3a2 2 0 010 4c0 2.5-2 4-4 4"/><rect x="7" y="2" width="10" height="9" rx="1"/></svg>,
   Check:({size=20,color="#15803D"})=><svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
   Settings:({size=24,color="#1A1A1A"})=><svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>,
-  Strava:({size=20,color="#FC4C02"})=><svg width={size} height={size} viewBox="0 0 24 24" fill={color}><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg>,
-  Close:({size=18,color="#1A1A1A"})=><svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+  Strava:({size=20,color="#FC4C02"})=><svg width={size} height={size} viewBox="0 0 24 24" fill={color}><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg>,   Close:({size=18,color="#1A1A1A"})=><svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+  BarChart:({size=24,color="#1A1A1A"})=><svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="6" y1="20" x2="6" y2="14"/><line x1="12" y1="20" x2="12" y2="8"/><line x1="18" y1="20" x2="18" y2="11"/></svg>,
+  Image:({size=24,color="#1A1A1A"})=><svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>,
 };
 
 const STYLES=`
@@ -497,87 +497,126 @@ function SegmentRow({stage,onPress,onDelete,userId}){
     </button>
   );
 }
-
 // ── Profile ───────────────────────────────────────────────────────────────────
-  function ProfileView({stages,settings,courseResults,onSettingsPress,onStatPress}){
-  const timed=stages.filter(s=>s.time);
-  const bars=[28,0,52,34,0,89,65],days=["M","T","W","T","F","S","S"];
-  const medalColor=pos=>pos===1?"#FFD700":pos===2?"#C0C0C0":pos===3?"#CD7F32":null;
-  const medalLabel=pos=>pos===1?"🥇 1st":pos===2?"🥈 2nd":pos===3?"🥉 3rd":`${pos}th`;
-  const modeColor=mode=>mode==="mashup"?C.blue:mode==="practice"?C.green:C.orange;
-  const modeLabel=mode=>mode==="mashup"?"⚡ Mashup":mode==="practice"?"🎯 Practice":"🏁 Race";
+function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,onSettingsPress,onStatPress,onGoToStages,onGoToCourses}){
+  const [selectedWeek,setSelectedWeek]=useState(pastWeeks.length-1);
+  const stagesRidden=stages.filter(s=>s.time).length;
+  const coursesComplete=courseResults.length;
+  const crCount=stages.filter(s=>s.cr).length;
+  const dayMax=Math.max(...weeklyActivity.meters,1);
+  const weekMaxMins=Math.max(...pastWeeks.map(w=>w.mins),1);
+  const weekLabel=weeksAgo=>weeksAgo===0?"This Week":weeksAgo===1?"1 Week Ago":`${weeksAgo} Weeks Ago`;
+  const selectedMins=pastWeeks[selectedWeek].mins;
+
   return(
     <div>
-      
-      <div style={{background:"#fff",padding:"24px 20px 20px",borderBottom:`1px solid ${C.border}`}}>
-        <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:18}}>
-                    <div style={{width:60,height:60,borderRadius:"50%",background:C.surface,border:`2px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>{settings.avatarUrl?<img src={settings.avatarUrl} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<Icon.User size={28} color={C.muted}/>}</div>
+      <div style={{background:"#fff",padding:"16px 20px 18px",borderBottom:`1px solid ${C.border}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:20}}>
+          <div style={{width:60,height:60,borderRadius:"50%",background:C.surface,border:`2px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>{settings.avatarUrl?<img src={settings.avatarUrl} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<Icon.User size={28} color={C.muted}/>}</div>
           <div style={{flex:1}}><div style={{fontSize:20,fontWeight:800,color:C.text}}>{settings.displayName}</div><div style={{fontSize:13,color:C.muted,marginTop:2}}>Member since 2024</div></div>
-
-             <button className="tap" onClick={onSettingsPress} style={{width:36,height:36,borderRadius:9,background:C.surface,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon.Settings size={18} color={C.muted}/></button>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-          {[{l:"Fastest Stages",v:stages.filter(s=>s.cr).length,key:"fastest"},{l:"Best Courses",v:"—",key:"courses"},{l:"Stages Completed",v:stages.filter(s=>s.time).length,key:"completed"},{l:"Course Records",v:stages.filter(s=>s.cr).length,key:"records"}].map(({l,v,key})=>(<button key={key} className="tap" onClick={()=>onStatPress&&onStatPress(key)} style={{background:"#fff",border:`1px solid ${C.blue}`,borderRadius:10,padding:"12px 8px",textAlign:"center"}}><div style={{fontSize:18,fontWeight:700,color:C.text}}>{v}</div><div style={{fontSize:10,color:C.muted,marginTop:2}}>{l}</div></button>))}
+          <button className="tap" onClick={onSettingsPress} style={{width:36,height:36,borderRadius:9,background:C.surface,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon.Settings size={18} color={C.muted}/></button>
         </div>
 
+        <div style={{display:"flex",gap:28}}>
+          {[
+            {label:"Followers",value:"—"},
+            {label:"Stages Ridden",value:String(stagesRidden)},
+            {label:"Courses Complete",value:String(coursesComplete)},
+          ].map(s=>(
+            <div key={s.label}>
+              <div style={{fontSize:11,color:C.muted,fontWeight:500}}>{s.label}</div>
+              <div style={{fontSize:17,color:C.text,fontWeight:700,marginTop:3}}>{s.value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{padding:"14px 16px 0"}}>
+        <div style={{fontSize:12,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>Activity This Week</div>
+        <div style={{display:"flex",alignItems:"flex-end",gap:4,height:30,marginBottom:5}}>
+          {weeklyActivity.meters.map((m,i)=>{
+            const pct=m>0?Math.max((m/dayMax)*100,10):4;
+            return(
+              <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+                <div style={{width:"100%",height:`${pct}%`,background:m>0?C.blue:"#F0F0F0",borderRadius:2,minHeight:2}}/>
+                <div style={{fontSize:8,color:C.muted,fontWeight:500}}>{weeklyActivity.dayLabels[i]}</div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div style={{padding:"18px 16px 0"}}>
-        <div style={{fontSize:15,fontWeight:700,color:C.text,marginBottom:12}}>Activity This Week</div>
-        <div style={{display:"flex",alignItems:"flex-end",gap:5,height:56,marginBottom:6}}>
-          {bars.map((h,i)=><div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}><div style={{width:"100%",height:`${h||3}%`,background:h>0?C.orange:"#F0F0F0",borderRadius:3,minHeight:3}}/><div style={{fontSize:9,color:C.muted,fontWeight:500}}>{days[i]}</div></div>)}
+        <div style={{fontSize:12,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:10}}>{weekLabel(pastWeeks.length-1-selectedWeek)}</div>
+
+        <div style={{display:"flex",gap:28,marginBottom:16}}>
+          <div>
+            <div style={{fontSize:13,color:C.muted}}>Stages</div>
+            <div style={{fontSize:18,fontWeight:800,color:C.text,marginTop:3}}>{pastWeeks[selectedWeek].stages}</div>
+          </div>
+          <div>
+            <div style={{fontSize:13,color:C.muted}}>Time</div>
+            <div style={{fontSize:18,fontWeight:800,color:C.text,marginTop:3}}>{selectedMins>=60?`${Math.floor(selectedMins/60)}h ${selectedMins%60}m`:`${selectedMins}m`}</div>
+          </div>
+          <div>
+            <div style={{fontSize:13,color:C.muted}}>Descent</div>
+            <div style={{fontSize:18,fontWeight:800,color:C.text,marginTop:3}}>—</div>
+          </div>
+        </div>
+
+        <div style={{display:"flex",alignItems:"flex-end",gap:3,height:44,marginBottom:6}}>
+          {pastWeeks.map((w,i)=>{
+            const pct=w.mins>0?Math.max((w.mins/weekMaxMins)*100,10):6;
+            const isSelected=i===selectedWeek;
+            return(
+              <button key={i} onClick={()=>setSelectedWeek(i)} style={{flex:1,height:"100%",display:"flex",alignItems:"flex-end",background:"none",border:"none",padding:0,cursor:"pointer"}}>
+                <div style={{width:"100%",boxSizing:"border-box",height:`${pct}%`,background:isSelected?`${C.blue}22`:C.mutedL,border:isSelected?`1.5px solid ${C.blue}`:"none",borderRadius:2,minHeight:3}}/>
+              </button>
+            );
+          })}
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between"}}>
+          <div style={{fontSize:9,color:C.muted}}>12 wks ago</div>
+          <div style={{fontSize:9,color:C.muted}}>Now</div>
         </div>
       </div>
 
-      {/* Courses with medals */}
-      <div style={{padding:"16px 16px 0"}}>
-        <div style={{fontSize:15,fontWeight:700,color:C.text,marginBottom:12}}>Courses Ridden</div>
-          {courseResults.length===0?<div style={{textAlign:"center",padding:"24px",color:C.muted,fontSize:13}}>No courses completed yet</div>:courseResults.map(course=>{
-          const mc=medalColor(course.pos),top3=course.pos&&course.pos<=3;
-          return(
-            <div key={course.id} style={{background:top3?`${mc}15`:"white",border:`1px solid ${top3?mc:C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:12}}>
-              <div style={{width:44,height:44,borderRadius:12,background:top3?mc:`${C.blue}12`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                {top3?<span style={{fontSize:22}}>{course.pos===1?"🥇":course.pos===2?"🥈":"🥉"}</span>:<Icon.Flag size={20} color={C.blue}/>}
-              </div>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{course.name}</div>
-                <div style={{display:"flex",alignItems:"center",gap:6}}>
-                  <div style={{fontSize:11,color:C.muted}}>{course.date} · {course.stages} stages</div>
-                  <div style={{fontSize:10,fontWeight:600,color:modeColor(course.mode),background:`${modeColor(course.mode)}15`,borderRadius:4,padding:"1px 5px"}}>{modeLabel(course.mode)}</div>
-                </div>
-              </div>
-              <div style={{textAlign:"right",flexShrink:0}}>
-                <div style={{fontSize:14,fontWeight:700,color:top3?C.orange:C.text}}>{formatTime(course.totalTime)}</div>
-                 {top3&&<div style={{fontSize:11,color:C.muted,marginTop:1}}>{medalLabel(course.pos)}</div>}
-              </div>
-            </div>
-          );
-        })}
+      <div style={{padding:"16px 16px 28px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <button className="tap" onClick={()=>onStatPress&&onStatPress('fastest')} style={{background:"#fff",border:`1px solid ${C.blue}`,borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+          <div style={{fontSize:17,fontWeight:700,color:C.text}}>{crCount}</div>
+          <div style={{fontSize:12,color:C.muted}}>CR</div>
+        </button>
+        <button className="tap" onClick={()=>onStatPress&&onStatPress('records')} style={{background:"#fff",border:`1px solid ${C.blue}`,borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+          <div style={{fontSize:17,fontWeight:700,color:C.text}}>0</div>
+          <div style={{fontSize:12,color:C.muted}}>Course CR</div>
+        </button>
       </div>
 
-      {/* Stage records */}
-      <div style={{padding:"16px"}}>
-        <div style={{fontSize:15,fontWeight:700,color:C.text,marginBottom:12}}>Stage Records</div>
-        {timed.map(s=>(
-          <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 0",borderBottom:`1px solid ${C.border}`}}>
-            <div style={{width:36,height:36,borderRadius:8,background:s.cr?"#FEF3C7":`${C.blue}12`,display:"flex",alignItems:"center",justifyContent:"center"}}>{s.cr?<Icon.Crown size={16} color="#92400E"/>:<Icon.Lightning size={16} color={C.blue}/>}</div>
-               <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600,color:C.text}}>{s.name}</div><div style={{fontSize:11,color:C.muted}}>{formatDist(haversine(s.start,s.finish))}</div></div>
-            <div style={{fontSize:15,fontWeight:700,color:s.cr?"#92400E":C.text}}>{formatTime(s.time)}</div>
-          </div>
+      <div style={{padding:"0 16px 24px"}}>
+        {[
+          {label:"Statistics",Ic:Icon.BarChart,onClick:null},
+          {label:"Stages",Ic:Icon.Lightning,onClick:onGoToStages},
+          {label:"Courses",Ic:Icon.Flag,onClick:onGoToCourses},
+          {label:"Posts",Ic:Icon.Image,onClick:null},
+        ].map((item,i,arr)=>(
+          <button key={item.label} className="tap" onClick={item.onClick||undefined} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"13px 0",background:"none",border:"none",borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none",textAlign:"left"}}>
+            <item.Ic size={18} color={C.muted}/>
+            <div style={{flex:1,fontSize:14,fontWeight:600,color:C.text}}>{item.label}</div>
+            <Icon.ChevronRight size={16} color={C.mutedL}/>
+          </button>
         ))}
-      </div> 
-      
-<div style={{padding:"0 16px 60px"}}>
+      </div>
+
+      <div style={{padding:"0 16px 60px"}}>
         <button className="tap" onClick={onSettingsPress} style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 0",borderBottom:`1px solid ${C.border}`,background:"none",color:C.text,fontSize:14,fontWeight:500}}>
           Settings<Icon.ChevronRight/>
         </button>
-       {["Connected Apps","Privacy"].map((item,i)=>(
+        {["Connected Apps","Privacy"].map((item,i)=>(
           <button key={item} className="tap" style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 0",borderBottom:i<1?`1px solid ${C.border}`:"none",background:"none",color:C.text,fontSize:14,fontWeight:500}}>
             {item}<Icon.ChevronRight/>
           </button>
         ))}
         <button className="tap" onClick={()=>supabase.auth.signOut()} style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 0",background:"none",color:C.red,fontSize:14,fontWeight:500,border:"none"}}>Sign Out<Icon.ChevronRight/></button>
-          
       </div>
     </div>
   );
