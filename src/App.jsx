@@ -1296,13 +1296,12 @@ useEffect(()=>{
   return()=>subscription.unsubscribe();
 },[]);
 useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.eq.public,created_by.eq.${user.id}`).then(async({data})=>{if(!data)return;const{data:times}=await supabase.from('stage_times').select('stage_id,time_ms').eq('user_id',user.id);const bests={};if(times)times.forEach(t=>{if(!bests[t.stage_id]||t.time_ms<bests[t.stage_id])bests[t.stage_id]=t.time_ms;});setStages(data.map(s=>({id:s.id,name:s.name,note:s.note||'',privacy:s.privacy,created_by:s.created_by,start:{lat:s.start_lat,lng:s.start_lng},finish:{lat:s.finish_lat,lng:s.finish_lng},line_coords:s.line_coords||null,time:bests[s.id]||null,cr:false})));});},[user]);
-
-
     
 
-  useEffect(()=>{if(!user)return;supabase.from('courses').select('*').then(({data})=>{if(data)setCourses(data.map(c=>({id:c.id,name:c.name,privacy:c.privacy,mode:c.mode,stageIds:c.stage_ids,times:{},bestPerStage:{}})));});},[user]);
+    useEffect(()=>{if(!user)return;supabase.from('courses').select('*').then(({data})=>{if(data)setCourses(data.map(c=>({id:c.id,name:c.name,privacy:c.privacy,mode:c.mode,stageIds:c.stage_ids,times:{},bestPerStage:{}})));});},[user]);
+  const [courseResults,setCourseResults]=useState([]);
+  useEffect(()=>{if(!user)return;supabase.from('course_results').select('id,total_time_ms,mode,completed_at,courses(name,stage_ids)').eq('user_id',user.id).order('completed_at',{ascending:false}).then(({data})=>{if(data)setCourseResults(data.map(r=>({id:r.id,name:r.courses?.name||'Course',date:new Date(r.completed_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}),stages:r.courses?.stage_ids?.length||0,mode:r.mode,totalTime:r.total_time_ms,pos:null})));});},[user]);
   
-
   const dragRef=useRef(null),pinchRef=useRef(null);
   const onTouchStart=useCallback(e=>{if(e.touches.length===2){return;}else{dragRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY,center:{...mapCenter}};pinchRef.current=null;}},[mapCenter,zoom]);
   const onTouchMove=useCallback(e=>{e.preventDefault();if(e.touches.length===1&&dragRef.current){const dx=e.touches[0].clientX-dragRef.current.x,dy=e.touches[0].clientY-dragRef.current.y,scale=Math.pow(2,zoom)*256,mercY=Math.log(Math.tan(Math.PI/4+(dragRef.current.center.lat*Math.PI)/360)),newMercY=mercY+(dy/scale)*Math.PI*2;setMapCenter({lng:dragRef.current.center.lng-(dx/scale)*360,lat:((Math.atan(Math.exp(newMercY))*2-Math.PI/2)*180)/Math.PI});}},[zoom]);
