@@ -662,8 +662,8 @@ function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,onS
       </div>
 
       <div style={{padding:"0 16px 24px"}}>
-        {[
-          {label:"Statistics",Ic:Icon.BarChart,onClick:null},
+               {[
+          {label:"Statistics",Ic:Icon.BarChart,onClick:onOpenProgress},
           {label:"Stages",Ic:Icon.Lightning,onClick:onGoToStages},
           {label:"Courses",Ic:Icon.Flag,onClick:onGoToCourses},
           {label:"Posts",Ic:Icon.Image,onClick:null},
