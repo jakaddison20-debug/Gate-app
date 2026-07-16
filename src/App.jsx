@@ -1380,6 +1380,7 @@ export default function App(){
   const [activeRace,setActiveRace]=useState(null);
   const [selectedStage,setSelectedStage]=useState(null);
   const [showSettings,setShowSettings]=useState(false);
+  const [showProgress,setShowProgress]=useState(false);
   const [settings,setSettings]=useState(DEFAULT_SETTINGS);
   const [user,setUser]=useState(null);
   const [showAuth,setShowAuth]=useState(false);
@@ -1474,7 +1475,7 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
     </div>
   );
 
-  // Settings screen overlay
+    // Settings screen overlay
   if(showSettings)return(
     <div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif"}}>
       <style>{STYLES}</style>
@@ -1483,7 +1484,19 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
     </div>
   );
 
-
+  // Statistics/Progress screen overlay
+  if(showProgress)return(
+    <div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
+      <style>{STYLES}</style>
+      <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,position:"sticky",top:0,zIndex:5,display:"flex",alignItems:"center",gap:12}}>
+        <button className="tap" onClick={()=>setShowProgress(false)} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
+        <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>Statistics</div>
+      </div>
+      <div style={{height:"calc(100vh - 60px)",overflowY:"auto"}}>
+        <ProgressSheet stages={stages} user={user}/>
+      </div>
+    </div>
+  );
 
   
   if(activeRace)return(
@@ -1615,10 +1628,6 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
       {/* Lobby */}
       {sheet==="lobby"&&(
         <><div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:45}} onClick={()=>setSheet(null)}/><div className="slide-up" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:46,maxHeight:"82vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><LobbySheet onClose={()=>setSheet(null)}/></div></>
-      )}
-
-            {sheet==='progress'&&(
-        <><div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:45}} onClick={()=>setSheet(null)}/><div className="slide-up" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:46,maxHeight:"82vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><ProgressSheet stages={stages} user={user}/></div></>
       )}
 
       {sheet&&sheet.startsWith('stat-')&&(
