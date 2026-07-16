@@ -26,7 +26,6 @@ const SAMPLE_COURSES_DONE=[];
 const SAMPLE_FEED=[];
 
 
-
 // Default settings
 const DEFAULT_SETTINGS={
   displayName:"Your Name",
@@ -497,8 +496,78 @@ function SegmentRow({stage,onPress,onDelete,userId}){
     </button>
   );
 }
+function ProgressChart({attempts}){
+  const W=280,H=100,PAD=10;
+  const times=attempts.map(a=>a.time_ms);
+  const min=Math.min(...times),max=Math.max(...times);
+  const range=max-min||1;
+  const points=attempts.map((a,i)=>({
+    x:PAD+(i/((attempts.length-1)||1))*(W-PAD*2),
+    y:PAD+((a.time_ms-min)/range)*(H-PAD*2),
+  }));
+  const path=points.map((p,i)=>`${i===0?'M':'L'}${p.x},${p.y}`).join(' ');
+  return(
+    <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{overflow:"visible"}}>
+      <path d={path} fill="none" stroke={C.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      {points.map((p,i)=><circle key={i} cx={p.x} cy={p.y} r={i===points.length-1?4:2.5} fill={i===points.length-1?C.blue:"#fff"} stroke={C.blue} strokeWidth="1.5"/>)}
+    </svg>
+  );
+}
+
+function ProgressSheet({stages,user}){
+  const [grouped,setGrouped]=useState(null);
+  const [expandedId,setExpandedId]=useState(null);
+  useEffect(()=>{
+    supabase.from('stage_times').select('stage_id,time_ms,created_at').eq('user_id',user.id).order('created_at',{ascending:true}).then(({data})=>{
+      if(!data)return setGrouped({});
+      const byStage={};
+      data.forEach(t=>{(byStage[t.stage_id]=byStage[t.stage_id]||[]).push(t);});
+      setGrouped(byStage);
+    });
+  },[user.id]);
+
+  if(grouped===null)return <div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>;
+
+  const progressStages=Object.keys(grouped).filter(id=>grouped[id].length>=2).map(id=>({
+    stage:stages.find(s=>String(s.id)===String(id)),
+    attempts:grouped[id],
+  })).filter(x=>x.stage);
+
+  if(progressStages.length===0)return <div style={{padding:"0 16px 40px"}}><div style={{fontSize:17,fontWeight:700,color:C.text,marginBottom:16}}>Progress</div><div style={{textAlign:"center",padding:"20px",color:C.muted,fontSize:13}}>Ride the same stage a couple of times to see your progress here.</div></div>;
+
+  return(
+    <div style={{padding:"0 16px 40px"}}>
+      <div style={{fontSize:17,fontWeight:700,color:C.text,marginBottom:16}}>Progress</div>
+      {progressStages.map(({stage,attempts})=>{
+        const best=Math.min(...attempts.map(a=>a.time_ms));
+        const isOpen=expandedId===stage.id;
+        return(
+          <div key={stage.id} style={{marginBottom:10,border:`1px solid ${C.border}`,borderRadius:12,overflow:"hidden"}}>
+            <button className="tap" onClick={()=>setExpandedId(isOpen?null:stage.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"12px 14px",background:"#fff",border:"none",textAlign:"left"}}>
+              <div style={{width:36,height:36,borderRadius:8,background:`${C.blue}12`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.Lightning size={16} color={C.blue}/></div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:14,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{stage.name}</div>
+                <div style={{fontSize:11,color:C.muted}}>{attempts.length} attempts</div>
+              </div>
+              <div style={{fontSize:15,fontWeight:700,color:C.text}}>{formatTime(best)}</div>
+              {isOpen?<Icon.ChevronUp size={16} color={C.mutedL}/>:<Icon.ChevronDown size={16} color={C.mutedL}/>}
+            </button>
+            {isOpen&&<div style={{padding:"4px 14px 16px",background:C.surface}}>
+              <ProgressChart attempts={attempts}/>
+              <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
+                <div style={{fontSize:10,color:C.mutedL}}>First: {formatTime(attempts[0].time_ms)}</div>
+                <div style={{fontSize:10,color:C.mutedL}}>Latest: {formatTime(attempts[attempts.length-1].time_ms)}</div>
+              </div>
+            </div>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Profile ───────────────────────────────────────────────────────────────────
-function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,onSettingsPress,onStatPress,onGoToStages,onGoToCourses}){
+function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,onSettingsPress,onStatPress,onGoToStages,onGoToCourses,onOpenProgress}){
   const [selectedWeek,setSelectedWeek]=useState(pastWeeks.length-1);
   const stagesRidden=stages.filter(s=>s.time).length;
   const coursesComplete=courseResults.length;
@@ -822,11 +891,10 @@ function RaceScreen({course,stages,user,onFinish}){
     const startCountdown=()=>{setGateStatus("waiting");setTimerMs(0);timerMsRef.current=0;startTimeRef.current=Date.now();setPhase("racing");timerRef.current=setInterval(()=>{timerMsRef.current=Date.now()-startTimeRef.current;setTimerMs(timerMsRef.current);},10);setTimeout(()=>{if(timerRef.current){clearInterval(timerRef.current);setPhase("transfer");setTimerMs(0);alert("Run cancelled — finish gate not reached in time");}},600000);};
 
    
-    const stopStage=async(saveTime=false)=>{
+     const stopStage=async(saveTime=false)=>{
     clearInterval(timerRef.current);
     const finalTime=timerMsRef.current;
-    if(saveTime&&!isPractice){const{data:existing}=await supabase.from('stage_times').select('id,time_ms').eq('stage_id',currentStage.id).eq('user_id',user.id).order('time_ms',{ascending:true}).limit(1).single();if(!existing||finalTime<existing.time_ms){if(existing){await supabase.from('stage_times').update({time_ms:finalTime}).eq('id',existing.id);}else{await supabase.from('stage_times').insert({stage_id:currentStage.id,user_id:user.id,time_ms:finalTime});}}}
-
+    if(saveTime&&!isPractice){await supabase.from('stage_times').insert({stage_id:currentStage.id,user_id:user.id,time_ms:finalTime});}
 
 
     const newSplit={stageId:currentStage.id,name:currentStage.name,time:finalTime};
