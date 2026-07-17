@@ -645,7 +645,7 @@ function StatisticsScreen({stages,courses,user,onBack}){
 }
 
 // ── Profile ───────────────────────────────────────────────────────────────────
-function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,onSettingsPress,onStatPress,onGoToStages,onGoToCourses}){
+function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,onSettingsPress,onStatPress,onGoToStages,onGoToCourses,onOpenProgress}){
   const [selectedWeek,setSelectedWeek]=useState(pastWeeks.length-1);
   const stagesRidden=stages.filter(s=>s.time).length;
   const coursesComplete=courseResults.length;
