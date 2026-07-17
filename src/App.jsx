@@ -1562,17 +1562,11 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
     </div>
   );
 
-  // Statistics/Progress screen overlay
+  // Statistics screen overlay
   if(showProgress)return(
     <div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
       <style>{STYLES}</style>
-      <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,position:"sticky",top:0,zIndex:5,display:"flex",alignItems:"center",gap:12}}>
-        <button className="tap" onClick={()=>setShowProgress(false)} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
-        <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>Statistics</div>
-      </div>
-      <div style={{height:"calc(100vh - 60px)",overflowY:"auto"}}>
-        <ProgressSheet stages={stages} user={user}/>
-      </div>
+      <StatisticsScreen stages={stages} courses={courses} user={user} onBack={()=>setShowProgress(false)}/>
     </div>
   );
 
