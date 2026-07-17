@@ -565,8 +565,87 @@ function ProgressSheet({stages,user}){
   );
 }
 
+function CourseProgressSheet({courses,user}){
+  const [grouped,setGrouped]=useState(null);
+  const [expandedId,setExpandedId]=useState(null);
+  useEffect(()=>{
+    supabase.from('course_results').select('course_id,total_time_ms,completed_at').eq('user_id',user.id).order('completed_at',{ascending:true}).then(({data})=>{
+      if(!data)return setGrouped({});
+      const byCourse={};
+      data.forEach(r=>{(byCourse[r.course_id]=byCourse[r.course_id]||[]).push(r);});
+      setGrouped(byCourse);
+    });
+  },[user.id]);
+
+  if(grouped===null)return <div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>;
+
+  const progressCourses=Object.keys(grouped).filter(id=>grouped[id].length>=2).map(id=>({
+    course:courses.find(c=>String(c.id)===String(id)),
+    attempts:grouped[id],
+  })).filter(x=>x.course);
+
+  if(progressCourses.length===0)return <div style={{padding:"0 16px 40px"}}><div style={{textAlign:"center",padding:"20px",color:C.muted,fontSize:13}}>Complete the same course a couple of times to see your progress here.</div></div>;
+
+  return(
+    <div style={{padding:"0 16px 40px"}}>
+      {progressCourses.map(({course,attempts})=>{
+        const best=Math.min(...attempts.map(a=>a.total_time_ms));
+        const isOpen=expandedId===course.id;
+        return(
+          <div key={course.id} style={{marginBottom:10,border:`1px solid ${C.border}`,borderRadius:12,overflow:"hidden"}}>
+            <button className="tap" onClick={()=>setExpandedId(isOpen?null:course.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"12px 14px",background:"#fff",border:"none",textAlign:"left"}}>
+              <div style={{width:36,height:36,borderRadius:8,background:`${C.blue}12`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.Flag size={16} color={C.blue}/></div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:14,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{course.name}</div>
+                <div style={{fontSize:11,color:C.muted}}>{attempts.length} completions</div>
+              </div>
+              <div style={{fontSize:15,fontWeight:700,color:C.text}}>{formatTime(best)}</div>
+              {isOpen?<Icon.ChevronUp size={16} color={C.mutedL}/>:<Icon.ChevronDown size={16} color={C.mutedL}/>}
+            </button>
+            {isOpen&&<div style={{padding:"4px 14px 16px",background:C.surface}}>
+              <ProgressChart attempts={attempts.map(a=>({time_ms:a.total_time_ms}))}/>
+              <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
+                <div style={{fontSize:10,color:C.mutedL}}>First: {formatTime(attempts[0].total_time_ms)}</div>
+                <div style={{fontSize:10,color:C.mutedL}}>Latest: {formatTime(attempts[attempts.length-1].total_time_ms)}</div>
+              </div>
+            </div>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function StatisticsScreen({stages,courses,user,onBack}){
+  const [view,setView]=useState('hub');
+  const titles={hub:"Statistics",stages:"Stages",courses:"Courses"};
+  return(
+    <div style={{width:"100%",height:"100vh",display:"flex",flexDirection:"column",background:"#fff"}}>
+      <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+        <button className="tap" onClick={()=>view==='hub'?onBack():setView('hub')} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
+        <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>{titles[view]}</div>
+      </div>
+      <div style={{flex:1,overflowY:"auto"}}>
+        {view==='hub'&&(
+          <div style={{padding:"16px"}}>
+            {[{key:'stages',label:'Stages',Ic:Icon.Lightning},{key:'courses',label:'Courses',Ic:Icon.Flag}].map((item,i,arr)=>(
+              <button key={item.key} className="tap" onClick={()=>setView(item.key)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"14px 0",background:"none",border:"none",borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none",textAlign:"left"}}>
+                <item.Ic size={18} color={C.muted}/>
+                <div style={{flex:1,fontSize:15,fontWeight:600,color:C.text}}>{item.label}</div>
+                <Icon.ChevronRight size={16} color={C.mutedL}/>
+              </button>
+            ))}
+          </div>
+        )}
+        {view==='stages'&&<ProgressSheet stages={stages} user={user}/>}
+        {view==='courses'&&<CourseProgressSheet courses={courses} user={user}/>}
+      </div>
+    </div>
+  );
+}
+
 // ── Profile ───────────────────────────────────────────────────────────────────
-function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,onSettingsPress,onStatPress,onGoToStages,onGoToCourses,onOpenProgress}){
+function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,onSettingsPress,onStatPress,onGoToStages,onGoToCourses}){
   const [selectedWeek,setSelectedWeek]=useState(pastWeeks.length-1);
   const stagesRidden=stages.filter(s=>s.time).length;
   const coursesComplete=courseResults.length;
