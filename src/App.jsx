@@ -535,9 +535,8 @@ function ProgressSheet({stages,user}){
 
     if(progressStages.length===0)return <div style={{padding:"0 16px 40px"}}><div style={{textAlign:"center",padding:"20px",color:C.muted,fontSize:13}}>Ride the same stage a couple of times to see your progress here.</div></div>;
 
-  return(
+   return(
     <div style={{padding:"0 16px 40px"}}>
-      <div style={{fontSize:17,fontWeight:700,color:C.text,marginBottom:16}}>Progress</div>
       {progressStages.map(({stage,attempts})=>{
         const best=Math.min(...attempts.map(a=>a.time_ms));
         const isOpen=expandedId===stage.id;
