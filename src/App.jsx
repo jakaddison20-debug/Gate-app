@@ -5,6 +5,7 @@ const supabase=createClient(import.meta.env.VITE_SUPABASE_URL,import.meta.env.VI
 const DEFAULT_CENTER={lat:53.4919264,lng:-0.3294266};
 
 const FAT_GATE_RADIUS=10;
+const FINISH_GATE_RADIUS=18;
 
 function haversine(a,b){const R=6371000,dLat=((b.lat-a.lat)*Math.PI)/180,dLng=((b.lng-a.lng)*Math.PI)/180,s=Math.sin(dLat/2)**2+Math.cos((a.lat*Math.PI)/180)*Math.cos((b.lat*Math.PI)/180)*Math.sin(dLng/2)**2;return R*2*Math.atan2(Math.sqrt(s),Math.sqrt(1-s));}
 function formatTime(ms){if(!ms)return"—";const m=Math.floor(ms/60000),s=Math.floor((ms%60000)/1000),cs=Math.floor((ms%1000)/10);return`${m}:${String(s).padStart(2,"0")}.${String(cs).padStart(2,"0")}`;}
