@@ -988,14 +988,14 @@ function RaceScreen({course,stages,user,onFinish}){
     setPhase("split");
   };
 
-   useEffect(()=>{
+      useEffect(()=>{
     if(phase!=="racing")return;
     if(!navigator.geolocation)return;
     const gate=currentStage.finish;
     const id=navigator.geolocation.watchPosition(pos=>{
       const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};
       const dist=haversine(loc,gate);
-      if(dist<=FAT_GATE_RADIUS){
+      if(dist<=FINISH_GATE_RADIUS){
         navigator.geolocation.clearWatch(id);
         stopStage(true);
       }
