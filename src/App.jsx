@@ -1505,9 +1505,10 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
   },[]);
   useEffect(()=>{if(!user)return;const since=new Date();since.setDate(since.getDate()-83);since.setHours(0,0,0,0);supabase.from('stage_times').select('stage_id,time_ms,created_at').eq('user_id',user.id).gte('created_at',since.toISOString()).then(({data})=>{if(data)setRecentStageTimes(data);});},[user]);
 
-  const weeklyActivity=useMemo(()=>{
+    const weeklyActivity=useMemo(()=>{
+    const monday=getMonday(new Date());
     const days=[];
-    for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);d.setHours(0,0,0,0);days.push(d);}
+    for(let i=0;i<7;i++){const d=new Date(monday);d.setDate(d.getDate()+i);days.push(d);}
     const dayKeys=days.map(d=>d.toDateString());
     const dayLabels=days.map(d=>d.toLocaleDateString('en-GB',{weekday:'narrow'}));
     const distByDay={};
@@ -1518,19 +1519,18 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
       const key=new Date(t.created_at).toDateString();
       if(key in distByDay)distByDay[key]+=haversine(stage.start,stage.finish);
     });
-  return{meters:dayKeys.map(k=>distByDay[k]),dayLabels};
+    return{meters:dayKeys.map(k=>distByDay[k]),dayLabels};
   },[stages,recentStageTimes,todayKey]);
-
-  const pastWeeks=useMemo(()=>{
-    const now=new Date();
+  
+    const pastWeeks=useMemo(()=>{
+    const thisMonday=getMonday(new Date());
     const buckets=[];
     for(let w=11;w>=0;w--){
-      const end=new Date(now);
-      end.setDate(end.getDate()-w*7);
+      const start=new Date(thisMonday);
+      start.setDate(start.getDate()-w*7);
+      const end=new Date(start);
+      end.setDate(end.getDate()+6);
       end.setHours(23,59,59,999);
-      const start=new Date(end);
-      start.setDate(start.getDate()-6);
-      start.setHours(0,0,0,0);
       buckets.push({start,end,stages:0,mins:0});
     }
     recentStageTimes.forEach(t=>{
@@ -1538,7 +1538,7 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
       const bucket=buckets.find(b=>created>=b.start&&created<=b.end);
       if(bucket){bucket.stages+=1;bucket.mins+=t.time_ms/60000;}
     });
-        return buckets.map(b=>({stages:b.stages,mins:Math.round(b.mins)}));
+    return buckets.map(b=>({stages:b.stages,mins:Math.round(b.mins)}));
   },[recentStageTimes,todayKey]);
 
   const dragRef=useRef(null),pinchRef=useRef(null);
