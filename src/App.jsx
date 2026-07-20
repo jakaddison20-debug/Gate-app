@@ -1027,7 +1027,7 @@ function RaceScreen({course,stages,user,onFinish}){
   if(phase==="modeIntro"){
     const modeInfo={
       practice:{color:C.green,icon:"🎯",title:"Practice Run",sub:"This run won't be saved. Ride it to learn the stages, then go again for real.",btn:"Start Practice",btnColor:C.green},
-      race:{color:C.orange,icon:"🏁",title:"Race Mode",sub:"One timed run. Your times will go to the leaderboard. Make it count.",btn:"Start Race",btnColor:C.orange},
+      race:{color:C.blue,icon:"🏁",title:"Race Mode",sub:"One timed run. Your times will go to the leaderboard. Make it count.",btn:"Start Race",btnColor:C.blue},
       mashup:{color:C.blue,icon:"⚡",title:"Mashup Mode",sub:"Unlimited runs. Your best time on each stage gets combined into one total. Keep going until you're happy.",btn:"Start Mashup",btnColor:C.blue},
     }[course.mode];
     return(
