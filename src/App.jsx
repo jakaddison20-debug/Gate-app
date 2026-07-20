@@ -1517,8 +1517,8 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
       const key=new Date(t.created_at).toDateString();
       if(key in distByDay)distByDay[key]+=haversine(stage.start,stage.finish);
     });
-    return{meters:dayKeys.map(k=>distByDay[k]),dayLabels};
-  },[stages,recentStageTimes]);
+  return{meters:dayKeys.map(k=>distByDay[k]),dayLabels};
+  },[stages,recentStageTimes,todayKey]);
 
   const pastWeeks=useMemo(()=>{
     const now=new Date();
@@ -1537,9 +1537,8 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
       const bucket=buckets.find(b=>created>=b.start&&created<=b.end);
       if(bucket){bucket.stages+=1;bucket.mins+=t.time_ms/60000;}
     });
-    return buckets.map(b=>({stages:b.stages,mins:Math.round(b.mins)}));
-  },[recentStageTimes]);
-
+        return buckets.map(b=>({stages:b.stages,mins:Math.round(b.mins)}));
+  },[recentStageTimes,todayKey]);
 
   const dragRef=useRef(null),pinchRef=useRef(null);
   const onTouchStart=useCallback(e=>{if(e.touches.length===2){return;}else{dragRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY,center:{...mapCenter}};pinchRef.current=null;}},[mapCenter,zoom]);
