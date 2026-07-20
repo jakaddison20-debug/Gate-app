@@ -1494,7 +1494,14 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
   const [courseResults,setCourseResults]=useState([]);
   useEffect(()=>{if(!user)return;supabase.from('course_results').select('id,total_time_ms,mode,completed_at,courses(name,stage_ids)').eq('user_id',user.id).order('completed_at',{ascending:false}).then(({data})=>{if(data)setCourseResults(data.map(r=>({id:r.id,name:r.courses?.name||'Course',date:new Date(r.completed_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}),stages:r.courses?.stage_ids?.length||0,mode:r.mode,totalTime:r.total_time_ms,pos:null})));});},[user]);
 
-  const [recentStageTimes,setRecentStageTimes]=useState([]);
+    const [recentStageTimes,setRecentStageTimes]=useState([]);
+  const [todayKey,setTodayKey]=useState(new Date().toDateString());
+  useEffect(()=>{
+    const check=()=>{const now=new Date().toDateString();setTodayKey(prev=>prev!==now?now:prev);};
+    document.addEventListener('visibilitychange',check);
+    const interval=setInterval(check,60000);
+    return()=>{document.removeEventListener('visibilitychange',check);clearInterval(interval);};
+  },[]);
   useEffect(()=>{if(!user)return;const since=new Date();since.setDate(since.getDate()-83);since.setHours(0,0,0,0);supabase.from('stage_times').select('stage_id,time_ms,created_at').eq('user_id',user.id).gte('created_at',since.toISOString()).then(({data})=>{if(data)setRecentStageTimes(data);});},[user]);
 
   const weeklyActivity=useMemo(()=>{
