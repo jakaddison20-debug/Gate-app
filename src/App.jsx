@@ -391,6 +391,8 @@ function Avatar({size=40,url=null}){return <div style={{width:size,height:size,b
 function SectionBuilderMap({stage,startIdx,endIdx,onTapPoint}){
   const mapContainer=useRef(null);
   const map=useRef(null);
+  const onTapPointRef=useRef(onTapPoint);
+  useEffect(()=>{onTapPointRef.current=onTapPoint;},[onTapPoint]);
   const coords=stage.line_coords&&stage.line_coords.length>1?stage.line_coords:[stage.start,stage.finish];
 
   useEffect(()=>{
