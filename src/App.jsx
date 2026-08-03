@@ -388,8 +388,141 @@ function MapboxStyleMap({center,zoom,flyToTrigger,width:W,height:H,stages=[],cou
 function Avatar({size=40,url=null}){return <div style={{width:size,height:size,borderRadius:"50%",background:C.surface,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden"}}>{url?<img src={url} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<Icon.User size={size*0.5} color={C.muted}/>}</div>;
 }
 
+function SectionBuilderMap({stage,startIdx,endIdx,onTapPoint}){
+  const mapContainer=useRef(null);
+  const map=useRef(null);
+  const coords=stage.line_coords&&stage.line_coords.length>1?stage.line_coords:[stage.start,stage.finish];
+
+  useEffect(()=>{
+    if(map.current)return;
+    const token=import.meta.env.VITE_MAPBOX_TOKEN;
+    if(!token)return;
+    import('https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js').then(()=>{
+      const mapboxgl=window.mapboxgl;
+      mapboxgl.accessToken=token;
+      const lats=coords.map(c=>c.lat),lngs=coords.map(c=>c.lng);
+      map.current=new mapboxgl.Map({
+        container:mapContainer.current,
+        style:'mapbox://styles/mapbox/outdoors-v12',
+        bounds:[[Math.min(...lngs),Math.min(...lats)],[Math.max(...lngs),Math.max(...lats)]],
+        fitBoundsOptions:{padding:40},
+      });
+      map.current.on('load',()=>{
+        map.current.addSource('section-line',{type:'geojson',data:{type:'Feature',geometry:{type:'LineString',coordinates:coords.map(c=>[c.lng,c.lat])}}});
+        map.current.addLayer({id:'section-line-layer',type:'line',source:'section-line',paint:{'line-color':'#F59E0B','line-width':4,'line-opacity':0.55}});
+        map.current.addSource('section-highlight',{type:'geojson',data:{type:'Feature',geometry:{type:'LineString',coordinates:[]}}});
+        map.current.addLayer({id:'section-highlight-layer',type:'line',source:'section-highlight',paint:{'line-color':'#2563EB','line-width':6}});
+        map.current.addSource('section-points',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+        map.current.addLayer({id:'section-points-layer',type:'circle',source:'section-points',paint:{'circle-radius':7,'circle-color':['get','color'],'circle-stroke-width':2,'circle-stroke-color':'#fff'}});
+        map.current.on('click',e=>{onTapPoint({lat:e.lngLat.lat,lng:e.lngLat.lng});});
+      });
+    });
+  },[]);
+
+  useEffect(()=>{
+    if(!map.current||!map.current.getSource('section-highlight'))return;
+    if(startIdx===null||endIdx===null){
+      map.current.getSource('section-highlight').setData({type:'Feature',geometry:{type:'LineString',coordinates:[]}});
+    } else {
+      const lo=Math.min(startIdx,endIdx),hi=Math.max(startIdx,endIdx);
+      map.current.getSource('section-highlight').setData({type:'Feature',geometry:{type:'LineString',coordinates:coords.slice(lo,hi+1).map(c=>[c.lng,c.lat])}});
+    }
+    const features=[];
+    if(startIdx!==null)features.push({type:'Feature',properties:{color:'#15803D'},geometry:{type:'Point',coordinates:[coords[startIdx].lng,coords[startIdx].lat]}});
+    if(endIdx!==null)features.push({type:'Feature',properties:{color:'#2563EB'},geometry:{type:'Point',coordinates:[coords[endIdx].lng,coords[endIdx].lat]}});
+    if(map.current.getSource('section-points'))map.current.getSource('section-points').setData({type:'FeatureCollection',features});
+  },[startIdx,endIdx]);
+
+  return(
+    <div style={{position:"relative",width:"100%",height:220,borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`}}>
+      <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet"/>
+      <div ref={mapContainer} style={{width:"100%",height:"100%"}}/>
+    </div>
+  );
+}
+
+function SectionsSheet({stage,user,onClose}){
+  const [sections,setSections]=useState([]);
+  const [adding,setAdding]=useState(false);
+  const [startIdx,setStartIdx]=useState(null);
+  const [endIdx,setEndIdx]=useState(null);
+  const [name,setName]=useState("");
+  const isCreator=stage.created_by===user.id;
+  const coords=stage.line_coords&&stage.line_coords.length>1?stage.line_coords:[stage.start,stage.finish];
+
+  useEffect(()=>{
+    supabase.from('stage_sections').select('*').eq('stage_id',stage.id).order('created_at',{ascending:true}).then(({data})=>{if(data)setSections(data);});
+  },[stage.id]);
+
+  const bothPlaced=startIdx!==null&&endIdx!==null;
+  const loIdx=bothPlaced?Math.min(startIdx,endIdx):null;
+  const hiIdx=bothPlaced?Math.max(startIdx,endIdx):null;
+  const sectionDist=bothPlaced?(()=>{let d=0;for(let i=loIdx;i<hiIdx;i++){d+=haversine(coords[i],coords[i+1]);}return Math.round(d);})():0;
+
+  const nearestPointIdx=pt=>{let best=0,bestD=Infinity;coords.forEach((c,i)=>{const d=haversine(pt,c);if(d<bestD){bestD=d;best=i;}});return best;};
+  const handleTap=pt=>{const idx=nearestPointIdx(pt);if(startIdx===null)setStartIdx(idx);else if(endIdx===null)setEndIdx(idx);};
+  const resetPoints=()=>{setStartIdx(null);setEndIdx(null);};
+
+  const saveSection=async()=>{
+    if(!name.trim()||!bothPlaced)return;
+    const startPt=coords[loIdx],finishPt=coords[hiIdx];
+    const{data,error}=await supabase.from('stage_sections').insert({stage_id:stage.id,name:name.trim(),start_lat:startPt.lat,start_lng:startPt.lng,finish_lat:finishPt.lat,finish_lng:finishPt.lng,created_by:user.id}).select().single();
+    if(error){alert("Couldn't save section: "+error.message);return;}
+    setSections(prev=>[...prev,data]);
+    setAdding(false);resetPoints();setName("");
+  };
+
+  return(
+    <div style={{padding:"0 16px 40px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0 16px"}}>
+        <div style={{fontSize:17,fontWeight:700,color:C.text}}>Sections</div>
+        <button className="tap" onClick={onClose} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 14px",color:C.text,fontSize:13}}>Done</button>
+      </div>
+
+      {!adding?(
+        <>
+          {isCreator&&(
+            <button className="tap" onClick={()=>setAdding(true)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"11px",color:C.blue,fontSize:13,fontWeight:600,marginBottom:16}}>
+              <Icon.Plus size={14} color={C.blue}/>Add Section
+            </button>
+          )}
+          {sections.length===0?(
+            <div style={{textAlign:"center",padding:"24px",color:C.muted,fontSize:13}}>No sections yet{isCreator?" — add a sprint or feature to split this stage up.":"."}</div>
+          ):sections.map(s=>(
+            <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 12px",background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,marginBottom:8}}>
+              <div style={{width:32,height:32,borderRadius:8,background:`${C.blue}12`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.Lightning size={15} color={C.blue}/></div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13,fontWeight:600,color:C.text}}>{s.name}</div>
+                <div style={{display:"flex",alignItems:"center",gap:3,fontSize:10,color:C.orange,background:`${C.orange}15`,borderRadius:4,padding:"1px 5px",marginTop:2,width:"fit-content"}}><Icon.Trophy size={9} color="#92400E"/>Leaderboard</div>
+              </div>
+              <Icon.ChevronRight size={16} color={C.mutedL}/>
+            </div>
+          ))}
+          <div style={{fontSize:11,color:C.mutedL,marginTop:14,textAlign:"center",lineHeight:1.5}}>Section times have their own leaderboard and don't affect your overall stage time.</div>
+        </>
+      ):(
+        <>
+          <div style={{fontSize:12,color:C.muted,marginBottom:10}}>{startIdx===null?"Tap the line to place the section start":endIdx===null?"Now tap where the section ends":"Section placed — name it below"}</div>
+          <SectionBuilderMap stage={stage} startIdx={startIdx} endIdx={endIdx} onTapPoint={handleTap}/>
+          {(startIdx!==null||endIdx!==null)&&(
+            <button className="tap" onClick={resetPoints} style={{background:"none",border:"none",color:C.muted,fontSize:12,marginTop:10}}>Reset points</button>
+          )}
+          {bothPlaced&&(
+            <>
+              <div style={{textAlign:"center",fontSize:13,color:C.blue,fontWeight:600,margin:"14px 0"}}>Section length: {formatDist(sectionDist)}</div>
+              <input value={name} onChange={e=>setName(e.target.value)} placeholder="Section name e.g. Sprint 2" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"13px 14px",fontSize:15,color:C.text,background:C.surface,marginBottom:16}}/>
+              <button className="tap" onClick={saveSection} disabled={!name.trim()} style={{width:"100%",background:name.trim()?C.blue:C.surface,border:"none",borderRadius:12,padding:15,color:name.trim()?"#fff":C.muted,fontSize:15,fontWeight:700}}>Save Section</button>
+            </>
+          )}
+          <button className="tap" onClick={()=>{setAdding(false);resetPoints();setName("");}} style={{width:"100%",background:"none",border:`1px solid ${C.border}`,borderRadius:12,padding:13,color:C.muted,fontSize:14,marginTop:10}}>Cancel</button>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Stage Detail Sheet ────────────────────────────────────────────────────────
-    function StageDetailSheet({stage,onClose,onRace}){
+    function StageDetailSheet({stage,onClose,onRace,onOpenSections}){
   const [lb,setLb]=useState([]);
  
   useEffect(()=>{supabase.from('stage_times').select('time_ms,user_id,profiles(display_name,avatar_url)').eq('stage_id',stage.id).order('time_ms',{ascending:true}).then(({data})=>{if(data){const seen={};const best=data.filter(t=>{const id=t.user_id;if(seen[id])return false;seen[id]=true;return true;});setLb(best.slice(0,10).map((t,i)=>({pos:i+1,name:t.profiles?.display_name||'Rider',avatarUrl:t.profiles?.avatar_url||null,time:t.time_ms})))}});},[stage.id]);
