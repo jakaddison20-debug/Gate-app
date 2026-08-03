@@ -514,7 +514,7 @@ function SectionsSheet({stage,user,onClose}){
               <button className="tap" onClick={saveSection} disabled={!name.trim()} style={{width:"100%",background:name.trim()?C.blue:C.surface,border:"none",borderRadius:12,padding:15,color:name.trim()?"#fff":C.muted,fontSize:15,fontWeight:700}}>Save Section</button>
             </>
           )}
-          <button className="tap" onClick={()=>{setAdding(false);resetPoints();setName("");}} style={{width:"100%",background:"none",border:`1px solid ${C.border}`,borderRadius:12,padding:13,color:C.muted,fontSize:14,marginTop:10}}>Cancel</button>
+           <button className="tap" onClick={()=>{setAdding(false);resetPoints();setName("");}} style={{width:"100%",background:"none",border:`1px solid ${C.border}`,borderRadius:12,padding:13,color:C.muted,fontSize:14,marginTop:10,marginBottom:40}}>Cancel</button>
         </>
       )}
     </div>
