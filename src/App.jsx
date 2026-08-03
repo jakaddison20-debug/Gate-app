@@ -416,7 +416,7 @@ function SectionBuilderMap({stage,startIdx,endIdx,onTapPoint}){
         map.current.addLayer({id:'section-highlight-layer',type:'line',source:'section-highlight',paint:{'line-color':'#2563EB','line-width':6}});
         map.current.addSource('section-points',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
         map.current.addLayer({id:'section-points-layer',type:'circle',source:'section-points',paint:{'circle-radius':7,'circle-color':['get','color'],'circle-stroke-width':2,'circle-stroke-color':'#fff'}});
-        map.current.on('click',e=>{onTapPoint({lat:e.lngLat.lat,lng:e.lngLat.lng});});
+        map.current.on('click',e=>{onTapPointRef.current({lat:e.lngLat.lat,lng:e.lngLat.lng});});
       });
     });
   },[]);
