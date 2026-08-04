@@ -364,11 +364,18 @@ function MapboxStyleMap({center,zoom,flyToTrigger,width:W,height:H,stages=[],cou
             if(stage&&onStagePress)onStagePress(stage);
           });
         }
-
-        // User dot
+        // User dot (direction-aware)
         if(userPos){
-          new mapboxgl.Marker({color:'#2563EB'}).setLngLat([userPos.lng,userPos.lat]).addTo(map.current);
+          const userEl=document.createElement('div');
+          userEl.style.cssText='width:34px;height:34px;';
+          const inner=document.createElement('div');
+          inner.style.cssText='width:100%;height:100%;transition:transform 0.3s ease;';
+          inner.innerHTML='<svg width="34" height="34" viewBox="0 0 34 34"><polygon points="17,2 25,17 17,12 9,17" fill="#2563EB" opacity="0.85"/><circle cx="17" cy="17" r="7" fill="#2563EB" stroke="white" stroke-width="3"/></svg>';
+          userEl.appendChild(inner);
+          userMarkerRef.current=new mapboxgl.Marker({element:userEl}).setLngLat([userPos.lng,userPos.lat]).addTo(map.current);
+          userMarkerInnerRef.current=inner;
         }
+     
       });
     });
   },[]);
