@@ -381,7 +381,13 @@ function MapboxStyleMap({center,zoom,flyToTrigger,width:W,height:H,stages=[],cou
   },[]);
   
 
-  useEffect(()=>{if(map.current&&flyToTrigger)map.current.flyTo({center:[center.lng,center.lat],zoom:zoom,essential:true});},[flyToTrigger]);
+    useEffect(()=>{if(map.current&&flyToTrigger)map.current.flyTo({center:[center.lng,center.lat],zoom:zoom,essential:true});},[flyToTrigger]);
+
+  useEffect(()=>{
+    if(!userMarkerRef.current||!userPos)return;
+    userMarkerRef.current.setLngLat([userPos.lng,userPos.lat]);
+    if(userMarkerInnerRef.current)userMarkerInnerRef.current.style.transform=`rotate(${userHeading||0}deg)`;
+  },[userPos,userHeading]);
 
 
   return(
