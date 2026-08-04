@@ -256,10 +256,12 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
   );
 }
 
-function MapboxStyleMap({center,zoom,flyToTrigger,width:W,height:H,stages=[],courses=[],userPos,onStagePress}){
+function MapboxStyleMap({center,zoom,flyToTrigger,width:W,height:H,stages=[],courses=[],userPos,userHeading,onStagePress}){
   const mapContainer=useRef(null);
   const map=useRef(null);
   const markersRef=useRef([]);
+  const userMarkerRef=useRef(null);
+  const userMarkerInnerRef=useRef(null);
 
   useEffect(()=>{
     if(map.current)return;
@@ -1748,7 +1750,7 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
       {tab==="map"&&(
         <div style={{position:"absolute",inset:0}}>
           <div style={{position:"absolute",inset:0,cursor:"grab",touchAction:"none"}} onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
-            <MapboxStyleMap center={mapCenter} zoom={zoom} flyToTrigger={flyToTrigger} width={mapSize.w} height={mapSize.h} stages={stages} courses={courses} userPos={userPos} onStagePress={s=>setSelectedStage(s)}/>
+              <MapboxStyleMap center={mapCenter} zoom={zoom} flyToTrigger={flyToTrigger} width={mapSize.w} height={mapSize.h} stages={stages} courses={courses} userPos={userPos} userHeading={userHeading} onStagePress={s=>setSelectedStage(s)}/>
           </div>
           <div style={{position:"absolute",top:52,left:16,right:16,display:"flex",gap:10,zIndex:10}}>
             <div style={{flex:1,background:"white",border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:8,boxShadow:"0 2px 10px rgba(0,0,0,0.1)"}}><Icon.Search/><span style={{fontSize:14,color:C.muted}}>Search stages…</span></div>
