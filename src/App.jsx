@@ -1602,9 +1602,6 @@ export default function App(){
   const [zoom,setZoom]=useState(13);
   const [stages,setStages]=useState(SAMPLE_STAGES);
   const [courses,setCourses]=useState([]);
-  const [recording,setRecording]=useState(false);
-  const [timerMs,setTimerMs]=useState(0);
-  const [timerRunning,setTimerRunning]=useState(false);
   const [sheet,setSheet]=useState(null);
   const [stagesFilter,setStagesFilter]=useState("all");
   const [coursesFilter,setCoursesFilter]=useState("stages");
