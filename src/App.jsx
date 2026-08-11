@@ -1832,14 +1832,6 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
         </div>
       )}
 
-      {/* Recording timer */}
-      {recording&&tab!=="map"&&(
-        <div className="fade-in" style={{position:"fixed",top:52,left:"50%",transform:"translateX(-50%)",zIndex:30,background:"white",borderRadius:12,padding:"8px 18px",boxShadow:"0 2px 14px rgba(0,0,0,0.12)",border:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12}}>
-          <div style={{width:8,height:8,borderRadius:"50%",background:C.red,animation:"recPulse 1.5s infinite"}}/>
-          <span style={{fontSize:20,fontWeight:700,color:C.text,fontVariantNumeric:"tabular-nums"}}>{formatTime(timerMs)}</span>
-          <button className="tap" onClick={()=>setTimerRunning(t=>!t)} style={{background:"none",border:"none",fontSize:16,color:C.muted}}>{timerRunning?"⏸":"▶"}</button>
-        </div>
-      )}
 
       {/* Stage detail (from stages tab) */}
       {selectedStage&&tab!=="map"&&sheet!=='sections'&&(
