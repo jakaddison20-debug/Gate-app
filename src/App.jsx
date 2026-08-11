@@ -1878,14 +1878,9 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
       )}
 
 
-      {/* Tab bar */}
+        {/* Tab bar */}
       <div style={{position:"fixed",bottom:0,left:0,right:0,background:"white",borderTop:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"space-around",padding:"10px 0 24px",zIndex:50}}>
         {TABS.map(t=>{
-          if(t.id==="record")return(
-            <button key="record" className="tap" onClick={()=>{if(!recording){setRecording(true);setTimerMs(0);setTimerRunning(true);}else{setRecording(false);setTimerRunning(false);}}} style={{width:54,height:54,borderRadius:"50%",background:recording?C.red:C.orange,border:"3px solid white",boxShadow:`0 4px 16px ${recording?"rgba(220,38,38,0.35)":"rgba(252,76,2,0.3)"}`,display:"flex",alignItems:"center",justifyContent:"center",marginTop:-14,transition:"all 0.2s"}}>
-              <div style={{width:recording?16:18,height:recording?16:18,borderRadius:recording?3:"50%",background:"white",transition:"all 0.2s"}}/>
-            </button>
-          );
           const active=tab===t.id;
           return(
             <button key={t.id} className="tap" onClick={()=>setTab(t.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",padding:"2px 10px"}}>
