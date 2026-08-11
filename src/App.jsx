@@ -1613,8 +1613,6 @@ export default function App(){
   const [user,setUser]=useState(null);
   const [showAuth,setShowAuth]=useState(false);
   useEffect(()=>{if(!user)return;supabase.from('profiles').select('display_name,avatar_url').eq('id',user.id).single().then(({data})=>{if(data)setSettings(prev=>({...prev,displayName:data.display_name||prev.displayName,avatarUrl:data.avatar_url||null}));});},[user]);
-
-      const timerRef=useRef(null);
   const containerRef=useRef(null);
   const wakeLockRef=useRef(null);
   const [mapSize,setMapSize]=useState({w:390,h:844});
@@ -1631,7 +1629,6 @@ useEffect(()=>{
 },[activeRace]);
   
   useEffect(()=>{const el=containerRef.current;if(!el)return;const ro=new ResizeObserver(e=>setMapSize({w:e[0].contentRect.width,h:e[0].contentRect.height}));ro.observe(el);setMapSize({w:el.clientWidth,h:el.clientHeight});return()=>ro.disconnect();},[]);
-  useEffect(()=>{if(timerRunning){timerRef.current=setInterval(()=>setTimerMs(t=>t+10),10);}else clearInterval(timerRef.current);return()=>clearInterval(timerRef.current);},[timerRunning]);
   useEffect(()=>{
   supabase.auth.getSession().then(({data:{session}})=>setUser(session?.user??null));
   const {data:{subscription}}=supabase.auth.onAuthStateChange((_,session)=>setUser(session?.user??null));
