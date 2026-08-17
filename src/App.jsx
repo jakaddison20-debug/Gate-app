@@ -1492,7 +1492,7 @@ function RaceScreen({course,stages,user,onFinish}){
 }
 
 // ── Course Card ───────────────────────────────────────────────────────────────
-function CourseCard({course,stages,onStart}){
+function CourseCard({course,stages,userId,onStart,onDelete}){
   const courseStages=course.stageIds.map(id=>stages.find(s=>s.id===id)).filter(Boolean);
   const totalDist=courseStages.reduce((a,s)=>a+haversine(s.start,s.finish),0);
   const modeInfo={practice:{color:C.green,icon:"🎯",label:"Practice"},race:{color:C.blue,icon:"🏁",label:"Race"},mashup:{color:C.blue,icon:"⚡",label:"Mashup"}}[course.mode||"race"];
@@ -1506,7 +1506,7 @@ function CourseCard({course,stages,onStart}){
             <div style={{fontSize:11,fontWeight:600,color:modeInfo.color,background:`${modeInfo.color}15`,borderRadius:6,padding:"2px 7px"}}>{modeInfo.icon} {modeInfo.label}</div>
           </div>
         </div>
-        <div style={{width:40,height:40,borderRadius:10,background:`${modeInfo.color}15`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>{modeInfo.icon}</div>
+        <div style={{width:40,height:40,borderRadius:10,background:`${modeInfo.color}15`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>{modeInfo.icon}</div>{onDelete&&course.created_by===userId&&<button className="tap" onClick={()=>onDelete(course.id)} style={{background:"none",border:"none",padding:"4px 0 4px 10px",color:C.red,fontSize:15,fontWeight:600}}>✕</button>}
       </div>
       <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}}>
         {courseStages.map((stage,i)=>(
@@ -1658,7 +1658,7 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
     });
   },[stageIdsKey,user]);
 
-        useEffect(()=>{if(!user)return;supabase.from('courses').select('*').then(({data})=>{if(data)setCourses(data.map(c=>({id:c.id,name:c.name,privacy:c.privacy,mode:c.mode,stageIds:c.stage_ids,times:{},bestPerStage:{}})));});},[user]);
+        useEffect(()=>{if(!user)return;supabase.from('courses').select('*').then(({data})=>{if(data)setCourses(data.map(c=>({id:c.id,name:c.name,privacy:c.privacy,mode:c.mode,stageIds:c.stage_ids,created_by:c.created_by,times:{},bestPerStage:{}})));});},[user]);
     const [courseResults,setCourseResults]=useState([]);
     const [courseCRCount,setCourseCRCount]=useState(0);
   const [courseCRList,setCourseCRList]=useState([]);
