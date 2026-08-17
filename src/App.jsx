@@ -1106,15 +1106,18 @@ function RaceScreen({course,stages,user,onFinish}){
   },[phase]);
 
   // Simulate GPS toward gate
-  useEffect(()=>{
+    useEffect(()=>{
     if(phase!=="transfer")return;
     if(!navigator.geolocation)return;
     const gate=currentStage.start;
+    prevGpsRef.current=null;
     const id=navigator.geolocation.watchPosition(pos=>{
       const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};
       const dist=haversine(loc,gate);
       setDistToGate(Math.round(dist));
-      if(dist<=FAT_GATE_RADIUS){navigator.geolocation.clearWatch(id);setGateStatus("entered");setTimeout(()=>startCountdown(),300);}
+      const crossed=segmentCrossesGate(prevGpsRef.current,loc,gate,FAT_GATE_RADIUS);
+      prevGpsRef.current=loc;
+      if(crossed){navigator.geolocation.clearWatch(id);setGateStatus("entered");setTimeout(()=>startCountdown(),300);}
       else if(dist<=50)setGateStatus("near");
       else setGateStatus("waiting");
     },err=>console.log(err),{enableHighAccuracy:true,maximumAge:0,timeout:10000});
@@ -1141,14 +1144,16 @@ function RaceScreen({course,stages,user,onFinish}){
     setPhase("split");
   };
 
-      useEffect(()=>{
+            useEffect(()=>{
     if(phase!=="racing")return;
     if(!navigator.geolocation)return;
     const gate=currentStage.finish;
+    prevGpsRef.current=null;
     const id=navigator.geolocation.watchPosition(pos=>{
       const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};
-      const dist=haversine(loc,gate);
-      if(dist<=FINISH_GATE_RADIUS){
+      const crossed=segmentCrossesGate(prevGpsRef.current,loc,gate,FINISH_GATE_RADIUS);
+      prevGpsRef.current=loc;
+      if(crossed){
         navigator.geolocation.clearWatch(id);
         stopStage(true);
       }
