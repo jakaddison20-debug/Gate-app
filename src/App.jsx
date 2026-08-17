@@ -543,7 +543,7 @@ function SectionsSheet({stage,user,onClose}){
     function StageDetailSheet({stage,onClose,onRace,onOpenSections}){
   const [lb,setLb]=useState([]);
  
-  useEffect(()=>{supabase.from('stage_times').select('time_ms,user_id,profiles(display_name,avatar_url)').eq('stage_id',stage.id).order('time_ms',{ascending:true}).then(({data})=>{if(data){const seen={};const best=data.filter(t=>{const id=t.user_id;if(seen[id])return false;seen[id]=true;return true;});setLb(best.slice(0,10).map((t,i)=>({pos:i+1,name:t.profiles?.display_name||'Rider',avatarUrl:t.profiles?.avatar_url||null,time:t.time_ms})))}});},[stage.id]);
+  useEffect(()=>{supabase.from('stage_times').select('time_ms,user_id,created_at,profiles(display_name,avatar_url)').eq('stage_id',stage.id).order('time_ms',{ascending:true}).then(({data})=>{if(data){const seen={};const best=data.filter(t=>{const id=t.user_id;if(seen[id])return false;seen[id]=true;return true;});setLb(best.slice(0,10).map((t,i)=>({pos:i+1,name:t.profiles?.display_name||'Rider',avatarUrl:t.profiles?.avatar_url||null,time:t.time_ms,date:new Date(t.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'})})))}});},[stage.id]);
 
   const dist=haversine(stage.start,stage.finish);
   const myEntry=lb.find(e=>e.avatar==="ME");
@@ -565,7 +565,7 @@ function SectionsSheet({stage,user,onClose}){
           ))}
         </div>
       </div>
-      {stage.crHolder&&<div style={{margin:"16px 16px 0",background:"#FFFBEB",borderRadius:12,padding:"12px 14px",border:"1px solid #FDE68A",display:"flex",alignItems:"center",gap:10}}><Icon.Crown size={18} color="#92400E"/><div style={{flex:1}}><div style={{fontSize:11,color:"#92400E",fontWeight:600,marginBottom:1}}>COURSE RECORD</div><div style={{fontSize:13,fontWeight:700,color:"#92400E"}}>{stage.crHolder} · {lb[0]?formatTime(lb[0].time):"—"}</div></div><div style={{fontSize:11,color:"#B45309"}}>{stage.crDate}</div></div>}
+      {lb.length>0&&<div style={{margin:"16px 16px 0",background:"#FFFBEB",borderRadius:12,padding:"12px 14px",border:"1px solid #FDE68A",display:"flex",alignItems:"center",gap:10}}><Icon.Crown size={18} color="#92400E"/><div style={{flex:1}}><div style={{fontSize:11,color:"#92400E",fontWeight:600,marginBottom:1}}>COURSE RECORD</div><div style={{fontSize:13,fontWeight:700,color:"#92400E"}}>{lb[0].name} · {formatTime(lb[0].time)}</div></div><div style={{fontSize:11,color:"#B45309"}}>{lb[0].date}</div></div>}
       {stage.note&&<div style={{margin:"12px 16px 0",background:C.surface,borderRadius:10,padding:"11px 14px",border:`1px solid ${C.border}`}}><div style={{fontSize:11,fontWeight:600,color:C.muted,marginBottom:4}}>STAGE NOTES</div><div style={{fontSize:13,color:C.text,lineHeight:1.5}}>📋 {stage.note}</div></div>}
       <div style={{padding:"16px 16px 0"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
