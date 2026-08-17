@@ -1892,13 +1892,35 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
         <><div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:45}} onClick={()=>setSheet(null)}/><div className="slide-up" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:46,maxHeight:"82vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div>
           <div style={{padding:"0 16px 80px"}}>
             <div style={{fontSize:17,fontWeight:700,color:C.text,marginBottom:16}}>{sheet==='stat-fastest'?'Fastest Stages':sheet==='stat-courses'?'Best Courses':sheet==='stat-completed'?'Stages Completed':'Course Records'}</div>
-            {(sheet==='stat-fastest'||sheet==='stat-records')&&stages.filter(s=>s.cr).map(s=>(
+                       {sheet==='stat-fastest'&&stages.filter(s=>s.cr).map(s=>(
               <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 0",borderBottom:`1px solid ${C.border}`}}>
                 <Icon.Crown size={18} color="#92400E"/>
                 <div style={{flex:1,fontSize:14,fontWeight:600,color:C.text}}>{s.name}</div>
                 <div style={{fontSize:14,fontWeight:700,color:"#92400E"}}>{formatTime(s.time)}</div>
               </div>
             ))}
+            {sheet==='stat-records'&&(courseCRList.length===0?<div style={{textAlign:"center",padding:"20px",color:C.muted,fontSize:13}}>No course records yet</div>:courseCRList.map(c=>{
+              const isOpen=expandedCRCourse===c.id;
+              const trackNames=(c.stageIds||[]).map(id=>stages.find(s=>s.id===id)?.name).filter(Boolean);
+              return(
+                <div key={c.id} style={{marginBottom:8,border:`1px solid ${C.border}`,borderRadius:10,overflow:"hidden"}}>
+                  <button className="tap" onClick={()=>setExpandedCRCourse(isOpen?null:c.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"11px 12px",background:"#fff",border:"none",textAlign:"left"}}>
+                    <Icon.Crown size={18} color="#92400E"/>
+                    <div style={{flex:1,fontSize:14,fontWeight:600,color:C.text}}>{c.name}</div>
+                    <div style={{fontSize:14,fontWeight:700,color:"#92400E"}}>{formatTime(c.totalTime)}</div>
+                    {isOpen?<Icon.ChevronUp size={14} color={C.mutedL}/>:<Icon.ChevronDown size={14} color={C.mutedL}/>}
+                  </button>
+                  {isOpen&&<div style={{padding:"8px 12px 12px",background:C.surface}}>
+                    {trackNames.length===0?<div style={{fontSize:12,color:C.muted}}>No stages found</div>:trackNames.map((name,i)=>(
+                      <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0"}}>
+                        <Icon.Lightning size={13} color={C.blue}/>
+                        <div style={{fontSize:13,color:C.text}}>{i+1}. {name}</div>
+                      </div>
+                    ))}
+                  </div>}
+                </div>
+              );
+            }))}
             {sheet==='stat-completed'&&stages.filter(s=>s.time).map(s=>(
               <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 0",borderBottom:`1px solid ${C.border}`}}>
                 <Icon.Lightning size={18} color={C.orange}/>
