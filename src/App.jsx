@@ -1858,7 +1858,7 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
                   <div style={{fontSize:13,color:C.muted,marginBottom:20,lineHeight:1.5}}>Choose Race or Mashup mode when building</div>
                   <button className="tap" onClick={()=>setSheet("courseBuilder")} style={{background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:12,padding:"12px 24px",color:C.blue,fontSize:14,fontWeight:600}}>Build Your First Course</button>
                 </div>
-              ):courses.map(course=><CourseCard key={course.id} course={course} stages={stages} onStart={c=>setActiveRace(c)}/>)}
+              ):courses.map(course=><CourseCard key={course.id} course={course} stages={stages} userId={user.id} onStart={c=>setActiveRace(c)} onDelete={async id=>{if(!window.confirm("Delete this course?"))return;await supabase.from('courses').delete().eq('id',id).eq('created_by',user.id);setCourses(prev=>prev.filter(c=>c.id!==id));}}/>)}
             </div>
           )}
         </div>
