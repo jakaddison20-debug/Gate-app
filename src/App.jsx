@@ -1635,7 +1635,22 @@ useEffect(()=>{
   return()=>subscription.unsubscribe();
 },[]);
 useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.eq.public,created_by.eq.${user.id}`).then(async({data})=>{if(!data)return;const{data:times}=await supabase.from('stage_times').select('stage_id,time_ms').eq('user_id',user.id);const bests={};if(times)times.forEach(t=>{if(!bests[t.stage_id]||t.time_ms<bests[t.stage_id])bests[t.stage_id]=t.time_ms;});setStages(data.map(s=>({id:s.id,name:s.name,note:s.note||'',privacy:s.privacy,created_by:s.created_by,start:{lat:s.start_lat,lng:s.start_lng},finish:{lat:s.finish_lat,lng:s.finish_lng},line_coords:s.line_coords||null,time:bests[s.id]||null,cr:false})));});},[user]);
-    
+
+  const stageIdsKey=useMemo(()=>stages.map(s=>s.id).join(','),[stages]);
+  useEffect(()=>{
+    if(!user||!stageIdsKey)return;
+    const ids=stageIdsKey.split(',');
+    supabase.from('stage_times').select('stage_id,user_id,time_ms').in('stage_id',ids).then(({data})=>{
+      if(!data)return;
+      const bestByStage={};
+      data.forEach(t=>{if(!bestByStage[t.stage_id]||t.time_ms<bestByStage[t.stage_id].time_ms){bestByStage[t.stage_id]={user_id:t.user_id,time_ms:t.time_ms};}});
+      setStages(prev=>prev.map(s=>{
+        const best=bestByStage[s.id];
+        const isCR=!!(best&&best.user_id===user.id);
+        return s.cr===isCR?s:{...s,cr:isCR};
+      }));
+    });
+  },[stageIdsKey,user]);
 
         useEffect(()=>{if(!user)return;supabase.from('courses').select('*').then(({data})=>{if(data)setCourses(data.map(c=>({id:c.id,name:c.name,privacy:c.privacy,mode:c.mode,stageIds:c.stage_ids,times:{},bestPerStage:{}})));});},[user]);
   const [courseResults,setCourseResults]=useState([]);
