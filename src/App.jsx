@@ -1654,7 +1654,9 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
 
         useEffect(()=>{if(!user)return;supabase.from('courses').select('*').then(({data})=>{if(data)setCourses(data.map(c=>({id:c.id,name:c.name,privacy:c.privacy,mode:c.mode,stageIds:c.stage_ids,times:{},bestPerStage:{}})));});},[user]);
     const [courseResults,setCourseResults]=useState([]);
-  const [courseCRCount,setCourseCRCount]=useState(0);
+    const [courseCRCount,setCourseCRCount]=useState(0);
+  const [courseCRList,setCourseCRList]=useState([]);
+  const [expandedCRCourse,setExpandedCRCourse]=useState(null);
   const courseIdsKey=useMemo(()=>courses.map(c=>c.id).join(','),[courses]);
   useEffect(()=>{
     if(!user||!courseIdsKey)return;
@@ -1663,9 +1665,14 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
       if(!data)return;
       const bestByCourse={};
       data.forEach(r=>{if(!bestByCourse[r.course_id]||r.total_time_ms<bestByCourse[r.course_id].total_time_ms){bestByCourse[r.course_id]={user_id:r.user_id,total_time_ms:r.total_time_ms};}});
-      setCourseCRCount(Object.values(bestByCourse).filter(b=>b.user_id===user.id).length);
+      const mine=Object.entries(bestByCourse).filter(([,b])=>b.user_id===user.id);
+      setCourseCRCount(mine.length);
+      setCourseCRList(mine.map(([cid,b])=>{
+        const course=courses.find(c=>String(c.id)===String(cid));
+        return course?{id:course.id,name:course.name,stageIds:course.stageIds,totalTime:b.total_time_ms}:null;
+      }).filter(Boolean));
     });
-  },[courseIdsKey,user]);
+  },[courseIdsKey,user,courses]);
   useEffect(()=>{if(!user)return;supabase.from('course_results').select('id,total_time_ms,mode,completed_at,courses(name,stage_ids)').eq('user_id',user.id).order('completed_at',{ascending:false}).then(({data})=>{if(data)setCourseResults(data.map(r=>({id:r.id,name:r.courses?.name||'Course',date:new Date(r.completed_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}),stages:r.courses?.stage_ids?.length||0,mode:r.mode,totalTime:r.total_time_ms,pos:null})));});},[user]);
 
     const [recentStageTimes,setRecentStageTimes]=useState([]);
