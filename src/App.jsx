@@ -887,8 +887,8 @@ function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,cou
           <div style={{fontSize:17,fontWeight:700,color:C.text}}>{crCount}</div>
           <div style={{fontSize:12,color:C.muted}}>CR</div>
         </button>
-        <button className="tap" onClick={()=>onStatPress&&onStatPress('records')} style={{background:"#fff",border:`1px solid ${C.blue}`,borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-          <div style={{fontSize:17,fontWeight:700,color:C.text}}>0</div>
+               <button className="tap" onClick={()=>onStatPress&&onStatPress('records')} style={{background:"#fff",border:`1px solid ${C.blue}`,borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+          <div style={{fontSize:17,fontWeight:700,color:C.text}}>{courseCRCount}</div>
           <div style={{fontSize:12,color:C.muted}}>Course CR</div>
         </button>
       </div>
