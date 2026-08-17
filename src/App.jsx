@@ -1076,12 +1076,11 @@ function RaceScreen({course,stages,user,onFinish}){
   const [bestPerStage,setBestPerStage]=useState(savedProgress?savedProgress.bestPerStage:{}); // mashup: best time per stage id
   const [runCount,setRunCount]=useState(savedProgress?savedProgress.runCount:0); // how many full runs completed
   const [gateStatus,setGateStatus]=useState("waiting");
-  const [distToGate,setDistToGate]=useState(null);
-
-      const timerRef=useRef(null);
+  const [distToGate,setDistToGate]=useState(null);   const timerRef=useRef(null);
   const countRef=useRef(null);
   const gpsRef=useRef(null);
   const startTimeRef=useRef(0);
+  const prevGpsRef=useRef(null);
   const [introDist,setIntroDist]=useState(null);
 
     const currentStage=courseStages[stageIndex];
