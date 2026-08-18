@@ -802,6 +802,99 @@ function CourseProgressSheet({courses,user}){
   );
 }
 
+function UnitField({label,unit,value,onChange,placeholder}){
+return(
+<div>
+<div style={{fontSize:10,fontWeight:700,color:C.muted,marginBottom:4,letterSpacing:0.4,textTransform:"uppercase"}}>{label}</div>
+<div style={{position:"relative"}}>
+<input type="number" inputMode="decimal" value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{width:"100%",border:`1px solid ${C.border}`,borderRadius:8,padding:unit?"8px 34px 8px 8px":"8px",fontSize:13,color:C.text,background:C.surface,boxSizing:"border-box"}}/>
+{!!unit&&<span style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",fontSize:10,color:C.mutedL,fontWeight:700,pointerEvents:"none"}}>{unit}</span>}
+</div>
+</div>
+);
+}
+const SUSPENSION_FIELDS=[{key:"psi",label:"PSI",unit:"psi"},{key:"lsc",label:"LSC",unit:"clicks"},{key:"hsc",label:"HSC",unit:"clicks"},{key:"lsr",label:"LSR",unit:"clicks"},{key:"hsr",label:"HSR",unit:"clicks"},{key:"hsb",label:"HSB",unit:"clicks"},{key:"tokens",label:"Tokens",unit:""},{key:"sag",label:"SAG",unit:"%"}];
+const COIL_FIELDS=[{key:"springRate",label:"Spring Rate",unit:"lbs/in"},{key:"lsc",label:"LSC",unit:"clicks"},{key:"hsc",label:"HSC",unit:"clicks"},{key:"lsr",label:"LSR",unit:"clicks"},{key:"hsr",label:"HSR",unit:"clicks"},{key:"hsb",label:"HSB",unit:"clicks"},{key:"sag",label:"SAG",unit:"%"}];
+function ModeToggle({mode,onChange}){
+return(
+<div style={{display:"flex",background:C.surface,borderRadius:8,padding:2,marginBottom:10}}>
+{["psi","lbs"].map(m=>(
+<button key={m} className="tap" onClick={()=>onChange(m)} style={{flex:1,border:"none",borderRadius:6,padding:"5px 0",background:mode===m?C.blue:"transparent",color:mode===m?"#fff":C.muted,fontSize:11,fontWeight:700}}>{m.toUpperCase()}</button>
+))}
+</div>
+);
+}
+function SuspensionColumn({title,prefix,s,setField}){
+const mode=s[prefix+"Mode"];
+const fields=mode==="lbs"?COIL_FIELDS:SUSPENSION_FIELDS;
+return(
+<div style={{background:"white",border:`1px solid ${C.border}`,borderRadius:16,padding:"14px 10px",flex:1,minWidth:0}}>
+<div style={{fontSize:14,fontWeight:700,color:C.text,textAlign:"center",marginBottom:8}}>{title}</div>
+<ModeToggle mode={mode} onChange={m=>setField(prefix+"Mode",m)}/>
+<div style={{display:"flex",flexDirection:"column",gap:8}}>
+{fields.map(f=>{
+const key=prefix+f.key.charAt(0).toUpperCase()+f.key.slice(1);
+return <UnitField key={f.key} label={f.label} unit={f.unit} value={s[key]} onChange={v=>setField(key,v)}/>;
+})}
+</div>
+</div>
+);
+}
+function NotesField({label,value,onChange}){
+return(
+<div style={{marginBottom:14}}>
+<div style={{fontSize:11,fontWeight:700,color:C.muted,marginBottom:6,letterSpacing:0.3,textTransform:"uppercase"}}>{label}</div>
+<textarea value={value} onChange={e=>onChange(e.target.value)} rows={2} style={{width:"100%",border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 12px",fontSize:13,color:C.text,background:C.surface,boxSizing:"border-box",resize:"none"}}/>
+</div>
+);
+}
+function BikeSetupScreen({settings,onSave,onBack}){
+const [s,setS]=useState(settings);
+useEffect(()=>{setS(settings);},[settings]);
+const setField=(key,val)=>setS(prev=>({...prev,[key]:val}));
+const saveAndClose=async()=>{
+onSave(s);
+const{data:{user}}=await supabase.auth.getUser();
+if(user){
+await supabase.from('profiles').update({bike_name:s.bikeName,rider_weight:s.riderWeight,tire_dry_front:s.tireDryFront,tire_dry_rear:s.tireDryRear,tire_wet_front:s.tireWetFront,tire_wet_rear:s.tireWetRear,shock_mode:s.shockMode,shock_psi:s.shockPsi,shock_spring_rate:s.shockSpringRate,shock_lsc:s.shockLsc,shock_hsc:s.shockHsc,shock_lsr:s.shockLsr,shock_hsr:s.shockHsr,shock_hsb:s.shockHsb,shock_tokens:s.shockTokens,shock_sag:s.shockSag,fork_mode:s.forkMode,fork_psi:s.forkPsi,fork_spring_rate:s.forkSpringRate,fork_lsc:s.forkLsc,fork_hsc:s.forkHsc,fork_lsr:s.forkLsr,fork_hsr:s.forkHsr,fork_hsb:s.forkHsb,fork_tokens:s.forkTokens,fork_sag:s.forkSag,bike_notes:s.bikeNotes,fork_notes:s.forkNotes,shock_notes:s.shockNotes}).eq('id',user.id);
+}
+onBack();
+};
+return(
+<div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
+<div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+<button className="tap" onClick={saveAndClose} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
+<div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>Bike Setup</div>
+</div>
+<div style={{flex:1,overflowY:"auto",padding:"20px 16px 40px"}}>
+<div style={{background:"white",border:`1px solid ${C.border}`,borderRadius:16,padding:"16px",marginBottom:16}}>
+<img src="/bike-setup.jpg" alt="Bike" style={{width:"100%",height:"auto",display:"block",margin:"0 auto 14px"}}/>
+<input value={s.bikeName} onChange={e=>setField("bikeName",e.target.value)} placeholder="Name your bike" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"12px 14px",fontSize:16,fontWeight:700,color:C.text,background:C.surface,marginBottom:12,boxSizing:"border-box",textAlign:"center"}}/>
+<div style={{marginBottom:14}}>
+<UnitField label="Rider weight — with gear" unit="kg" value={s.riderWeight} onChange={v=>setField("riderWeight",v)} placeholder="78"/>
+</div>
+<div style={{fontSize:10,fontWeight:700,color:C.mutedL,letterSpacing:0.6,textTransform:"uppercase",marginBottom:6}}>Dry</div>
+<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+<UnitField label="Tire — Rear" unit="psi" value={s.tireDryRear} onChange={v=>setField("tireDryRear",v)} placeholder="24"/>
+<UnitField label="Tire — Front" unit="psi" value={s.tireDryFront} onChange={v=>setField("tireDryFront",v)} placeholder="22"/>
+</div>
+<div style={{fontSize:10,fontWeight:700,color:C.mutedL,letterSpacing:0.6,textTransform:"uppercase",marginBottom:6}}>Wet</div>
+<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+<UnitField label="Tire — Rear" unit="psi" value={s.tireWetRear} onChange={v=>setField("tireWetRear",v)} placeholder="22"/>
+<UnitField label="Tire — Front" unit="psi" value={s.tireWetFront} onChange={v=>setField("tireWetFront",v)} placeholder="20"/>
+</div>
+</div>
+<div style={{display:"flex",gap:10,marginBottom:16}}>
+<SuspensionColumn title="Shock" prefix="shock" s={s} setField={setField}/>
+<SuspensionColumn title="Fork" prefix="fork" s={s} setField={setField}/>
+</div>
+<NotesField label="Bike notes" value={s.bikeNotes} onChange={v=>setField("bikeNotes",v)}/>
+<NotesField label="Fork notes" value={s.forkNotes} onChange={v=>setField("forkNotes",v)}/>
+<NotesField label="Shock notes" value={s.shockNotes} onChange={v=>setField("shockNotes",v)}/>
+</div>
+</div>
+);
+}
 function StatisticsScreen({stages,courses,user,onBack}){
   const [view,setView]=useState('hub');
   const titles={hub:"Statistics",stages:"Stages",courses:"Courses"};
