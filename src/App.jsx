@@ -1250,23 +1250,22 @@ function RaceScreen({course,stages,user,onFinish}){
 
     const startCountdown=()=>{playBeep(880,150);setGateStatus("waiting");setTimerMs(0);timerMsRef.current=0;startTimeRef.current=Date.now();setPhase("racing");timerRef.current=setInterval(()=>{timerMsRef.current=Date.now()-startTimeRef.current;setTimerMs(timerMsRef.current);},10);setTimeout(()=>{if(timerRef.current){clearInterval(timerRef.current);setPhase("transfer");setTimerMs(0);alert("Run cancelled — finish gate not reached in time");}},600000);};
 
-    const stopStage=async(saveTime=false)=>{
-    playBeep(440,250);
-    clearInterval(timerRef.current);
-    const finalTime=timerMsRef.current;
-    if(saveTime&&!isPractice){await supabase.from('stage_times').insert({stage_id:currentStage.id,user_id:user.id,time_ms:finalTime});}
-
-    const newSplit={stageId:currentStage.id,name:currentStage.name,time:finalTime};
-    setSplits(prev=>[...prev,newSplit]);
-    // Mashup: update best per stage
-    if(isMashup){
-      setBestPerStage(prev=>{
-        const current=prev[currentStage.id];
-        return{...prev,[currentStage.id]:(!current||finalTime<current)?finalTime:current};
-      });
-    }
-    setPhase("split");
-  };
+    const stopStage=(saveTime=false)=>{
+playBeep(440,250);
+clearInterval(timerRef.current);
+const finalTime=timerMsRef.current;
+const newSplit={stageId:currentStage.id,name:currentStage.name,time:finalTime};
+setSplits(prev=>[...prev,newSplit]);
+// Mashup: update best per stage
+if(isMashup){
+setBestPerStage(prev=>{
+const current=prev[currentStage.id];
+return{...prev,[currentStage.id]:(!current||finalTime<current)?finalTime:current};
+});
+}
+setPhase("split");
+if(saveTime&&!isPractice){supabase.from('stage_times').insert({stage_id:currentStage.id,user_id:user.id,time_ms:finalTime}).then(()=>{}).catch(err=>console.log(err));}
+};
 
             useEffect(()=>{
     if(phase!=="racing")return;
