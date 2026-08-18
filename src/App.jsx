@@ -1200,7 +1200,7 @@ function RaceScreen({course,stages,user,onFinish}){
   const [bestPerStage,setBestPerStage]=useState(savedProgress?savedProgress.bestPerStage:{}); // mashup: best time per stage id
   const [runCount,setRunCount]=useState(savedProgress?savedProgress.runCount:0); // how many full runs completed
   const [gateStatus,setGateStatus]=useState("waiting");
-  const [distToGate,setDistToGate]=useState(null);   const timerRef=useRef(null);
+  const [distToGate,setDistToGate]=useState(null); const [armed,setArmed]=useState(false); const timerRef=useRef(null);
   const countRef=useRef(null);
   const gpsRef=useRef(null);
   const startTimeRef=useRef(0);
@@ -1231,22 +1231,22 @@ function RaceScreen({course,stages,user,onFinish}){
 
   // Simulate GPS toward gate
     useEffect(()=>{
-    if(phase!=="transfer")return;
-    if(!navigator.geolocation)return;
-    const gate=currentStage.start;
-    prevGpsRef.current=null;
-    const id=navigator.geolocation.watchPosition(pos=>{
-      const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};
-      const dist=haversine(loc,gate);
-      setDistToGate(Math.round(dist));
-      const crossed=segmentCrossesGate(prevGpsRef.current,loc,gate,FAT_GATE_RADIUS);
-      prevGpsRef.current=loc;
-      if(crossed){navigator.geolocation.clearWatch(id);setGateStatus("entered");setTimeout(()=>startCountdown(),300);}
-      else if(dist<=50)setGateStatus("near");
-      else setGateStatus("waiting");
-    },err=>console.log(err),{enableHighAccuracy:true,maximumAge:0,timeout:10000});
-    return()=>navigator.geolocation.clearWatch(id);
-  },[phase,stageIndex]);
+if(phase!=="transfer"||!armed)return;
+if(!navigator.geolocation)return;
+const gate=currentStage.start;
+prevGpsRef.current=null;
+const id=navigator.geolocation.watchPosition(pos=>{
+const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};
+const dist=haversine(loc,gate);
+setDistToGate(Math.round(dist));
+const crossed=segmentCrossesGate(prevGpsRef.current,loc,gate,FAT_GATE_RADIUS);
+prevGpsRef.current=loc;
+if(crossed){navigator.geolocation.clearWatch(id);setGateStatus("entered");setTimeout(()=>startCountdown(),300);}
+else if(dist<=50)setGateStatus("near");
+else setGateStatus("waiting");
+},err=>console.log(err),{enableHighAccuracy:true,maximumAge:0,timeout:10000});
+return()=>navigator.geolocation.clearWatch(id);
+},[phase,stageIndex,armed]);
 
     const startCountdown=()=>{playBeep(880,150);setGateStatus("waiting");setTimerMs(0);timerMsRef.current=0;startTimeRef.current=Date.now();setPhase("racing");timerRef.current=setInterval(()=>{timerMsRef.current=Date.now()-startTimeRef.current;setTimerMs(timerMsRef.current);},10);setTimeout(()=>{if(timerRef.current){clearInterval(timerRef.current);setPhase("transfer");setTimerMs(0);alert("Run cancelled — finish gate not reached in time");}},600000);};
 
@@ -1285,19 +1285,19 @@ if(saveTime&&!isPractice){supabase.from('stage_times').insert({stage_id:currentS
   },[phase,stageIndex]);
 
   const nextStage=()=>{
-    if(isLastStage){
-      setRunCount(r=>r+1);
-      if(isPractice){setPhase("done");}
-      else if(isMashup){setPhase("mashupBetween");}
-      else{setPhase("done");}
-    } else {
-      setStageIndex(i=>i+1);setPhase("transfer");
-    }
-  };
+if(isLastStage){
+setRunCount(r=>r+1);
+if(isPractice){setPhase("done");}
+else if(isMashup){setPhase("mashupBetween");}
+else{setPhase("done");}
+} else {
+setStageIndex(i=>i+1);setPhase("transfer");setArmed(false);
+}
+};
 
   const startAnotherRun=()=>{
-    setStageIndex(0);setSplits([]);setPhase("transfer");
-  };
+setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
+};
 
   useEffect(()=>()=>{clearInterval(timerRef.current);clearInterval(countRef.current);clearInterval(gpsRef.current);},[]);
 
