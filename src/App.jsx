@@ -1410,14 +1410,28 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
           {courseStages.map((_,i)=><div key={i} style={{flex:1,height:4,borderRadius:2,background:i<stageIndex?C.orange:i===stageIndex?"white":"rgba(255,255,255,0.2)"}}/>)}
         </div>
         <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"32px 24px",textAlign:"center"}}>
-          <div style={{width:100,height:100,borderRadius:"50%",background:`${gateColors[gateStatus]}20`,border:`3px solid ${gateColors[gateStatus]}`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:20,transition:"all 0.3s"}}>
-            <Icon.Location size={40} color={gateColors[gateStatus]}/>
-          </div>
-          <div style={{fontSize:20,fontWeight:700,color:C.text,marginBottom:8}}>{stageIndex===0?`Head to Stage 1`:`Transfer to Stage ${stageIndex+1}`}</div>
-          <div style={{fontSize:24,fontWeight:800,color:gateColors[gateStatus],marginBottom:8,transition:"all 0.3s"}}>{gateMsg[gateStatus]}</div>
-          <div style={{fontSize:13,color:C.muted,marginBottom:16}}>{isPractice?"Timer won't start — just ride it for feel":"Timer starts automatically when you enter the gate"}</div>
-          {currentStage.note&&<div style={{background:C.surface,borderRadius:12,padding:"12px 16px",border:`1px solid ${C.border}`,fontSize:13,color:C.muted,maxWidth:280}}>📋 {currentStage.note}</div>}
-        </div>
+{!armed?(
+<>
+<div style={{width:100,height:100,borderRadius:"50%",background:`${C.muted}20`,border:`3px solid ${C.muted}`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:20}}>
+<Icon.Location size={40} color={C.muted}/>
+</div>
+<div style={{fontSize:20,fontWeight:700,color:C.text,marginBottom:8}}>{stageIndex===0?`Head to Stage 1`:`Transfer to Stage ${stageIndex+1}`}</div>
+<div style={{fontSize:14,color:C.muted,marginBottom:20,maxWidth:260}}>Gate detection is off. Tap below once you're ready — the app will start watching for the start gate.</div>
+<button className="tap" onClick={()=>{setGateStatus("waiting");setDistToGate(null);setArmed(true);}} style={{background:C.blue,border:"none",borderRadius:14,padding:"14px 28px",color:"#fff",fontSize:15,fontWeight:700}}>Arm Start Gate</button>
+</>
+):(
+<>
+<div style={{width:100,height:100,borderRadius:"50%",background:`${gateColors[gateStatus]}20`,border:`3px solid ${gateColors[gateStatus]}`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:20,transition:"all 0.3s"}}>
+<Icon.Location size={40} color={gateColors[gateStatus]}/>
+</div>
+<div style={{fontSize:20,fontWeight:700,color:C.text,marginBottom:8}}>{stageIndex===0?`Head to Stage 1`:`Transfer to Stage ${stageIndex+1}`}</div>
+<div style={{fontSize:24,fontWeight:800,color:gateColors[gateStatus],marginBottom:8,transition:"all 0.3s"}}>{gateMsg[gateStatus]}</div>
+<div style={{fontSize:13,color:C.muted,marginBottom:16}}>{isPractice?"Timer won't start — just ride it for feel":"Timer starts automatically when you enter the gate"}</div>
+{currentStage.note&&<div style={{background:C.surface,borderRadius:12,padding:"12px 16px",border:`1px solid ${C.border}`,fontSize:13,color:C.muted,maxWidth:280}}>📋 {currentStage.note}</div>}
+<button className="tap" onClick={()=>{setArmed(false);setGateStatus("waiting");setDistToGate(null);}} style={{marginTop:16,background:"none",border:"none",color:C.muted,fontSize:12,textDecoration:"underline"}}>Disarm</button>
+</>
+)}
+</div>
         {isMashup&&Object.keys(bestPerStage).length>0&&(
           <div style={{padding:"0 20px 8px"}}>
             <div style={{fontSize:12,color:C.muted,fontWeight:600,marginBottom:6}}>CURRENT BEST TIMES</div>
