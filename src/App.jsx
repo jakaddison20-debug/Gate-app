@@ -929,7 +929,8 @@ function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,cou
                {[
           {label:"Statistics",Ic:Icon.BarChart,onClick:onOpenProgress},
           {label:"Stages",Ic:Icon.Lightning,onClick:onGoToStages},
-          {label:"Courses",Ic:Icon.Flag,onClick:onGoToCourses},
+         {label:"Courses",Ic:Icon.Flag,onClick:onGoToCourses},
+         {label:"Bike Setup",Ic:Icon.Bike,onClick:onOpenBikeSetup},
           {label:"Posts",Ic:Icon.Image,onClick:null},
         ].map((item,i,arr)=>(
           <button key={item.label} className="tap" onClick={item.onClick||undefined} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"13px 0",background:"none",border:"none",borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none",textAlign:"left"}}>
