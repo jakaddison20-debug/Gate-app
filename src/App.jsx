@@ -1050,6 +1050,21 @@ function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,cou
 }
 
 // ── Stage Builder ─────────────────────────────────────────────────────────────
+function pointAtDistance(coords,targetDist){
+if(!coords||coords.length<2)return coords&&coords[0]?coords[0]:null;
+let acc=0;
+for(let i=0;i<coords.length-1;i++){
+const a=coords[i],b=coords[i+1];
+const segDist=haversine(a,b);
+if(acc+segDist>=targetDist){
+const remain=targetDist-acc;
+const frac=segDist===0?0:remain/segDist;
+return{lat:a.lat+(b.lat-a.lat)*frac,lng:a.lng+(b.lng-a.lng)*frac};
+}
+acc+=segDist;
+}
+return coords[coords.length-1];
+}
 function StageBuilderSheet({onClose,onSave}){
   const [name,setName]=useState("");
   const [privacy,setPrivacy]=useState("private");
@@ -1059,8 +1074,7 @@ function StageBuilderSheet({onClose,onSave}){
   const [recording,setRecording]=useState(false);
   const [lineCoords,setLineCoords]=useState([]);
   const trackRef=useRef(null);
-  const simulatePlace=()=>{if(!navigator.geolocation){alert("GPS not available");return;}navigator.geolocation.getCurrentPosition(pos=>{const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};if(!start){setStart(loc);setLineCoords([loc]);setRecording(true);trackRef.current=navigator.geolocation.watchPosition(p=>setLineCoords(prev=>[...prev,{lat:p.coords.latitude,lng:p.coords.longitude}]),err=>console.log(err),{enableHighAccuracy:true,maximumAge:0});}else if(!finish){setFinish(loc);setRecording(false);navigator.geolocation.clearWatch(trackRef.current);}},err=>alert("Could not get location — make sure GPS is on"),{enableHighAccuracy:true,timeout:10000});};
-
+  const simulatePlace=()=>{if(!navigator.geolocation){alert("GPS not available");return;}navigator.geolocation.getCurrentPosition(pos=>{const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};if(!start){setStart(loc);setLineCoords([loc]);setRecording(true);trackRef.current=navigator.geolocation.watchPosition(p=>setLineCoords(prev=>[...prev,{lat:p.coords.latitude,lng:p.coords.longitude}]),err=>console.log(err),{enableHighAccuracy:true,maximumAge:0});}else if(!finish){setFinish(loc);setRecording(false);navigator.geolocation.clearWatch(trackRef.current);const fullLine=[...lineCoords,loc];let total=0;for(let i=0;i<fullLine.length-1;i++)total+=haversine(fullLine[i],fullLine[i+1]);if(total>25){const offsetStart=pointAtDistance(fullLine,25);if(offsetStart)setStart(offsetStart);}setLineCoords(fullLine);}},err=>alert("Could not get location — make sure GPS is on"),{enableHighAccuracy:true,timeout:10000});};
 
   const canSave=name.trim()&&start&&finish;
   const dist=start&&finish?haversine(start,finish):null;
