@@ -1645,6 +1645,7 @@ export default function App(){
   const [selectedStage,setSelectedStage]=useState(null);
   const [showSettings,setShowSettings]=useState(false);
   const [showProgress,setShowProgress]=useState(false);
+  const [showBikeSetup,setShowBikeSetup]=useState(false);
   const [settings,setSettings]=useState(DEFAULT_SETTINGS);
   const [user,setUser]=useState(null);
   const [showAuth,setShowAuth]=useState(false);
