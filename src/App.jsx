@@ -1783,9 +1783,19 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
     <div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif"}}>
       <style>{STYLES}</style>
       <div style={{height:44,background:"#fff"}}/>
-      <SettingsScreen settings={settings} onSave={setSettings} onBack={()=>setShowSettings(false)}/>
-    </div>
-  );
+      <SettingsScreen settings={settings} onSave={setSettings} 
+onBack={()=>setShowSettings(false)}/>
+</div>
+);
+
+// Bike Setup screen overlay
+if(showBikeSetup)return(
+<div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
+<style>{STYLES}</style>
+<div style={{height:44,background:"#fff"}}/>
+<BikeSetupScreen settings={settings} onSave={setSettings} onBack={()=>setShowBikeSetup(false)}/>
+</div>
+);
 
   // Statistics screen overlay
   if(showProgress)return(
