@@ -1770,6 +1770,14 @@ export default function App(){
   const [settings,setSettings]=useState(DEFAULT_SETTINGS);
   const [user,setUser]=useState(null);
   const [showAuth,setShowAuth]=useState(false);
+  const [refreshTick,setRefreshTick]=useState(0);
+  useEffect(()=>{
+  const onVisible=()=>{if(document.visibilityState==="visible")setRefreshTick(t=>t+1);};
+  document.addEventListener('visibilitychange',onVisible);
+  window.addEventListener('pageshow',onVisible);
+  return()=>{document.removeEventListener('visibilitychange',onVisible);window.removeEventListener('pageshow',onVisible);};
+  },[]);
+
   useEffect(()=>{if(!user)return;supabase.from('profiles').select('display_name,avatar_url,bike_name,rider_weight,tire_dry_front,tire_dry_rear,tire_wet_front,tire_wet_rear,shock_mode,shock_psi,shock_spring_rate,shock_lsc,shock_hsc,shock_lsr,shock_hsr,shock_hsb,shock_tokens,shock_sag,fork_mode,fork_psi,fork_spring_rate,fork_lsc,fork_hsc,fork_lsr,fork_hsr,fork_hsb,fork_tokens,fork_sag,bike_notes,fork_notes,shock_notes').eq('id',user.id).single().then(({data})=>{if(data)setSettings(prev=>({...prev,displayName:data.display_name||prev.displayName,avatarUrl:data.avatar_url||null,bikeName:data.bike_name||'',riderWeight:data.rider_weight||'',tireDryFront:data.tire_dry_front||'',tireDryRear:data.tire_dry_rear||'',tireWetFront:data.tire_wet_front||'',tireWetRear:data.tire_wet_rear||'',shockMode:data.shock_mode||'psi',shockPsi:data.shock_psi||'',shockSpringRate:data.shock_spring_rate||'',shockLsc:data.shock_lsc||'',shockHsc:data.shock_hsc||'',shockLsr:data.shock_lsr||'',shockHsr:data.shock_hsr||'',shockHsb:data.shock_hsb||'',shockTokens:data.shock_tokens||'',shockSag:data.shock_sag||'',forkMode:data.fork_mode||'psi',forkPsi:data.fork_psi||'',forkSpringRate:data.fork_spring_rate||'',forkLsc:data.fork_lsc||'',forkHsc:data.fork_hsc||'',forkLsr:data.fork_lsr||'',forkHsr:data.fork_hsr||'',forkHsb:data.fork_hsb||'',forkTokens:data.fork_tokens||'',forkSag:data.fork_sag||'',bikeNotes:data.bike_notes||'',forkNotes:data.fork_notes||'',shockNotes:data.shock_notes||''}));});},[user]);
   const containerRef=useRef(null);
   const wakeLockRef=useRef(null);
