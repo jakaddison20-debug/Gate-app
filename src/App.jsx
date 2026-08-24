@@ -1778,7 +1778,7 @@ export default function App(){
   return()=>{document.removeEventListener('visibilitychange',onVisible);window.removeEventListener('pageshow',onVisible);};
   },[]);
 
-  useEffect(()=>{if(!user)return;supabase.from('profiles').select('display_name,avatar_url,bike_name,rider_weight,tire_dry_front,tire_dry_rear,tire_wet_front,tire_wet_rear,shock_mode,shock_psi,shock_spring_rate,shock_lsc,shock_hsc,shock_lsr,shock_hsr,shock_hsb,shock_tokens,shock_sag,fork_mode,fork_psi,fork_spring_rate,fork_lsc,fork_hsc,fork_lsr,fork_hsr,fork_hsb,fork_tokens,fork_sag,bike_notes,fork_notes,shock_notes').eq('id',user.id).single().then(({data})=>{if(data)setSettings(prev=>({...prev,displayName:data.display_name||prev.displayName,avatarUrl:data.avatar_url||null,bikeName:data.bike_name||'',riderWeight:data.rider_weight||'',tireDryFront:data.tire_dry_front||'',tireDryRear:data.tire_dry_rear||'',tireWetFront:data.tire_wet_front||'',tireWetRear:data.tire_wet_rear||'',shockMode:data.shock_mode||'psi',shockPsi:data.shock_psi||'',shockSpringRate:data.shock_spring_rate||'',shockLsc:data.shock_lsc||'',shockHsc:data.shock_hsc||'',shockLsr:data.shock_lsr||'',shockHsr:data.shock_hsr||'',shockHsb:data.shock_hsb||'',shockTokens:data.shock_tokens||'',shockSag:data.shock_sag||'',forkMode:data.fork_mode||'psi',forkPsi:data.fork_psi||'',forkSpringRate:data.fork_spring_rate||'',forkLsc:data.fork_lsc||'',forkHsc:data.fork_hsc||'',forkLsr:data.fork_lsr||'',forkHsr:data.fork_hsr||'',forkHsb:data.fork_hsb||'',forkTokens:data.fork_tokens||'',forkSag:data.fork_sag||'',bikeNotes:data.bike_notes||'',forkNotes:data.fork_notes||'',shockNotes:data.shock_notes||''}));});},[user]);
+  useEffect(()=>{if(!user)return;supabase.from('profiles').select('display_name,avatar_url').eq('id',user.id).single().then(({data})=>{if(data)setSettings(prev=>({...prev,displayName:data.display_name||prev.displayName,avatarUrl:data.avatar_url||null}));});},[user,refreshTick]);
   const containerRef=useRef(null);
   const wakeLockRef=useRef(null);
   const [mapSize,setMapSize]=useState({w:390,h:844});
@@ -1800,7 +1800,8 @@ useEffect(()=>{
   const {data:{subscription}}=supabase.auth.onAuthStateChange((_,session)=>setUser(session?.user??null));
   return()=>subscription.unsubscribe();
 },[]);
-useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.eq.public,created_by.eq.${user.id}`).then(async({data})=>{if(!data)return;const{data:times}=await supabase.from('stage_times').select('stage_id,time_ms').eq('user_id',user.id);const bests={};if(times)times.forEach(t=>{if(!bests[t.stage_id]||t.time_ms<bests[t.stage_id])bests[t.stage_id]=t.time_ms;});setStages(data.map(s=>({id:s.id,name:s.name,note:s.note||'',privacy:s.privacy,created_by:s.created_by,start:{lat:s.start_lat,lng:s.start_lng},finish:{lat:s.finish_lat,lng:s.finish_lng},line_coords:s.line_coords||null,time:bests[s.id]||null,cr:false})));});},[user]);
+useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.eq.public,created_by.eq.${user.id}`).then(async({data})=>{if(!data)return;const{data:times}=await supabase.from('stage_times').select('stage_id,time_ms').eq('user_id',user.id);const bests={};if(times)times.forEach(t=>{if(!bests[t.stage_id]||t.time_ms<bests[t.stage_id])bests[t.stage_id]=t.time_ms;});setStages(data.map(s=>({id:s.id,name:s.name,note:s.note||'',privacy:s.privacy,created_by:s.created_by,start:{lat:s.start_lat,lng:s.start_lng},finish:{lat:s.finish_lat,lng:s.finish_lng},line_coords:s.line_coords||null,time:bests[s.id]||null,cr:false})));});},[user,refreshTick]);
+
 
   const stageIdsKey=useMemo(()=>stages.map(s=>s.id).join(','),[stages]);
   useEffect(()=>{
@@ -1818,7 +1819,7 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
     });
   },[stageIdsKey,user]);
 
-        useEffect(()=>{if(!user)return;supabase.from('courses').select('*').then(({data})=>{if(data)setCourses(data.map(c=>({id:c.id,name:c.name,privacy:c.privacy,mode:c.mode,stageIds:c.stage_ids,created_by:c.created_by,times:{},bestPerStage:{}})));});},[user]);
+       useEffect(()=>{if(!user)return;supabase.from('courses').select('*').then(({data})=>{if(data)setCourses(data.map(c=>({id:c.id,name:c.name,privacy:c.privacy,mode:c.mode,stageIds:c.stage_ids,times:{},bestPerStage:{}})));});},[user,refreshTick]);
     const [courseResults,setCourseResults]=useState([]);
     const [courseCRCount,setCourseCRCount]=useState(0);
   const [courseCRList,setCourseCRList]=useState([]);
