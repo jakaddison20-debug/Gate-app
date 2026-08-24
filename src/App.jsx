@@ -124,7 +124,7 @@ const STYLES=`
 // ── Toggle switch ─────────────────────────────────────────────────────────────
 function Toggle({value,onChange}){
   return(
-    <div onClick={()=>onChange(!value)} style={{width:46,height:26,borderRadius:13,background:value?C.orange:"#DDD",position:"relative",cursor:"pointer",transition:"background 0.2s",flexShrink:0}}>
+    <div onClick={()=>onChange(!value)} style={{width:46,height:26,borderRadius:13,background:value?C.blue:"#DDD",position:"relative",cursor:"pointer",transition:"background 0.2s",flexShrink:0}}>
       <div style={{position:"absolute",top:3,left:value?22:3,width:20,height:20,borderRadius:"50%",background:"white",boxShadow:"0 1px 4px rgba(0,0,0,0.2)",transition:"left 0.2s"}}/>
     </div>
   );
