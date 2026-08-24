@@ -182,9 +182,9 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
       {/* Header */}
 
       <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,position:"sticky",top:0,zIndex:5,display:"flex",alignItems:"center",gap:12}}>
-        <button className="tap" onClick={()=>{onSave(s);onBack();}} style={{background:"none",border:"none",color:C.orange,fontSize:14,fontWeight:600}}>← Back</button>
+        <button className="tap" onClick={()=>{onSave(s);onBack();}} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
         <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>Settings <span style={{fontSize:11,color:C.muted}}>(build 4)</span></div>
-        <button className="tap" onClick={()=>{onSave(s);onBack();}} style={{background:C.orange,border:"none",borderRadius:8,padding:"6px 14px",color:"white",fontSize:13,fontWeight:600}}>Save</button>
+        <button className="tap" onClick={()=>{onSave(s);onBack();}} style={{background:C.blue,border:"none",borderRadius:8,padding:"6px 14px",color:"white",fontSize:13,fontWeight:600}}>Save</button>
       </div>
 
       <div style={{padding:"20px 16px"}}>
