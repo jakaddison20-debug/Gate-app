@@ -1259,7 +1259,7 @@ prevGpsRef.current=loc;
 if(crossed){navigator.geolocation.clearWatch(id);setGateStatus("entered");setTimeout(()=>startCountdown(),300);}
 else if(dist<=50)setGateStatus("near");
 else setGateStatus("waiting");
-},err=>console.log(err),{enableHighAccuracy:true,maximumAge:0,timeout:10000});
+},err=>{console.log(err);logEvent(user?.id,"gps_error_transfer",err.message||String(err),currentStage?.id,{code:err.code});},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
 return()=>navigator.geolocation.clearWatch(id);
 },[phase,stageIndex,armed]);
 
