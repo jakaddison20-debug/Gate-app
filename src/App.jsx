@@ -1850,7 +1850,8 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
     const interval=setInterval(check,60000);
     return()=>{document.removeEventListener('visibilitychange',check);clearInterval(interval);};
   },[]);
-  useEffect(()=>{if(!user)return;const since=new Date();since.setDate(since.getDate()-83);since.setHours(0,0,0,0);supabase.from('stage_times').select('stage_id,time_ms,created_at').eq('user_id',user.id).gte('created_at',since.toISOString()).then(({data})=>{if(data)setRecentStageTimes(data);});},[user]);
+  useEffect(()=>{if(!user)return;const since=new Date();since.setDate(since.getDate()-83);since.setHours(0,0,0,0);supabase.from('stage_times').select('stage_id,time_ms,created_at').eq('user_id',user.id).gte('created_at',since.toISOString()).then(({data})=>{if(data)setRecentStageTimes(data);});},[user,refreshTick]);
+
 
     const weeklyActivity=useMemo(()=>{
     const monday=getMonday(new Date());
