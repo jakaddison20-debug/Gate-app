@@ -1292,12 +1292,12 @@ if(saveTime&&!isPractice){supabase.from('stage_times').insert({stage_id:currentS
       const crossed=segmentCrossesGate(prevGpsRef.current,loc,gate,FINISH_GATE_RADIUS);
       prevGpsRef.current=loc;
       if(crossed){
-        navigator.geolocation.clearWatch(id);
-        stopStage(true);
-      }
-    },err=>console.log(err),{enableHighAccuracy:true,maximumAge:0,timeout:10000});
-    return()=>navigator.geolocation.clearWatch(id);
-  },[phase,stageIndex]);
+navigator.geolocation.clearWatch(id);
+stopStage(true);
+}
+},err=>{console.log(err);logEvent(user?.id,"gps_error_racing",err.message||String(err),currentStage?.id,{code:err.code});},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
+return()=>navigator.geolocation.clearWatch(id);
+},[phase,stageIndex]);
 
   const nextStage=()=>{
 if(isLastStage){
