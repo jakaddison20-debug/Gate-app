@@ -659,7 +659,22 @@ const myEntry=lb.find(e=>user&&e.user_id===user.id);
 }
 
 // ── Activity Card ─────────────────────────────────────────────────────────────
+  function FeedCard({item}){
+const icons={stage_record:{Ic:Icon.Crown,color:"#92400E",bg:"#FFFBEB"},course_finish:{Ic:Icon.Flag,color:C.orange,bg:C.orangeL},stage_created:{Ic:Icon.Lightning,color:C.blue,bg:`${C.blue}15`},course_created:{Ic:Icon.Flag,color:C.blue,bg:`${C.blue}15`},day_recap:{Ic:Icon.BarChart,color:C.green,bg:`${C.green}15`}};
+const cfg=icons[item.event_type]||{Ic:Icon.Lightning,color:C.muted,bg:C.surface};
+return(
+<div style={{display:"flex",alignItems:"flex-start",gap:12,padding:"14px 16px",borderBottom:`1px solid ${C.border}`}}>
+<Avatar size={38} url={item.avatarUrl}/>
+<div style={{flex:1}}>
+<div style={{fontSize:13,color:C.text,lineHeight:1.4}}><span style={{fontWeight:700}}>{item.userName}</span> {item.message}</div>
+<div style={{fontSize:11,color:C.muted,marginTop:2}}>{item.ago}</div>
+</div>
+<div style={{width:30,height:30,borderRadius:8,background:cfg.bg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><cfg.Ic size={15} color={cfg.color}/></div>
+</div>
+);
+}
 function ActivityCard({item}){
+
   const [kudosed,setKudosed]=useState(false);
   const colors=["#FC4C02","#2563EB","#15803D","#7C3AED","#B45309"];
   const bg=colors[item.id%colors.length];
