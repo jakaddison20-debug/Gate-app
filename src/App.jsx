@@ -311,31 +311,19 @@ function MapboxStyleMap({center,zoom,flyToTrigger,width:W,height:H,stages=[],cou
       });
             map.current.on('load',()=>{
         const pinCanvas=document.createElement('canvas');
-        pinCanvas.width=68;pinCanvas.height=84;
-        const ctx=pinCanvas.getContext('2d');
-        ctx.beginPath();
-        ctx.moveTo(34,0);
-        ctx.bezierCurveTo(15.2,0,0,15.2,0,34);
-        ctx.bezierCurveTo(0,57.4,34,84,34,84);
-        ctx.bezierCurveTo(34,84,68,57.4,68,34);
-        ctx.bezierCurveTo(68,15.2,52.8,0,34,0);
-        ctx.closePath();
-        ctx.fillStyle='rgba(37,99,235,0.35)';
-        ctx.fill();
-        ctx.strokeStyle='#2563EB';
-        ctx.lineWidth=4.4;
-        ctx.lineJoin='round';
-        ctx.lineCap='round';
-        ctx.beginPath();
-        ctx.moveTo(38.7,20);
-        ctx.lineTo(19.3,42.7);
-        ctx.lineTo(36,42.7);
-        ctx.lineTo(33.3,60.7);
-        ctx.lineTo(52.7,36);
-        ctx.lineTo(36,36);
-        ctx.closePath();
-        ctx.stroke();
-        map.current.addImage('stage-pin',ctx.getImageData(0,0,68,84));
+pinCanvas.width=24;pinCanvas.height=24;
+const ctx=pinCanvas.getContext('2d');
+ctx.fillStyle='#2563EB';
+ctx.beginPath();
+ctx.moveTo(13,2);
+ctx.lineTo(3,14);
+ctx.lineTo(12,14);
+ctx.lineTo(11,22);
+ctx.lineTo(21,10);
+ctx.lineTo(12,10);
+ctx.closePath();
+ctx.fill();
+map.current.addImage('stage-pin',ctx.getImageData(0,0,24,24));
 
         // Add stages as lines
         const midpointFeatures=[];
@@ -378,7 +366,7 @@ function MapboxStyleMap({center,zoom,flyToTrigger,width:W,height:H,stages=[],cou
             midLng=(stage.start.lng+stage.finish.lng)/2;
           }
 
-          midpointFeatures.push({type:'Feature',properties:{stageId:String(stage.id)},geometry:{type:'Point',coordinates:[midLng,midLat]}});
+          midpointFeatures.push({type:'Feature',properties:{stageId:String(stage.id),name:stage.name},geometry:{type:'Point',coordinates:[midLng,midLat]}});
 
           if(stage.line_coords&&stage.line_coords.length>1){
 
@@ -390,7 +378,7 @@ function MapboxStyleMap({center,zoom,flyToTrigger,width:W,height:H,stages=[],cou
 
               if(midpointFeatures.length>0){
           map.current.addSource('stage-midpoints',{type:'geojson',data:{type:'FeatureCollection',features:midpointFeatures}});
-          map.current.addLayer({id:'stage-midpoints-icon',type:'symbol',source:'stage-midpoints',layout:{'icon-image':'stage-pin','icon-size':0.5,'icon-anchor':'bottom','icon-allow-overlap':true}});
+          map.current.addLayer({id:'stage-midpoints-icon',type:'symbol',source:'stage-midpoints',layout:{'icon-image':'stage-pin','icon-size':['interpolate',['linear'],['zoom'],10,0.35,14,0.55,18,0.85],'icon-anchor':'center','icon-allow-overlap':true,'text-field':['get','name'],'text-size':['interpolate',['linear'],['zoom'],10,9,14,12,18,15],'text-offset':[1.1,0],'text-anchor':'left','text-allow-overlap':true},paint:{'text-color':'#1A1A1A','text-halo-color':'#ffffff','text-halo-width':1.4}});
           map.current.on('click','stage-midpoints-icon',e=>{
             const stageId=e.features[0].properties.stageId;
             const stage=stages.find(s=>String(s.id)===stageId);
