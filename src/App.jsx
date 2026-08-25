@@ -716,6 +716,7 @@ function SegmentRow({stage,onPress,onDelete,userId}){
     </button>
   );
 }
+function PositionBadge({pos,size=32}){const crownColor=pos===1?"#C9A227":pos===2?"#AEB2B8":pos===3?"#AD8158":null;return(<div style={{display:"flex",flexDirection:"column",alignItems:"center"}}>{crownColor&&<svg width={size*0.5} height={size*0.4} viewBox="0 0 24 20" style={{marginBottom:-size*0.06}}><path d="M3 19l-1.5-10L7 13l5-9 5 9 5.5-4L20 19H3z" fill={crownColor} stroke={crownColor} strokeLinejoin="round" strokeWidth="1"/><rect x="3" y="17" width="17" height="2.6" rx="1" fill={crownColor}/></svg>}<span style={{fontSize:size*0.44,fontWeight:800,color:C.text,letterSpacing:-0.5}}>P{pos}</span></div>);}
 function ProgressChart({attempts}){
   const W=280,H=100,PAD=10;
   const times=attempts.map(a=>a.time_ms);
