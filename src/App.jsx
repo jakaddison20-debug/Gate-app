@@ -573,36 +573,69 @@ function SectionsSheet({stage,user,onClose}){
 }
 
 // ── Stage Detail Sheet ────────────────────────────────────────────────────────
-    function StageDetailSheet({stage,onClose,onRace,onOpenSections}){
+    function StageDetailSheet({stage,onClose,onRace,onOpenSections,user,onRename}){
   const [lb,setLb]=useState([]);
+const [myAttempts,setMyAttempts]=useState([]);
+const [editingName,setEditingName]=useState(false);
+const [nameVal,setNameVal]=useState(stage.name);
+const [savingName,setSavingName]=useState(false);
  
   useEffect(()=>{supabase.from('stage_times').select('time_ms,user_id,created_at,profiles(display_name,avatar_url)').eq('stage_id',stage.id).order('time_ms',{ascending:true}).then(({data})=>{if(data){const seen={};const best=data.filter(t=>{const id=t.user_id;if(seen[id])return false;seen[id]=true;return true;});setLb(best.slice(0,10).map((t,i)=>({pos:i+1,name:t.profiles?.display_name||'Rider',avatarUrl:t.profiles?.avatar_url||null,time:t.time_ms,date:new Date(t.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'})})))}});},[stage.id]);
 
-  const dist=haversine(stage.start,stage.finish);
-  const myEntry=lb.find(e=>e.avatar==="ME");
+ useEffect(()=>{if(!user)return;supabase.from('stage_times').select('time_ms,created_at').eq('stage_id',stage.id).eq('user_id',user.id).order('created_at',{ascending:true}).then(({data})=>{if(data)setMyAttempts(data);});},[stage.id,user]);
+const isCreator=!!(user&&stage.created_by&&stage.created_by===user.id);
+const saveName=async()=>{const trimmed=nameVal.trim();if(!trimmed||trimmed===stage.name){setEditingName(false);setNameVal(stage.name);return;}setSavingName(true);const{error}=await supabase.from('stages').update({name:trimmed}).eq('id',stage.id);setSavingName(false);if(error){alert(error.message);return;}onRename&&onRename(stage.id,trimmed);setEditingName(false);};
+const dist=haversine(stage.start,stage.finish);
+const myEntry=lb.find(e=>e.avatar==="ME");
   const myPos=myEntry?myEntry.pos:null;
   const medalColor=pos=>pos===1?"#FFD700":pos===2?"#C0C0C0":pos===3?"#CD7F32":null;
   return(
     <div style={{padding:"0 0 40px"}}>
-      <div style={{background:"linear-gradient(135deg,#1A1A1A,#2A2A2A)",padding:"20px 20px 20px"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
-            <div><div style={{fontSize:20,fontWeight:800,color:"white",marginBottom:4}}>{stage.name}</div><div style={{fontSize:12,color:"rgba(255,255,255,0.6)"}}>{formatDist(dist)} · {stage.privacy}</div></div>
-          <button className="tap" onClick={onClose} style={{background:"rgba(255,255,255,0.15)",borderRadius:8,padding:"6px 12px",color:"white",fontSize:13,border:"none"}}>Close</button>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-          {[{l:"Your Best",v:stage.time?formatTime(stage.time):"—",hi:true},{l:"Position",v:myPos?`${myPos===1?"🥇":myPos===2?"🥈":myPos===3?"🥉":""}${myPos}${myPos===1?"st":myPos===2?"nd":myPos===3?"rd":"th"}`:"—",hi:!!myPos},{l:"Riders",v:`${lb.length}+`}].map(({l,v,hi})=>(
-            <div key={l} style={{background:"rgba(255,255,255,0.1)",borderRadius:10,padding:"10px 8px",textAlign:"center"}}>
-              <div style={{fontSize:14,fontWeight:700,color:hi?C.green:"white"}}>{v}</div>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.6)",marginTop:2}}>{l}</div>
-            </div>
-          ))}
-        </div>
-      </div>
+<div style={{background:"#fff",padding:"16px 16px 4px",borderBottom:`1px solid ${C.border}`}}>
+<div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
+<div style={{flex:1,marginRight:12}}>
+{editingName?(
+<div style={{display:"flex",alignItems:"center",gap:8}}>
+<input autoFocus value={nameVal} onChange={e=>setNameVal(e.target.value)} style={{flex:1,fontSize:20,fontWeight:800,color:C.text,border:`1.5px solid ${C.blue}`,borderRadius:8,padding:"6px 10px",background:"#fff"}}/>
+<button className="tap" onClick={saveName} disabled={savingName} style={{background:C.blue,border:"none",borderRadius:8,padding:"8px 12px",color:"#fff",fontSize:13,fontWeight:700}}>{savingName?"…":"Save"}</button>
+<button className="tap" onClick={()=>{setEditingName(false);setNameVal(stage.name);}} style={{background:"none",border:"none",color:C.muted,fontSize:13}}>Cancel</button>
+</div>
+):(
+<div style={{display:"flex",alignItems:"center",gap:8}}>
+<div style={{fontSize:20,fontWeight:800,color:C.text}}>{nameVal}</div>
+{isCreator&&<button className="tap" onClick={()=>setEditingName(true)} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:6,padding:"3px 8px",color:C.muted,fontSize:11,fontWeight:600}}>Edit</button>}
+</div>
+)}
+<div style={{fontSize:12,color:C.muted,marginTop:4}}>{formatDist(dist)} · {stage.privacy}</div>
+</div>
+<button className="tap" onClick={onClose} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 12px",color:C.text,fontSize:13}}>Close</button>
+</div>
+<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}}>
+{[{l:"Your Best",v:stage.time?formatTime(stage.time):"—",hi:true},{l:"Position",v:myPos?`${myPos===1?"🥇":myPos===2?"🥈":myPos===3?"🥉":""}${myPos}${myPos===1?"st":myPos===2?"nd":myPos===3?"rd":"th"}`:"—",hi:!!myPos},{l:"Riders",v:`${lb.length}+`}].map(({l,v,hi})=>(
+<div key={l} style={{background:C.surface,borderRadius:10,padding:"10px 8px",textAlign:"center",border:`1px solid ${C.border}`}}>
+<div style={{fontSize:14,fontWeight:700,color:hi?C.green:C.text}}>{v}</div>
+<div style={{fontSize:10,color:C.muted,marginTop:2}}>{l}</div>
+</div>
+))}
+</div>
+</div>
+
       {lb.length>0&&<div style={{margin:"16px 16px 0",background:"#FFFBEB",borderRadius:12,padding:"12px 14px",border:"1px solid #FDE68A",display:"flex",alignItems:"center",gap:10}}><Icon.Crown size={18} color="#92400E"/><div style={{flex:1}}><div style={{fontSize:11,color:"#92400E",fontWeight:600,marginBottom:1}}>COURSE RECORD</div><div style={{fontSize:13,fontWeight:700,color:"#92400E"}}>{lb[0].name} · {formatTime(lb[0].time)}</div></div><div style={{fontSize:11,color:"#B45309"}}>{lb[0].date}</div></div>}
       {stage.note&&<div style={{margin:"12px 16px 0",background:C.surface,borderRadius:10,padding:"11px 14px",border:`1px solid ${C.border}`}}><div style={{fontSize:11,fontWeight:600,color:C.muted,marginBottom:4}}>STAGE NOTES</div><div style={{fontSize:13,color:C.text,lineHeight:1.5}}>📋 {stage.note}</div></div>}
-      <div style={{padding:"16px 16px 0"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-          <div style={{fontSize:15,fontWeight:700,color:C.text}}>Leaderboard</div>
+      {myAttempts.length>=2&&<div style={{margin:"16px 16px 0",background:"#fff",borderRadius:12,padding:"14px",border:`1px solid ${C.border}`}}>
+<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+<div style={{fontSize:14,fontWeight:700,color:C.text}}>Your Progress</div>
+<div style={{fontSize:11,color:C.muted}}>{myAttempts.length} attempts</div>
+</div>
+<ProgressChart attempts={myAttempts}/>
+<div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
+<div style={{fontSize:10,color:C.mutedL}}>First: {formatTime(myAttempts[0].time_ms)}</div>
+<div style={{fontSize:10,color:C.mutedL}}>Latest: {formatTime(myAttempts[myAttempts.length-1].time_ms)}</div>
+</div>
+</div>}
+<div style={{padding:"16px 16px 0"}}>
+<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+<div style={{fontSize:15,fontWeight:700,color:C.text}}>Leaderboard</div>
           <div style={{fontSize:11,color:C.muted,background:C.surface,borderRadius:6,padding:"3px 8px",border:`1px solid ${C.border}`}}>Free · Top 10</div>
         </div>
         {lb.length===0?<div style={{textAlign:"center",padding:"20px",color:C.muted,fontSize:13}}>No times yet — be the first!</div>:lb.map((entry,i)=>{
