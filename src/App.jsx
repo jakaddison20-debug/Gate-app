@@ -1888,6 +1888,12 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
   useEffect(()=>{if(!user)return;supabase.from('course_results').select('id,total_time_ms,mode,completed_at,courses(name,stage_ids)').eq('user_id',user.id).order('completed_at',{ascending:false}).then(({data})=>{if(data)setCourseResults(data.map(r=>({id:r.id,name:r.courses?.name||'Course',date:new Date(r.completed_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}),stages:r.courses?.stage_ids?.length||0,mode:r.mode,totalTime:r.total_time_ms,pos:null})));});},[user]);
 
     const [recentStageTimes,setRecentStageTimes]=useState([]);
+const [feed,setFeed]=useState([]);
+useEffect(()=>{if(!user)return;supabase.from('app_events').select('id,event_type,message,created_at,profiles(display_name,avatar_url)').in('event_type',['stage_record','course_finish','stage_created','course_created','day_recap']).order('created_at',{ascending:false}).limit(50).then(({data})=>{if(data)setFeed(data.map(e=>({id:e.id,event_type:e.event_type,message:e.message,userName:e.profiles?.display_name||'Rider',avatarUrl:e.profiles?.avatar_url||null,ago:timeAgo(e.created_at)})));});},[user,refreshTick]);
+const [todayStageTimes,setTodayStageTimes]=useState([]);
+const [daySharedToday,setDaySharedToday]=useState(false);
+useEffect(()=>{if(!user)return;const startOfDay=new Date();startOfDay.setHours(0,0,0,0);supabase.from('stage_times').select('time_ms,stage_id').eq('user_id',user.id).gte('created_at',startOfDay.toISOString()).then(({data})=>{if(data)setTodayStageTimes(data);});supabase.from('app_events').select('id').eq('user_id',user.id).eq('event_type','day_recap').gte('created_at',startOfDay.toISOString()).then(({data})=>{setDaySharedToday(!!(data&&data.length));});},[user,refreshTick]);
+const shareDayRecap=()=>{const stageIds=[...new Set(todayStageTimes.map(t=>t.stage_id))];const totalMs=todayStageTimes.reduce((a,t)=>a+t.time_ms,0);if(!window.confirm(`Share today's ride?\n${stageIds.length} stage${stageIds.length>1?'s':''} · ${todayStageTimes.length} run${todayStageTimes.length>1?'s':''} · ${formatTime(totalMs)} total`))return;logEvent(user.id,'day_recap',`rode ${stageIds.length} stage${stageIds.length>1?'s':''} today · ${formatTime(totalMs)}`,null,{stage_count:stageIds.length,run_count:todayStageTimes.length,total_time_ms:totalMs});setDaySharedToday(true);};
   const [todayKey,setTodayKey]=useState(new Date().toDateString());
   useEffect(()=>{
     const check=()=>{const now=new Date().toDateString();setTodayKey(prev=>prev!==now?now:prev);};
