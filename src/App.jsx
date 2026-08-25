@@ -642,7 +642,7 @@ const myEntry=lb.find(e=>e.avatar==="ME");
           const isMe=entry.avatar==="ME",mc=medalColor(entry.pos);
           return(
             <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"11px 12px",background:isMe?C.orangeL:"white",borderRadius:10,marginBottom:6,border:`1px solid ${isMe?C.orange:C.border}`}}>
-              <div style={{width:28,textAlign:"center"}}>{mc?<div style={{width:24,height:24,borderRadius:"50%",background:mc,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"white",margin:"0 auto"}}>{entry.pos}</div>:<div style={{fontSize:13,fontWeight:600,color:C.muted}}>{entry.pos}</div>}</div>
+              <div style={{width:34}}><PositionBadge pos={entry.pos} size={30}/></div>
                             <Avatar size={32} url={entry.avatarUrl}/>
               <div style={{flex:1}}><div style={{fontSize:13,fontWeight:isMe?700:500,color:C.text}}>{isMe?"You":entry.name}</div><div style={{fontSize:11,color:C.muted}}>{entry.date}</div></div>
               <div style={{fontSize:15,fontWeight:700,color:isMe?C.orange:C.text}}>{formatTime(entry.time)}</div>
