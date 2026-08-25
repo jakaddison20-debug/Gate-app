@@ -1323,7 +1323,7 @@ return{...prev,[currentStage.id]:(!current||finalTime<current)?finalTime:current
 });
 }
 setPhase("split");
-if(saveTime&&!isPractice){supabase.from('stage_times').select('time_ms').eq('stage_id',currentStage.id).order('time_ms',{ascending:true}).limit(1).then(({data})=>{const prevBest=data&&data[0]?data[0].time_ms:null;supabase.from('stage_times').insert({stage_id:currentStage.id,user_id:user.id,time_ms:finalTime}).then(()=>{if(prevBest===null||finalTime<prevBest){logEvent(user.id,'stage_record',`set a new record on ${currentStage.name} · ${formatTime(finalTime)}`,currentStage.id,{time_ms:finalTime});}}).catch(err=>console.log(err));});}
+if(saveTime&&!isPractice){supabase.from('stage_times').select('time_ms').eq('stage_id',currentStage.id).order('time_ms',{ascending:true}).limit(1).then(({data})=>{const prevBest=data&&data[0]?data[0].time_ms:null;supabase.from('stage_times').insert({stage_id:currentStage.id,user_id:user.id,time_ms:finalTime}).then(()=>{if(prevBest===null||finalTime<prevBest){logEvent(user.id,'stage_record',`set a new record on ${currentStage.name} · ${formatTime(finalTime)}`,currentStage.id,{time_ms:finalTime});onActivity&&onActivity();}}).catch(err=>console.log(err));});}
 };
 
             useEffect(()=>{
