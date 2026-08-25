@@ -611,12 +611,18 @@ const myEntry=lb.find(e=>e.avatar==="ME");
 <button className="tap" onClick={onClose} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 12px",color:C.text,fontSize:13}}>Close</button>
 </div>
 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}}>
-{[{l:"Your Best",v:stage.time?formatTime(stage.time):"—",hi:true},{l:"Position",v:myPos?`${myPos===1?"🥇":myPos===2?"🥈":myPos===3?"🥉":""}${myPos}${myPos===1?"st":myPos===2?"nd":myPos===3?"rd":"th"}`:"—",hi:!!myPos},{l:"Riders",v:`${lb.length}+`}].map(({l,v,hi})=>(
-<div key={l} style={{background:C.surface,borderRadius:10,padding:"10px 8px",textAlign:"center",border:`1px solid ${C.border}`}}>
-<div style={{fontSize:14,fontWeight:700,color:hi?C.green:C.text}}>{v}</div>
-<div style={{fontSize:10,color:C.muted,marginTop:2}}>{l}</div>
+<div style={{background:C.surface,borderRadius:10,padding:"10px 8px",textAlign:"center",border:`1px solid ${C.border}`}}>
+<div style={{fontSize:14,fontWeight:700,color:C.green}}>{stage.time?formatTime(stage.time):"—"}</div>
+<div style={{fontSize:10,color:C.muted,marginTop:2}}>Your Best</div>
 </div>
-))}
+<div style={{background:C.surface,borderRadius:10,padding:"10px 8px 8px",textAlign:"center",border:`1px solid ${C.border}`}}>
+<div style={{display:"flex",justifyContent:"center",marginBottom:4}}>{myPos?<PositionBadge pos={myPos} size={40}/>:<div style={{fontSize:14,fontWeight:700,color:C.text}}>—</div>}</div>
+<div style={{fontSize:10,color:C.muted,marginTop:2}}>Position</div>
+</div>
+<div style={{background:C.surface,borderRadius:10,padding:"10px 8px",textAlign:"center",border:`1px solid ${C.border}`}}>
+<div style={{fontSize:14,fontWeight:700,color:C.text}}>{lb.length}+</div>
+<div style={{fontSize:10,color:C.muted,marginTop:2}}>Riders</div>
+</div>
 </div>
 </div>
 
