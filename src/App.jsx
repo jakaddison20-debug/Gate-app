@@ -626,7 +626,7 @@ const myEntry=lb.find(e=>user&&e.user_id===user.id);
 </div>
 </div>
 
-      {lb.length>0&&<div style={{margin:"16px 16px 0",background:"#FFFBEB",borderRadius:12,padding:"12px 14px",border:"1px solid #FDE68A",display:"flex",alignItems:"center",gap:10}}><Icon.Crown size={18} color="#92400E"/><div style={{flex:1}}><div style={{fontSize:11,color:"#92400E",fontWeight:600,marginBottom:1}}>COURSE RECORD</div><div style={{fontSize:13,fontWeight:700,color:"#92400E"}}>{lb[0].name} · {formatTime(lb[0].time)}</div></div><div style={{fontSize:11,color:"#B45309"}}>{lb[0].date}</div></div>}
+      {lb.length>0&&<div style={{margin:"16px 16px 0",background:"#FFFBEB",borderRadius:12,padding:"12px 14px",border:"1px solid #FDE68A",display:"flex",alignItems:"center",gap:10}}><Icon.Crown size={18} color="#92400E"/><div style={{flex:1}}><div style={{fontSize:11,color:"#92400E",fontWeight:600,marginBottom:1}}>STAGE RECORD</div><div style={{fontSize:13,fontWeight:700,color:"#92400E"}}>{lb[0].name} · {formatTime(lb[0].time)}</div></div><div style={{fontSize:11,color:"#B45309"}}>{lb[0].date}</div></div>}
       {stage.note&&<div style={{margin:"12px 16px 0",background:C.surface,borderRadius:10,padding:"11px 14px",border:`1px solid ${C.border}`}}><div style={{fontSize:11,fontWeight:600,color:C.muted,marginBottom:4}}>STAGE NOTES</div><div style={{fontSize:13,color:C.text,lineHeight:1.5}}>📋 {stage.note}</div></div>}
       {myAttempts.length>=2&&<div style={{margin:"16px 16px 0",background:"#fff",borderRadius:12,padding:"14px",border:`1px solid ${C.border}`}}>
 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
