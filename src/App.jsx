@@ -1241,13 +1241,13 @@ function CourseBuilderSheet({stages,onClose,onSave}){
 }
 
 // ── Race / Practice / Mashup Screen ──────────────────────────────────────────
-function RaceScreen({course,stages,user,onFinish}){
+function RaceScreen({course,stages,user,onFinish,onActivity}){
 
   const courseStages=course.stageIds.map(id=>stages.find(s=>s.id===id)).filter(Boolean);
   const isPractice=course.mode==="practice";
   const isMashup=course.mode==="mashup";
 
-    const progressKey=`gate_progress_${course.id}_${user.id}`;
+  const progressKey=`gate_progress_${course.id}_${user.id}`;
   const savedProgress=(()=>{try{const s=JSON.parse(localStorage.getItem(progressKey));if(s&&Date.now()-s.savedAt<12*3600*1000)return s;}catch(e){}return null;})();
 
   const [stageIndex,setStageIndex]=useState(savedProgress?savedProgress.stageIndex:0);
