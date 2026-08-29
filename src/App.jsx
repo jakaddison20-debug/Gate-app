@@ -1767,7 +1767,7 @@ function CourseCard({course,stages,userId,onStart,onDelete,onEdit}){
             <div style={{fontSize:11,fontWeight:600,color:modeInfo.color,background:`${modeInfo.color}15`,borderRadius:6,padding:"2px 7px"}}>{modeInfo.icon} {modeInfo.label}</div>
           </div>
         </div>
-        <div style={{width:40,height:40,borderRadius:10,background:`${modeInfo.color}15`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>{modeInfo.icon}</div>{onDelete&&course.created_by===userId&&<button className="tap" onClick={()=>onDelete(course.id)} style={{background:"none",border:"none",padding:"4px 0 4px 10px",color:C.red,fontSize:15,fontWeight:600}}>✕</button>}
+       <div style={{display:"flex",alignItems:"center"}}><div style={{width:40,height:40,borderRadius:10,background:`${modeInfo.color}15`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>{modeInfo.icon}</div>{onEdit&&course.created_by===userId&&<button className="tap" onClick={()=>onEdit(course)} style={{background:"none",border:"none",padding:"4px 0 4px 10px",color:C.blue,fontSize:13,fontWeight:600}}>Edit</button>}{onDelete&&course.created_by===userId&&<button className="tap" onClick={()=>onDelete(course.id)} style={{background:"none",border:"none",padding:"4px 0 4px 8px",color:C.red,fontSize:15,fontWeight:600}}>✕</button>}</div>
       </div>
       <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}}>
         {courseStages.map((stage,i)=>(
