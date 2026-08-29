@@ -1877,8 +1877,8 @@ export default function App(){
   const [flyToTrigger,setFlyToTrigger]=useState(null);
   const [zoom,setZoom]=useState(13);
   const [stages,setStages]=useState(SAMPLE_STAGES);
-  const [courses,setCourses]=useState([]);
-  const [sheet,setSheet]=useState(null);
+  const [courses,setCourses]=useState([]);   const [sheet,setSheet]=useState(null);
+  const [editingCourse,setEditingCourse]=useState(null);
   const [stagesFilter,setStagesFilter]=useState("all");
   const [coursesFilter,setCoursesFilter]=useState("stages");
   const [activeRace,setActiveRace]=useState(null);
