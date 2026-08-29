@@ -1,7 +1,7 @@
 {
   "name": "GATE",
   "short_name": "GATE",
-    "icons": [
+  "icons": [
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
