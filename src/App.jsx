@@ -1243,7 +1243,7 @@ function CourseBuilderSheet({stages,course,onClose,onSave}){
       <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
              {COURSE_MODES.map(m=>(
           <button key={m.id} className="tap" onClick={()=>setMode(m.id)} style={{display:"flex",alignItems:"flex-start",gap:12,background:mode===m.id?`${C.blue}10`:C.surface,border:`1.5px solid ${mode===m.id?C.blue:C.border}`,borderRadius:14,padding:"14px 16px",textAlign:"left",transition:"all 0.15s"}}>
-            <div style={{fontSize:24,flexShrink:0}}>{m.icon}</div>
+           <div style={{width:24,flexShrink:0,display:"flex",alignItems:"center"}}><m.Ic size={20} color={mode===m.id?C.blue:C.muted}/></div>
             <div style={{flex:1}}>
               <div style={{fontSize:14,fontWeight:700,color:mode===m.id?C.blue:C.text,marginBottom:2}}>{m.label}</div>
               <div style={{fontSize:12,color:C.muted,lineHeight:1.4}}>{m.desc}</div>
