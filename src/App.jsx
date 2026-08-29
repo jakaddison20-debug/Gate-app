@@ -1774,23 +1774,31 @@ function AuthScreen({onAuth}){
     setLoading(false);
   };
 
-  return(
+    return(
     <div style={{position:"fixed",inset:0,background:"#fff",zIndex:200,display:"flex",flexDirection:"column"}}>
-      <div style={{background:C.orange,padding:"60px 24px 32px",textAlign:"center"}}>
-        <div style={{fontSize:36,fontWeight:800,color:"white",letterSpacing:-1,marginBottom:4}}>GATE</div>
-        <div style={{fontSize:14,color:"rgba(255,255,255,0.8)"}}>Enduro timing for every trail</div>
+      <div style={{padding:"72px 24px 28px",textAlign:"center"}}>
+        <svg width="30" height="30" viewBox="0 0 24 24" style={{margin:"0 auto 14px"}}><polygon points="13,2 3,14 12,14 11,22 21,10 12,10" fill={C.blue}/></svg>
+        <div style={{fontSize:30,fontWeight:800,color:C.text,letterSpacing:-1,marginBottom:4}}>GATE</div>
+        <div style={{fontSize:13,color:C.muted}}>Enduro timing for every trail</div>
       </div>
-      <div style={{flex:1,padding:"32px 24px",overflowY:"auto"}}>
-        <div style={{display:"flex",background:C.surface,borderRadius:10,padding:3,marginBottom:24}}>
-          {["login","signup"].map(m=><button key={m} onClick={()=>setMode(m)} style={{flex:1,padding:"9px",borderRadius:8,background:mode===m?"#fff":"none",border:"none",color:mode===m?C.text:C.muted,fontSize:14,fontWeight:mode===m?600:400}}>{m==="login"?"Log In":"Sign Up"}</button>)}
+      <div style={{flex:1,padding:"8px 24px 24px",overflowY:"auto"}}>
+        <div style={{display:"flex",background:C.surface,borderRadius:10,padding:3,marginBottom:22}}>
+          {["login","signup"].map(m=><button key={m} onClick={()=>setMode(m)} style={{flex:1,padding:"9px",borderRadius:8,background:mode===m?"#fff":"none",border:"none",color:mode===m?C.text:C.muted,fontSize:14,fontWeight:mode===m?600:400,boxShadow:mode===m?"0 1px 4px rgba(0,0,0,0.08)":"none"}}>{m==="login"?"Log In":"Sign Up"}</button>)}
         </div>
-        {mode==="signup"&&<input value={name} onChange={e=>setName(e.target.value)} placeholder="Your name" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"13px 14px",fontSize:15,marginBottom:12,background:C.surface}}/>}
-        <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email" type="email" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"13px 14px",fontSize:15,marginBottom:12,background:C.surface}}/>
-        <input value={password} onChange={e=>setPassword(e.target.value)} placeholder="Password" type="password" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"13px 14px",fontSize:15,marginBottom:20,background:C.surface}}/>
+        {mode==="signup"&&<input value={name} onChange={e=>setName(e.target.value)} placeholder="Your name" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"13px 14px",fontSize:15,marginBottom:12,background:C.surface,boxSizing:"border-box"}}/>}
+        <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email" type="email" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"13px 14px",fontSize:15,marginBottom:12,background:C.surface,boxSizing:"border-box"}}/>
+        <input value={password} onChange={e=>setPassword(e.target.value)} placeholder="Password" type="password" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"13px 14px",fontSize:15,marginBottom:20,background:C.surface,boxSizing:"border-box"}}/>
+        {mode==="signup"&&(
+          <label style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:20,cursor:"pointer"}}>
+            <input type="checkbox" checked={agreed} onChange={e=>setAgreed(e.target.checked)} style={{marginTop:2,width:16,height:16,accentColor:C.blue,flexShrink:0}}/>
+            <span style={{fontSize:12,color:C.muted,lineHeight:1.5}}>I agree to the Terms & Conditions</span>
+          </label>
+        )}
         {error&&<div style={{fontSize:13,color:error.includes("Check")?C.green:C.red,marginBottom:16,textAlign:"center"}}>{error}</div>}
-        <button className="tap" onClick={submit} style={{width:"100%",background:loading?C.surface:C.orange,border:"none",borderRadius:12,padding:16,color:loading?C.muted:"#fff",fontSize:15,fontWeight:700}}>
+        <button className="tap" onClick={submit} disabled={mode==="signup"&&!agreed} style={{width:"100%",background:loading?C.surface:(mode==="signup"&&!agreed)?C.surface:C.blue,border:"none",borderRadius:12,padding:16,color:loading||(mode==="signup"&&!agreed)?C.muted:"#fff",fontSize:15,fontWeight:700}}>
           {loading?"...":(mode==="login"?"Log In":"Create Account")}
         </button>
+        <div style={{textAlign:"center",fontSize:12,color:C.muted,marginTop:20,lineHeight:1.6}}>By continuing you agree that mountain biking carries inherent risk and you're responsible for riding within your ability.</div>
       </div>
     </div>
   );
