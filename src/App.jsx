@@ -1232,7 +1232,7 @@ function CourseBuilderSheet({stages,course,onClose,onSave}){
   return(
     <div style={{padding:"0 16px 40px"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0 18px"}}>
-        <div><div style={{fontSize:17,fontWeight:700,color:C.text}}>Build Course</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>String stages into a race</div></div>
+        <div><div style={{fontSize:17,fontWeight:700,color:C.text}}>{course?"Edit Course":"Build Course"}</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>{course?"Rename, add or remove stages":"String stages into a race"}</div></div>
         <button className="tap" onClick={onClose} style={{background:C.surface,borderRadius:8,padding:"6px 14px",color:C.text,fontSize:13,fontWeight:500,border:`1px solid ${C.border}`}}>Cancel</button>
       </div>
 
@@ -1298,8 +1298,8 @@ function CourseBuilderSheet({stages,course,onClose,onSave}){
         ))}
       </div>
 
-            <button className="tap" onClick={()=>canSave&&onSave({id:Date.now(),name:name.trim(),stageIds:selectedIds,privacy,mode,times:{},bestPerStage:{}})} style={{width:"100%",background:canSave?"#fff":C.surface,border:`1.5px solid ${canSave?C.blue:C.border}`,borderRadius:12,padding:15,color:canSave?C.blue:C.muted,fontSize:15,fontWeight:700,transition:"all 0.2s"}}>
-        {canSave?`Create ${mode==="mashup"?"Mashup":"Race"} Course`:"Select at least 2 stages"}
+        <button className="tap" onClick={()=>canSave&&onSave({id:course?.id||Date.now(),name:name.trim(),stageIds:selectedIds,privacy,mode,times:{},bestPerStage:{}})} style={{width:"100%",background:canSave?"#fff":C.surface,border:`1.5px solid ${canSave?C.blue:C.border}`,borderRadius:12,padding:15,color:canSave?C.blue:C.muted,fontSize:15,fontWeight:700,transition:"all 0.2s"}}>
+        {canSave?(course?"Save Changes":`Create ${mode==="mashup"?"Mashup":"Race"} Course`):"Select at least 2 stages"}
       </button>
     </div>
   );
