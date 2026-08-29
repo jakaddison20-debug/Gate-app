@@ -1888,12 +1888,12 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
       data.forEach(r=>{if(!bestByCourse[r.course_id]||r.total_time_ms<bestByCourse[r.course_id].total_time_ms){bestByCourse[r.course_id]={user_id:r.user_id,total_time_ms:r.total_time_ms};}});
       const mine=Object.entries(bestByCourse).filter(([,b])=>b.user_id===user.id);
       setCourseCRCount(mine.length);
-      setCourseCRList(mine.map(([cid,b])=>{
+            setCourseCRList(mine.map(([cid,b])=>{
         const course=courses.find(c=>String(c.id)===String(cid));
         return course?{id:course.id,name:course.name,stageIds:course.stageIds,totalTime:b.total_time_ms}:null;
       }).filter(Boolean));
     });
-  },[courseIdsKey,user,courses]);
+  },[courseIdsKey,user,courses,refreshTick]);
   useEffect(()=>{if(!user)return;supabase.from('course_results').select('id,total_time_ms,mode,completed_at,courses(name,stage_ids)').eq('user_id',user.id).order('completed_at',{ascending:false}).then(({data})=>{if(data)setCourseResults(data.map(r=>({id:r.id,name:r.courses?.name||'Course',date:new Date(r.completed_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}),stages:r.courses?.stage_ids?.length||0,mode:r.mode,totalTime:r.total_time_ms,pos:null})));});},[user]);
 
     const [recentStageTimes,setRecentStageTimes]=useState([]);
