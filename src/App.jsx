@@ -1160,11 +1160,69 @@ function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,cou
 }
 
 // ── Course Builder Sheet ──────────────────────────────────────────────────────
-function CourseBuilderSheet({stages,onClose,onSave}){
-  const [name,setName]=useState("");
-  const [privacy,setPrivacy]=useState("group");
-  const [selectedIds,setSelectedIds]=useState([]);
-  const [mode,setMode]=useState("race");
+ function CourseStagesMap({courseStages}){
+  const mapContainer=useRef(null);
+  const map=useRef(null);
+  const layerIdsRef=useRef([]);
+  const markersRef=useRef([]);
+  const stageIdsKey=courseStages.map(s=>s.id).join(',');
+
+  const drawStages=()=>{
+    if(!map.current||!map.current.isStyleLoaded())return;
+    layerIdsRef.current.forEach(id=>{
+      if(map.current.getLayer(id))map.current.removeLayer(id);
+      if(map.current.getSource(id))map.current.removeSource(id);
+    });
+    layerIdsRef.current=[];
+    markersRef.current.forEach(m=>m.remove());
+    markersRef.current=[];
+    if(courseStages.length===0)return;
+    const boundsPoints=[];
+    courseStages.forEach((stage,i)=>{
+      const coords=stage.line_coords&&stage.line_coords.length>1?stage.line_coords:[stage.start,stage.finish];
+      coords.forEach(c=>boundsPoints.push([c.lng,c.lat]));
+      const id='course-line-'+stage.id;
+      map.current.addSource(id,{type:'geojson',data:{type:'Feature',geometry:{type:'LineString',coordinates:coords.map(c=>[c.lng,c.lat])}}});
+      map.current.addLayer({id,type:'line',source:id,paint:{'line-color':'#2563EB','line-width':4,'line-opacity':0.9}});
+      layerIdsRef.current.push(id);
+      const el=document.createElement('div');
+      el.style.cssText='width:24px;height:24px;border-radius:50%;background:#2563EB;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;font-family:Inter,sans-serif;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3);';
+      el.textContent=String(i+1);
+      const marker=new window.mapboxgl.Marker({element:el}).setLngLat([stage.start.lng,stage.start.lat]).addTo(map.current);
+      markersRef.current.push(marker);
+    });
+    if(boundsPoints.length>0){
+      const lats=boundsPoints.map(p=>p[1]),lngs=boundsPoints.map(p=>p[0]);
+      map.current.fitBounds([[Math.min(...lngs),Math.min(...lats)],[Math.max(...lngs),Math.max(...lats)]],{padding:40,duration:400});
+    }
+  };
+
+  useEffect(()=>{
+    if(map.current)return;
+    const token=import.meta.env.VITE_MAPBOX_TOKEN;
+    if(!token)return;
+    import('https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js').then(()=>{
+      const mapboxgl=window.mapboxgl;
+      mapboxgl.accessToken=token;
+      map.current=new mapboxgl.Map({container:mapContainer.current,style:'mapbox://styles/mapbox/outdoors-v12',center:[DEFAULT_CENTER.lng,DEFAULT_CENTER.lat],zoom:11});
+      map.current.on('load',()=>{drawStages();});
+    });
+  },[]);
+
+  useEffect(()=>{if(map.current&&map.current.isStyleLoaded())drawStages();},[stageIdsKey]);
+
+  return(
+    <div style={{position:"relative",width:"100%",height:170,borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`}}>
+      <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet"/>
+      <div ref={mapContainer} style={{width:"100%",height:"100%"}}/>
+    </div>
+  );
+}
+function CourseBuilderSheet({stages,course,onClose,onSave}){
+  const [name,setName]=useState(course?.name||"");
+  const [privacy,setPrivacy]=useState(course?.privacy||"group");
+  const [selectedIds,setSelectedIds]=useState(course?.stageIds||[]);
+  const [mode,setMode]=useState(course?.mode||"race");
   const toggle=id=>setSelectedIds(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
   const moveUp=i=>{if(i===0)return;setSelectedIds(prev=>{const a=[...prev];[a[i-1],a[i]]=[a[i],a[i-1]];return a;});};
   const moveDown=i=>setSelectedIds(prev=>{if(i===prev.length-1)return prev;const a=[...prev];[a[i],a[i+1]]=[a[i+1],a[i]];return a;});
