@@ -2167,7 +2167,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
             <div style={{padding:"16px"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
                 <div style={{fontSize:22,fontWeight:800,color:C.text}}>Courses</div>
-                 <button className="tap" onClick={()=>setSheet("courseBuilder")} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"9px 14px",color:C.blue,fontSize:13,fontWeight:600}}><Icon.Plus size={16} color={C.blue}/>New</button>
+                 <button className="tap" onClick={()=>{setEditingCourse(null);setSheet("courseBuilder");}} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"9px 14px",color:C.blue,fontSize:13,fontWeight:600}}><Icon.Plus size={16} color={C.blue}/>New</button>
               </div>
               {courses.length===0?(
                 <div style={{textAlign:"center",padding:"48px 20px",color:C.muted}}>
