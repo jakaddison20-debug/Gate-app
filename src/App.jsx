@@ -2023,10 +2023,29 @@ if(showBikeSetup)return(
           <div style={{position:"absolute",inset:0,cursor:"grab",touchAction:"none"}} onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
               <MapboxStyleMap center={mapCenter} zoom={zoom} flyToTrigger={flyToTrigger} width={mapSize.w} height={mapSize.h} stages={stages} courses={courses} userPos={userPos} userHeading={userHeading} onStagePress={s=>setSelectedStage(s)}/>
           </div>
-          <div style={{position:"absolute",top:52,left:16,right:16,display:"flex",gap:10,zIndex:10}}>
-            <div style={{flex:1,background:"white",border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:8,boxShadow:"0 2px 10px rgba(0,0,0,0.1)"}}><Icon.Search/><span style={{fontSize:14,color:C.muted}}>Search stages…</span></div>
-            <button className="tap" onClick={()=>setSheet("stageBuilder")} style={{background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:12,padding:"10px 16px",display:"flex",alignItems:"center",gap:6,boxShadow:"0 2px 10px rgba(0,0,0,0.08)"}}><Icon.Plus size={20} color={C.blue}/><span style={{fontSize:13,fontWeight:600,color:C.blue,whiteSpace:"nowrap"}}>Stage</span></button>
+                    <div style={{position:"absolute",top:52,left:16,right:16,zIndex:10}}>
+            <div style={{display:"flex",gap:10}}>
+              <div style={{flex:1,background:"white",border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:8,boxShadow:"0 2px 10px rgba(0,0,0,0.1)"}}>
+                <Icon.Search/>
+                <input value={mapSearchQuery} onChange={e=>setMapSearchQuery(e.target.value)} placeholder="Search stages…" style={{border:"none",outline:"none",background:"none",fontSize:14,color:C.text,flex:1,fontFamily:"'Inter',sans-serif"}}/>
+                {mapSearchQuery&&<button onClick={()=>setMapSearchQuery("")} style={{background:"none",border:"none",padding:0,display:"flex"}}><Icon.Close size={14} color={C.muted}/></button>}
+              </div>
+              <button className="tap" onClick={()=>setSheet("stageBuilder")} style={{background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:12,padding:"10px 16px",display:"flex",alignItems:"center",gap:6,boxShadow:"0 2px 10px rgba(0,0,0,0.08)"}}><Icon.Plus size={20} color={C.blue}/><span style={{fontSize:13,fontWeight:600,color:C.blue,whiteSpace:"nowrap"}}>Stage</span></button>
+            </div>
+            {mapSearchQuery.trim()&&(mapSearchResults.length>0?(
+              <div style={{marginTop:8,background:"#fff",borderRadius:12,border:`1px solid ${C.border}`,boxShadow:"0 4px 16px rgba(0,0,0,0.12)",overflow:"hidden"}}>
+                {mapSearchResults.map((s,i)=>(
+                  <button key={s.id} className="tap" onClick={()=>{setMapCenter({lat:s.start.lat,lng:s.start.lng});setZoom(15);setFlyToTrigger(Date.now());setSelectedStage(s);setMapSearchQuery("");}} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"11px 14px",background:"none",border:"none",borderBottom:i<mapSearchResults.length-1?`1px solid ${C.border}`:"none",textAlign:"left"}}>
+                    <Icon.Lightning size={15} color={C.blue}/>
+                    <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600,color:C.text}}>{s.name}</div><div style={{fontSize:11,color:C.muted}}>{formatDist(haversine(s.start,s.finish))} · {s.privacy}</div></div>
+                  </button>
+                ))}
+              </div>
+            ):(
+              <div style={{marginTop:8,background:"#fff",borderRadius:12,border:`1px solid ${C.border}`,padding:"14px",textAlign:"center",fontSize:13,color:C.muted,boxShadow:"0 4px 16px rgba(0,0,0,0.12)"}}>No stages found</div>
+            ))}
           </div>
+
           <div style={{position:"absolute",right:16,top:"50%",transform:"translateY(-50%)",display:"flex",flexDirection:"column",gap:6,zIndex:10}}>
             {[{l:"+",a:()=>setZoom(z=>Math.min(18,z+1))},{l:"−",a:()=>setZoom(z=>Math.max(8,z-1))},{l:"⌖",a:()=>{setMapCenter(userPos);setFlyToTrigger(Date.now());}}].map(({l,a})=>(
               <button key={l} className="tap" onClick={a} style={{width:36,height:36,borderRadius:9,background:"white",border:`1px solid ${C.border}`,fontSize:l==="⌖"?14:18,display:"flex",alignItems:"center",justifyContent:"center",color:C.text,boxShadow:"0 2px 6px rgba(0,0,0,0.08)"}}>{l}</button>
