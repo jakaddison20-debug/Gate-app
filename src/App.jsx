@@ -1753,7 +1753,7 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
 }
 
 // ── Course Card ───────────────────────────────────────────────────────────────
-function CourseCard({course,stages,userId,onStart,onDelete}){
+function CourseCard({course,stages,userId,onStart,onDelete,onEdit}){
   const courseStages=course.stageIds.map(id=>stages.find(s=>s.id===id)).filter(Boolean);
   const totalDist=courseStages.reduce((a,s)=>a+haversine(s.start,s.finish),0);
   const modeInfo={practice:{color:C.green,icon:"🎯",label:"Practice"},race:{color:C.blue,icon:"🏁",label:"Race"},mashup:{color:C.blue,icon:"⚡",label:"Mashup"}}[course.mode||"race"];
