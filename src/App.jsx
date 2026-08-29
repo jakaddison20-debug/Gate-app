@@ -1937,10 +1937,9 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
       }));
     });
   },[stageIdsKey,user]);
-
-       useEffect(()=>{if(!user)return;supabase.from('courses').select('*').then(({data})=>{if(data)setCourses(data.map(c=>({id:c.id,name:c.name,privacy:c.privacy,mode:c.mode,stageIds:c.stage_ids,times:{},bestPerStage:{}})));});},[user,refreshTick]);
-    const [courseResults,setCourseResults]=useState([]);
-    const [courseCRCount,setCourseCRCount]=useState(0);
+  
+    useEffect(()=>{if(!user)return;supabase.from('courses').select('*').then(({data})=>{if(data)setCourses(data.map(c=>({id:c.id,name:c.name,privacy:c.privacy,mode:c.mode,created_by:c.created_by,stageIds:c.stage_ids,times:{},bestPerStage:{}})));});},[user,refreshTick]);
+  const [courseResults,setCourseResults]=useState([]);    const [courseCRCount,setCourseCRCount]=useState(0);
   const [courseCRList,setCourseCRList]=useState([]);
   const [expandedCRCourse,setExpandedCRCourse]=useState(null);
   const courseIdsKey=useMemo(()=>courses.map(c=>c.id).join(','),[courses]);
