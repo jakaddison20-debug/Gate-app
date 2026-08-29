@@ -1431,13 +1431,13 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
   if(phase==="modeIntro"){
     const modeInfo={
       practice:{color:C.green,icon:"🎯",title:"Practice Run",sub:"This run won't be saved. Ride it to learn the stages, then go again for real.",btn:"Start Practice",btnColor:C.green},
-      race:{color:C.blue,icon:"🏁",title:"Race Mode",sub:"One timed run. Your times will go to the leaderboard. Make it count.",btn:"Start Race",btnColor:C.blue},
+      race:{color:C.blue,title:"Race Mode",sub:"One timed run. Your times will go to the leaderboard. Make it count.",btn:"Start Race",btnColor:C.blue},
       mashup:{color:C.blue,icon:"⚡",title:"Mashup Mode",sub:"Unlimited runs. Your best time on each stage gets combined into one total. Keep going until you're happy.",btn:"Start Mashup",btnColor:C.blue},
     }[course.mode];
     return(
       <div style={{position:"fixed",inset:0,background:"#fff",zIndex:100,display:"flex",flexDirection:"column"}}>
         <div style={{background:"#fff",padding:"52px 20px 32px",textAlign:"center",flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-          <div style={{fontSize:72,marginBottom:16}}>{modeInfo.icon}</div>
+          <div style={{width:72,height:72,marginBottom:16,display:"flex",alignItems:"center",justifyContent:"center"}}>{course.mode==="mashup"?<Icon.Lightning size={56} color={modeInfo.color}/>:course.mode==="practice"?<span style={{fontSize:56}}>🎯</span>:<Icon.Flag size={56} color={modeInfo.color}/>}</div>
           <div style={{fontSize:28,fontWeight:800,color:C.text,marginBottom:8}}>{course.name}</div>
           <div style={{fontSize:18,fontWeight:600,color:C.text,marginBottom:12}}>{modeInfo.title}</div>
           <div style={{fontSize:14,color:C.muted,lineHeight:1.6,maxWidth:280,textAlign:"center",marginBottom:24}}>{modeInfo.sub}</div>
