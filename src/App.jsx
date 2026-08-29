@@ -1759,6 +1759,7 @@ function AuthScreen({onAuth}){
   const [name,setName]=useState("");
   const [error,setError]=useState("");
   const [loading,setLoading]=useState(false);
+  const [agreed,setAgreed]=useState(false);
 
   const submit=async()=>{
     setLoading(true);setError("");
