@@ -1265,6 +1265,13 @@ function CourseBuilderSheet({stages,course,onClose,onSave}){
         );
       })}
 
+            {selectedIds.length>0&&(
+        <div style={{marginBottom:16}}>
+          <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase",marginBottom:10}}>Route Preview</div>
+          <CourseStagesMap courseStages={selectedIds.map(id=>stages.find(s=>s.id===id)).filter(Boolean)}/>
+        </div>
+      )}
+
       {selectedIds.length>=2&&(
         <div style={{marginTop:4,marginBottom:16}}>
           <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase",marginBottom:10}}>Stage Order</div>
