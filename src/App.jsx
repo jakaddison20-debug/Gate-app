@@ -21,11 +21,6 @@ function unproject(x,y,center,zoom,w,h){const scale=Math.pow(2,zoom)*256,mercY=c
 
 const C={orange:"#F59E0B",orangeL:"#FFF8E7",bg:"#FFFFFF",surface:"#F5F5F5",border:"#E6E6E6",text:"#1A1A1A",muted:"#6B6B6B",mutedL:"#C4C4C4",blue:"#2563EB",green:"#15803D",red:"#DC2626",yellow:"#B45309",mapBase:"#EAE6DF",mapWater:"#A8D3E8",mapWaterDark:"#8BBDD4",mapPark:"#D4E8D0",mapParkDark:"#BDDBB7",mapBuilding:"#D9D5CC",mapBuildingBorder:"#C8C4BB",mapHighwayBorder:"#C0B89A",mapHighway:"#F5D490",mapMajorRoad:"#FFFFFF",mapMajorBorder:"#C8C0A4",mapMinorRoad:"#FFFFFF",mapMinorBorder:"#D4CDB8",mapLabel:"#5A5A5A"};
 
-// ── Course modes ──────────────────────────────────────────────────────────────
-const COURSE_MODES=[
-  {id:"race",label:"Race",Ic:Icon.Flag,desc:"One timed run. Times go to the leaderboard."},
-  {id:"mashup",label:"Mashup",Ic:Icon.Lightning,desc:"Unlimited runs. Best time on each stage combined into your total."},
-];
 const SAMPLE_STAGES=[];
 
 const LEADERBOARD_DATA={};
@@ -99,7 +94,13 @@ const Icon={
   Strava:({size=20,color="#FC4C02"})=><svg width={size} height={size} viewBox="0 0 24 24" fill={color}><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg>,   Close:({size=18,color="#1A1A1A"})=><svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
   BarChart:({size=24,color="#1A1A1A"})=><svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="6" y1="20" x2="6" y2="14"/><line x1="12" y1="20" x2="12" y2="8"/><line x1="18" y1="20" x2="18" y2="11"/></svg>,
   Image:({size=24,color="#1A1A1A"})=><svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>,
-};
+  };
+
+// ── Course modes ──────────────────────────────────────────────────────────────
+const COURSE_MODES=[
+  {id:"race",label:"Race",Ic:Icon.Flag,desc:"One timed run. Times go to the leaderboard."},
+  {id:"mashup",label:"Mashup",Ic:Icon.Lightning,desc:"Unlimited runs. Best time on each stage combined into your total."},
+];
 
 const STYLES=`
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
