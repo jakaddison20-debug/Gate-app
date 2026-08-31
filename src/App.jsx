@@ -1635,7 +1635,7 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
           ))}
         </div>
         <div style={{padding:"0 20px 44px"}}>
-          <button className="tap" onClick={stopStage} style={{width:"100%",background:isPractice?"rgba(255,255,255,0.2)":C.red,border:isPractice?"1px solid rgba(255,255,255,0.3)":"none",borderRadius:14,padding:18,color:"#fff",fontSize:16,fontWeight:700,boxShadow:isPractice?"none":"0 4px 20px rgba(220,38,38,0.4)"}}>
+                    <button className="tap" onClick={()=>stopStage(false)} style={{width:"100%",background:isPractice?"rgba(255,255,255,0.2)":C.red,border:isPractice?"1px solid rgba(255,255,255,0.3)":"none",borderRadius:14,padding:18,color:"#fff",fontSize:16,fontWeight:700,boxShadow:isPractice?"none":"0 4px 20px rgba(220,38,38,0.4)"}}>
             {isPractice?"✓  Finish Gate — Next Stage":"■   Stop — Finish Gate"}
           </button>
         </div>
