@@ -1219,11 +1219,84 @@ function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,cou
     </div>
   );
 }
+function CourseStagePickerMap({stages,selectedIds,onToggle}){
+  const mapContainer=useRef(null);
+  const map=useRef(null);
+  const markersRef=useRef([]);
+  const onToggleRef=useRef(onToggle);
+  useEffect(()=>{onToggleRef.current=onToggle;},[onToggle]);
+
+  const midpoint=(stage)=>{
+    if(stage.line_coords&&stage.line_coords.length>1){
+      const raw=stage.line_coords;
+      const coords=[raw[0]];
+      for(let i=1;i<raw.length;i++){if(haversine(coords[coords.length-1],raw[i])<100){coords.push(raw[i]);}}
+      if(coords.length<2)coords.push(raw[raw.length-1]);
+      let totalLen=0;const segLens=[];
+      for(let i=0;i<coords.length-1;i++){const d=haversine(coords[i],coords[i+1]);segLens.push(d);totalLen+=d;}
+      const halfLen=totalLen/2;let acc=0,midPoint=coords[0];
+      for(let i=0;i<segLens.length;i++){if(acc+segLens[i]>=halfLen){const remain=halfLen-acc;const frac=segLens[i]>0?remain/segLens[i]:0;midPoint={lat:coords[i].lat+(coords[i+1].lat-coords[i].lat)*frac,lng:coords[i].lng+(coords[i+1].lng-coords[i].lng)*frac};break;}acc+=segLens[i];}
+      return midPoint;
+    }
+    return{lat:(stage.start.lat+stage.finish.lat)/2,lng:(stage.start.lng+stage.finish.lng)/2};
+  };
+
+  const rebuildMarkers=()=>{
+    if(!map.current)return;
+    markersRef.current.forEach(m=>m.remove());
+    markersRef.current=[];
+    stages.forEach(stage=>{
+      const idx=selectedIds.indexOf(stage.id);
+      const on=idx>=0;
+      const pt=midpoint(stage);
+      const el=document.createElement('div');
+      el.style.cssText='display:flex;flex-direction:column;align-items:center;cursor:pointer;';
+      el.innerHTML=on
+        ?`<div style="width:30px;height:30px;border-radius:50%;background:#2563EB;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700;font-family:Inter,sans-serif;">${idx+1}</div><div style="margin-top:2px;font-size:10px;font-weight:600;color:#1A1A1A;background:rgba(255,255,255,0.9);border-radius:4px;padding:1px 5px;white-space:nowrap;">${stage.name}</div>`
+        :`<div style="width:26px;height:26px;border-radius:50%;background:#fff;border:2px solid #C4C4C4;box-shadow:0 2px 6px rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;"><svg width="13" height="13" viewBox="0 0 24 24"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10" fill="#8A8A8A"/></svg></div><div style="margin-top:2px;font-size:10px;font-weight:600;color:#6B6B6B;background:rgba(255,255,255,0.9);border-radius:4px;padding:1px 5px;white-space:nowrap;">${stage.name}</div>`;
+      el.addEventListener('click',()=>onToggleRef.current(stage.id));
+      const marker=new window.mapboxgl.Marker({element:el}).setLngLat([pt.lng,pt.lat]).addTo(map.current);
+      markersRef.current.push(marker);
+    });
+  };
+
+  useEffect(()=>{
+    if(map.current)return;
+    const token=import.meta.env.VITE_MAPBOX_TOKEN;
+    if(!token)return;
+    import('https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js').then(()=>{
+      const mapboxgl=window.mapboxgl;
+      mapboxgl.accessToken=token;
+      const opts={container:mapContainer.current,style:'mapbox://styles/mapbox/outdoors-v12'};
+      if(stages.length>0){
+        const pts=stages.map(s=>midpoint(s));
+        const lats=pts.map(p=>p.lat),lngs=pts.map(p=>p.lng);
+        opts.bounds=[[Math.min(...lngs),Math.min(...lats)],[Math.max(...lngs),Math.max(...lats)]];
+        opts.fitBoundsOptions={padding:60};
+      } else {
+        opts.center=[DEFAULT_CENTER.lng,DEFAULT_CENTER.lat];
+        opts.zoom=12;
+      }
+      map.current=new mapboxgl.Map(opts);
+      map.current.on('load',()=>{rebuildMarkers();});
+    });
+  },[]);
+
+  useEffect(()=>{if(map.current&&map.current.loaded())rebuildMarkers();},[selectedIds,stages]);
+
+  return(
+    <div style={{position:"relative",width:"100%",height:"100%"}}>
+      <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet"/>
+      <div ref={mapContainer} style={{width:"100%",height:"100%"}}/>
+    </div>
+  );
+}
 function CourseBuilderSheet({stages,course,onClose,onSave}){
   const [name,setName]=useState(course?.name||"");
   const [privacy,setPrivacy]=useState(course?.privacy||"group");
   const [selectedIds,setSelectedIds]=useState(course?.stageIds||[]);
   const [mode,setMode]=useState(course?.mode||"race");
+  const [pickMode,setPickMode]=useState("list");
   const toggle=id=>setSelectedIds(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
   const moveUp=i=>{if(i===0)return;setSelectedIds(prev=>{const a=[...prev];[a[i-1],a[i]]=[a[i],a[i-1]];return a;});};
   const moveDown=i=>setSelectedIds(prev=>{if(i===prev.length-1)return prev;const a=[...prev];[a[i],a[i+1]]=[a[i+1],a[i]];return a;});
