@@ -1708,7 +1708,10 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
             <div style={{fontSize:22,fontWeight:800,color:"white"}}>{currentStage.name}</div>
             <div style={{fontSize:13,color:"rgba(255,255,255,0.6)",marginTop:4}}>{formatDist(haversine(currentStage.start,currentStage.finish))}</div>
           </div>
-          <button className="tap" onClick={quitRace} style={{background:"rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 14px",color:"rgba(255,255,255,0.7)",fontSize:13,border:"none"}}>Quit</button>
+           <div style={{display:"flex",gap:8}}>
+            <button className="tap" onClick={()=>setShowRaceMap(true)} style={{background:"rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 14px",color:"rgba(255,255,255,0.9)",fontSize:13,border:"none",display:"flex",alignItems:"center",gap:6}}><Icon.Map size={14} color="rgba(255,255,255,0.9)"/>Map</button>
+            <button className="tap" onClick={quitRace} style={{background:"rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 14px",color:"rgba(255,255,255,0.7)",fontSize:13,border:"none"}}>Quit</button>
+          </div>
         </div>
         <div style={{padding:"16px 20px",background:headerBg,display:"flex",gap:6}}>
           {courseStages.map((_,i)=><div key={i} style={{flex:1,height:4,borderRadius:2,background:i<stageIndex?C.orange:i===stageIndex?"white":"rgba(255,255,255,0.2)"}}/>)}
@@ -1752,9 +1755,10 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
             {splits.map((s,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`}}><div style={{fontSize:12,color:C.muted}}>{i+1}. {s.name}</div><div style={{fontSize:12,fontWeight:700,color:C.orange}}>{formatTime(s.time)}</div></div>)}
           </div>
         )}
-        <div style={{padding:"16px 20px 40px"}}>
+                <div style={{padding:"16px 20px 40px"}}>
         
         </div>
+        {showRaceMap&&<RaceMapOverlay courseStages={courseStages} onClose={()=>setShowRaceMap(false)}/>}
       </div>
     );
   }
