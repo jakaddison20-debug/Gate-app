@@ -1540,18 +1540,25 @@ function RaceScreen({course,stages,user,onFinish,onActivity}){
   },[phase]);
 
   // Simulate GPS toward gate
-    useEffect(()=>{
+        useEffect(()=>{
 if(phase!=="transfer"||!armed)return;
 if(!navigator.geolocation)return;
 const gate=currentStage.start;
 prevGpsRef.current=null;
 const id=navigator.geolocation.watchPosition(pos=>{
-const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};
+const loc={lat:pos.coords.latitude,lng:pos.coords.longitude,ts:pos.timestamp};
 const dist=haversine(loc,gate);
 setDistToGate(Math.round(dist));
-const crossed=segmentCrossesGate(prevGpsRef.current,loc,gate,FAT_GATE_RADIUS);
+const prev=prevGpsRef.current;
+const crossed=segmentCrossesGate(prev,loc,gate,FAT_GATE_RADIUS);
 prevGpsRef.current=loc;
-if(crossed){navigator.geolocation.clearWatch(id);setGateStatus("entered");setTimeout(()=>startCountdown(),300);}
+if(crossed){
+navigator.geolocation.clearWatch(id);
+setGateStatus("entered");
+const t=prev?gateCrossT(prev,loc,gate):0;
+const crossTs=prev?prev.ts+t*(loc.ts-prev.ts):loc.ts;
+setTimeout(()=>startCountdown(crossTs),300);
+}
 else if(dist<=50)setGateStatus("near");
 else setGateStatus("waiting");
 },err=>{console.log(err);logEvent(user?.id,"gps_error_transfer",err.message||String(err),currentStage?.id,{code:err.code});},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
@@ -1560,10 +1567,10 @@ return()=>navigator.geolocation.clearWatch(id);
 
 const startCountdown=()=>{playBeep(880,150);setGateStatus("waiting");setTimerMs(0);timerMsRef.current=0;startTimeRef.current=Date.now();setPhase("racing");timerRef.current=setInterval(()=>{timerMsRef.current=Date.now()-startTimeRef.current;setTimerMs(timerMsRef.current);},10);setTimeout(()=>{if(timerRef.current){clearInterval(timerRef.current);setPhase("transfer");setTimerMs(0);logEvent(user?.id,"finish_timeout","Finish gate not reached within 10 minutes",currentStage?.id);alert("Run cancelled — finish gate not reached in time");}},600000);};    
 
-    const stopStage=(saveTime=false)=>{
+      const stopStage=(saveTime=false,crossTs=null)=>{
 playBeep(440,250);
 clearInterval(timerRef.current);
-const finalTime=timerMsRef.current;
+const finalTime=crossTs?Math.max(0,crossTs-startTimeRef.current):timerMsRef.current;  
 const newSplit={stageId:currentStage.id,name:currentStage.name,time:finalTime};
 setSplits(prev=>[...prev,newSplit]);
 // Mashup: update best per stage
@@ -1577,22 +1584,26 @@ setPhase("split");
 if(saveTime&&!isPractice){supabase.from('stage_times').select('time_ms').eq('stage_id',currentStage.id).order('time_ms',{ascending:true}).limit(1).then(({data})=>{const prevBest=data&&data[0]?data[0].time_ms:null;supabase.from('stage_times').insert({stage_id:currentStage.id,user_id:user.id,time_ms:finalTime}).then(()=>{if(prevBest===null||finalTime<prevBest){logEvent(user.id,'stage_record',`set a new record on ${currentStage.name} · ${formatTime(finalTime)}`,currentStage.id,{time_ms:finalTime}).then(()=>onActivity&&onActivity());}}).catch(err=>console.log(err));});}
 };
 
-            useEffect(()=>{
+             useEffect(()=>{
     if(phase!=="racing")return;
     if(!navigator.geolocation)return;
     const gate=currentStage.finish;
     prevGpsRef.current=null;
     const id=navigator.geolocation.watchPosition(pos=>{
-      const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};
-      const crossed=segmentCrossesGate(prevGpsRef.current,loc,gate,FINISH_GATE_RADIUS);
+      const loc={lat:pos.coords.latitude,lng:pos.coords.longitude,ts:pos.timestamp};
+      const prev=prevGpsRef.current;
+      const crossed=segmentCrossesGate(prev,loc,gate,FINISH_GATE_RADIUS);
       prevGpsRef.current=loc;
       if(crossed){
 navigator.geolocation.clearWatch(id);
-stopStage(true);
+const t=prev?gateCrossT(prev,loc,gate):0;
+const crossTs=prev?prev.ts+t*(loc.ts-prev.ts):loc.ts;
+stopStage(true,crossTs);
 }
 },err=>{console.log(err);logEvent(user?.id,"gps_error_racing",err.message||String(err),currentStage?.id,{code:err.code});},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
 return()=>navigator.geolocation.clearWatch(id);
 },[phase,stageIndex]);
+           
 
   const nextStage=()=>{
 if(isLastStage){
