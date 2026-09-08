@@ -2262,16 +2262,16 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
             <div style={{padding:"16px"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
                 <div style={{fontSize:22,fontWeight:800,color:C.text}}>Courses</div>
-                 <button className="tap" onClick={()=>{setEditingCourse(null);setSheet("courseBuilder");}} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"9px 14px",color:C.blue,fontSize:13,fontWeight:600}}><Icon.Plus size={16} color={C.blue}/>New</button>
+                  <button className="tap" onClick={()=>{setEditingCourse(null);setShowCourseBuilder(true);}} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"9px 14px",color:C.blue,fontSize:13,fontWeight:600}}><Icon.Plus size={16} color={C.blue}/>New</button>
               </div>
               {courses.length===0?(
                 <div style={{textAlign:"center",padding:"48px 20px",color:C.muted}}>
                                     <div style={{width:64,height:64,borderRadius:"50%",background:`${C.blue}15`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}><Icon.Flag size={28} color={C.blue}/></div>
                   <div style={{fontSize:16,fontWeight:600,color:C.text,marginBottom:6}}>No courses yet</div>
                   <div style={{fontSize:13,color:C.muted,marginBottom:20,lineHeight:1.5}}>Choose Race or Mashup mode when building</div>
-                  <button className="tap" onClick={()=>{setEditingCourse(null);setSheet("courseBuilder");}} style={{background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:12,padding:"12px 24px",color:C.blue,fontSize:14,fontWeight:600}}>Build Your First Course</button>
+                  <button className="tap" onClick={()=>{setEditingCourse(null);setShowCourseBuilder(true);}} style={{background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:12,padding:"12px 24px",color:C.blue,fontSize:14,fontWeight:600}}>Build Your First Course</button>
                 </div>
-              ):courses.map(course=><CourseCard key={course.id} course={course} stages={stages} userId={user.id} onStart={c=>setActiveRace(c)} onEdit={c=>{setEditingCourse(c);setSheet("courseBuilder");}} onDelete={async id=>{if(!window.confirm("Delete this course?"))return;await supabase.from('courses').delete().eq('id',id).eq('created_by',user.id);setCourses(prev=>prev.filter(c=>c.id!==id));}}/>)}
+                ):courses.map(course=><CourseCard key={course.id} course={course} stages={stages} userId={user.id} onStart={c=>setActiveRace(c)} onEdit={c=>{setEditingCourse(c);setShowCourseBuilder(true);}} onDelete={async id=>{if(!window.confirm("Delete this course?"))return;await supabase.from('courses').delete().eq('id',id).eq('created_by',user.id);setCourses(prev=>prev.filter(c=>c.id!==id));}}/>)}
             </div>
           )}
         </div>
