@@ -1565,9 +1565,8 @@ else setGateStatus("waiting");
 return()=>navigator.geolocation.clearWatch(id);
 },[phase,stageIndex,armed]);
 
-const startCountdown=()=>{playBeep(880,150);setGateStatus("waiting");setTimerMs(0);timerMsRef.current=0;startTimeRef.current=Date.now();setPhase("racing");timerRef.current=setInterval(()=>{timerMsRef.current=Date.now()-startTimeRef.current;setTimerMs(timerMsRef.current);},10);setTimeout(()=>{if(timerRef.current){clearInterval(timerRef.current);setPhase("transfer");setTimerMs(0);logEvent(user?.id,"finish_timeout","Finish gate not reached within 10 minutes",currentStage?.id);alert("Run cancelled — finish gate not reached in time");}},600000);};    
-
-      const stopStage=(saveTime=false,crossTs=null)=>{
+const startCountdown=(crossTs=null)=>{playBeep(880,150);setGateStatus("waiting");startTimeRef.current=crossTs||Date.now();timerMsRef.current=Date.now()-startTimeRef.current;setTimerMs(timerMsRef.current);setPhase("racing");timerRef.current=setInterval(()=>{timerMsRef.current=Date.now()-startTimeRef.current;setTimerMs(timerMsRef.current);},10);setTimeout(()=>{if(timerRef.current){clearInterval(timerRef.current);setPhase("transfer");setTimerMs(0);logEvent(user?.id,"finish_timeout","Finish gate not reached within 10 minutes",currentStage?.id);alert("Run cancelled — finish gate not reached in time");}},600000);};    
+  const stopStage=(saveTime=false,crossTs=null)=>{
 playBeep(440,250);
 clearInterval(timerRef.current);
 const finalTime=crossTs?Math.max(0,crossTs-startTimeRef.current):timerMsRef.current;  
