@@ -1122,17 +1122,15 @@ function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,cou
   const trackRef=useRef(null);
   const simulatePlace=()=>{if(!navigator.geolocation){alert("GPS not available");return;}navigator.geolocation.getCurrentPosition(pos=>{const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};if(!start){setStart(loc);setLineCoords([loc]);setRecording(true);trackRef.current=navigator.geolocation.watchPosition(p=>setLineCoords(prev=>[...prev,{lat:p.coords.latitude,lng:p.coords.longitude}]),err=>console.log(err),{enableHighAccuracy:true,maximumAge:0});}else if(!finish){setFinish(loc);setRecording(false);navigator.geolocation.clearWatch(trackRef.current);const fullLine=[...lineCoords,loc];let total=0;for(let i=0;i<fullLine.length-1;i++)total+=haversine(fullLine[i],fullLine[i+1]);if(total>25){const offsetStart=pointAtDistance(fullLine,25);if(offsetStart)setStart(offsetStart);}setLineCoords(fullLine);}},err=>alert("Could not get location — make sure GPS is on"),{enableHighAccuracy:true,timeout:10000});};
 
-  const canSave=name.trim()&&start&&finish;
+    const canSave=name.trim()&&start&&finish;
   const dist=start&&finish?haversine(start,finish):null;
-    return(
-    <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
-      <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
-        <div><div style={{fontSize:17,fontWeight:700,color:C.text}}>{course?"Edit Course":"Build Course"}</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>{course?"Rename, add or remove stages":"String stages into a race"}</div></div>
-        <button className="tap" onClick={onClose} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 12px",color:C.text,fontSize:13}}>Close</button>
+  return(
+    <div style={{padding:"0 16px 60px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0 18px"}}>
+        <div style={{fontSize:17,fontWeight:700,color:C.text}}>New Stage</div>
+        <button className="tap" onClick={onClose} style={{background:C.surface,borderRadius:8,padding:"6px 14px",color:C.text,fontSize:13,fontWeight:500,border:`1px solid ${C.border}`}}>Cancel</button>
       </div>
-      <div style={{flex:1,overflowY:"auto",padding:"16px"}}>
-
-      <input value={name} onChange={e=>setName(e.target.value)} placeholder="Course name e.g. Sunday Enduro" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"13px 14px",fontSize:15,color:C.text,background:C.surface,marginBottom:20}}/>
+      <input value={name} onChange={e=>setName(e.target.value)} placeholder="Stage name" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"13px 14px",fontSize:15,color:C.text,background:C.surface,marginBottom:16}}/>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
         {[{label:"Start Gate",color:C.green,gate:start},{label:"Finish Gate",color:C.red,gate:finish}].map(({label,color,gate})=>(
           <div key={label} style={{background:gate?`${color}10`:C.surface,border:`1.5px solid ${gate?color:C.border}`,borderRadius:12,padding:"13px 12px"}}>
