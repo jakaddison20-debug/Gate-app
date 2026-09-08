@@ -1505,7 +1505,8 @@ function RaceScreen({course,stages,user,onFinish,onActivity}){
   const gpsRef=useRef(null);
   const startTimeRef=useRef(0);
   const prevGpsRef=useRef(null);
-  const [introDist,setIntroDist]=useState(null);
+    const [introDist,setIntroDist]=useState(null);
+  const [showRaceMap,setShowRaceMap]=useState(false);
 
     const currentStage=courseStages[stageIndex];
   const totalStages=courseStages.length;
