@@ -1329,8 +1329,15 @@ function CourseBuilderSheet({stages,course,onClose,onSave}){
         ))}
       </div>
 
-      <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase",marginBottom:10}}>Select Stages ({selectedIds.length} selected)</div>
-      {stages.map(stage=>{
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase"}}>Select Stages ({selectedIds.length} selected)</div>
+        <div style={{display:"flex",background:C.surface,borderRadius:8,padding:2}}>
+          {["list","map"].map(m=>(
+            <button key={m} className="tap" onClick={()=>setPickMode(m)} style={{padding:"5px 10px",borderRadius:6,background:pickMode===m?"#fff":"none",border:"none",fontSize:11,fontWeight:pickMode===m?600:400,color:pickMode===m?C.text:C.muted,boxShadow:pickMode===m?"0 1px 3px rgba(0,0,0,0.1)":"none"}}>{m==="list"?"List":"Map"}</button>
+          ))}
+        </div>
+      </div>
+      {pickMode==="list"?stages.map(stage=>{
         const on=selectedIds.includes(stage.id),pos=selectedIds.indexOf(stage.id);
         return(
           <button key={stage.id} className="tap" onClick={()=>toggle(stage.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,background:on?`${C.blue}0D`:C.surface,border:`1px solid ${on?C.blue:C.border}`,borderRadius:12,padding:"12px 14px",marginBottom:8,textAlign:"left",transition:"all 0.15s"}}>
@@ -1339,7 +1346,16 @@ function CourseBuilderSheet({stages,course,onClose,onSave}){
             {on&&<Icon.Check size={18} color={C.blue}/>}
           </button>
         );
-      })}
+      }):(
+        <div style={{marginBottom:16}}>
+          <div style={{textAlign:"center",fontSize:12,fontWeight:600,color:C.blue,background:`${C.blue}10`,borderRadius:8,padding:"8px",marginBottom:8}}>
+            {selectedIds.length===0?"Tap a stage to add it as Stage 1":`Tap a stage to add it as Stage ${selectedIds.length+1}`}
+          </div>
+          <div style={{width:"100%",height:420,borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`}}>
+            <CourseStagePickerMap stages={stages} selectedIds={selectedIds} onToggle={toggle}/>
+          </div>
+        </div>
+      )}
 
             {selectedIds.length>0&&(
         <div style={{marginBottom:16}}>
@@ -1374,9 +1390,12 @@ function CourseBuilderSheet({stages,course,onClose,onSave}){
         ))}
       </div>
 
+             </div>
+      <div style={{padding:"12px 16px",borderTop:`1px solid ${C.border}`,flexShrink:0}}>
         <button className="tap" onClick={()=>canSave&&onSave({id:course?.id||Date.now(),name:name.trim(),stageIds:selectedIds,privacy,mode,times:{},bestPerStage:{}})} style={{width:"100%",background:canSave?"#fff":C.surface,border:`1.5px solid ${canSave?C.blue:C.border}`,borderRadius:12,padding:15,color:canSave?C.blue:C.muted,fontSize:15,fontWeight:700,transition:"all 0.2s"}}>
         {canSave?(course?"Save Changes":`Create ${mode==="mashup"?"Mashup":"Race"} Course`):"Select at least 2 stages"}
       </button>
+      </div>
     </div>
   );
 }
