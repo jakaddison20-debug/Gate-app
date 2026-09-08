@@ -1974,6 +1974,7 @@ export default function App(){
   const [stages,setStages]=useState(SAMPLE_STAGES);
   const [courses,setCourses]=useState([]);   const [sheet,setSheet]=useState(null);
   const [editingCourse,setEditingCourse]=useState(null);
+  const [showCourseBuilder,setShowCourseBuilder]=useState(false);
   const [stagesFilter,setStagesFilter]=useState("all");
   const [coursesFilter,setCoursesFilter]=useState("stages");
   const [activeRace,setActiveRace]=useState(null);
