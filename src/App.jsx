@@ -1400,6 +1400,87 @@ function CourseBuilderSheet({stages,course,onClose,onSave}){
   );
 }
 
+// ── Race Map Overlay ──────────────────────────────────────────────────────────
+function RaceMapOverlay({courseStages,onClose}){
+  const mapContainer=useRef(null);
+  const map=useRef(null);
+  const userMarkerRef=useRef(null);
+  const userMarkerInnerRef=useRef(null);
+  const [userPos,setUserPos]=useState(null);
+
+  useEffect(()=>{
+    if(!navigator.geolocation)return;
+    const id=navigator.geolocation.watchPosition(pos=>{
+      setUserPos({lat:pos.coords.latitude,lng:pos.coords.longitude,heading:pos.coords.heading});
+    },err=>console.log(err),{enableHighAccuracy:true,maximumAge:2000,timeout:10000});
+    return()=>navigator.geolocation.clearWatch(id);
+  },[]);
+
+  useEffect(()=>{
+    if(map.current)return;
+    const token=import.meta.env.VITE_MAPBOX_TOKEN;
+    if(!token)return;
+    import('https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js').then(()=>{
+      const mapboxgl=window.mapboxgl;
+      mapboxgl.accessToken=token;
+      const boundsPoints=[];
+      courseStages.forEach(stage=>{
+        const coords=stage.line_coords&&stage.line_coords.length>1?stage.line_coords:[stage.start,stage.finish];
+        coords.forEach(c=>boundsPoints.push([c.lng,c.lat]));
+      });
+      const opts={container:mapContainer.current,style:'mapbox://styles/mapbox/outdoors-v12'};
+      if(boundsPoints.length>0){
+        const lats=boundsPoints.map(p=>p[1]),lngs=boundsPoints.map(p=>p[0]);
+        opts.bounds=[[Math.min(...lngs),Math.min(...lats)],[Math.max(...lngs),Math.max(...lats)]];
+        opts.fitBoundsOptions={padding:60};
+      } else {
+        opts.center=[DEFAULT_CENTER.lng,DEFAULT_CENTER.lat];
+        opts.zoom=13;
+      }
+      map.current=new mapboxgl.Map(opts);
+      map.current.on('load',()=>{
+        courseStages.forEach((stage,i)=>{
+          const coords=stage.line_coords&&stage.line_coords.length>1?stage.line_coords:[stage.start,stage.finish];
+          const id='race-line-'+stage.id;
+          map.current.addSource(id,{type:'geojson',data:{type:'Feature',geometry:{type:'LineString',coordinates:coords.map(c=>[c.lng,c.lat])}}});
+          map.current.addLayer({id,type:'line',source:id,paint:{'line-color':'#2563EB','line-width':4,'line-opacity':0.9}});
+          const el=document.createElement('div');
+          el.style.cssText='width:26px;height:26px;border-radius:50%;background:#2563EB;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;font-family:Inter,sans-serif;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3);';
+          el.textContent=String(i+1);
+          new mapboxgl.Marker({element:el}).setLngLat([stage.start.lng,stage.start.lat]).addTo(map.current);
+        });
+      });
+    });
+  },[]);
+
+  useEffect(()=>{
+    if(!userPos||!map.current)return;
+    if(!userMarkerRef.current){
+      const el=document.createElement('div');
+      el.style.cssText='width:34px;height:34px;';
+      const inner=document.createElement('div');
+      inner.style.cssText='width:100%;height:100%;transition:transform 0.3s ease;';
+      inner.innerHTML='<svg width="34" height="34" viewBox="0 0 34 34"><polygon points="17,2 25,17 17,12 9,17" fill="#2563EB" opacity="0.85"/><circle cx="17" cy="17" r="7" fill="#2563EB" stroke="white" stroke-width="3"/></svg>';
+      el.appendChild(inner);
+      userMarkerRef.current=new window.mapboxgl.Marker({element:el}).setLngLat([userPos.lng,userPos.lat]).addTo(map.current);
+      userMarkerInnerRef.current=inner;
+    } else {
+      userMarkerRef.current.setLngLat([userPos.lng,userPos.lat]);
+      if(userMarkerInnerRef.current&&typeof userPos.heading==='number'&&!isNaN(userPos.heading))userMarkerInnerRef.current.style.transform=`rotate(${userPos.heading}deg)`;
+    }
+  },[userPos]);
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"#fff",zIndex:150,display:"flex",flexDirection:"column"}}>
+      <div style={{position:"absolute",top:52,left:16,right:16,zIndex:10,display:"flex",justifyContent:"flex-end"}}>
+        <button className="tap" onClick={onClose} style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 14px",color:C.text,fontSize:13,fontWeight:600,boxShadow:"0 2px 10px rgba(0,0,0,0.1)",display:"flex",alignItems:"center",gap:6}}><Icon.Close size={14} color={C.text}/>Close Map</button>
+      </div>
+      <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet"/>
+      <div ref={mapContainer} style={{width:"100%",height:"100%"}}/>
+    </div>
+  );
+}
+
 // ── Race / Practice / Mashup Screen ──────────────────────────────────────────
 function RaceScreen({course,stages,user,onFinish,onActivity}){
 
@@ -2149,6 +2230,17 @@ if(showBikeSetup)return(
 </div>
 );
 
+    // Course builder overlay
+  if(showCourseBuilder)return(
+    <div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
+      <style>{STYLES}</style>
+      <div style={{height:44,background:"#fff"}}/>
+      <div style={{height:"calc(100vh - 44px)"}}>
+        <CourseBuilderSheet stages={stages} course={editingCourse} onClose={()=>{setShowCourseBuilder(false);setEditingCourse(null);}} onSave={async c=>{if(c.id&&courses.some(x=>x.id===c.id)){const{error}=await supabase.from('courses').update({name:c.name,privacy:c.privacy,mode:c.mode,stage_ids:c.stageIds}).eq('id',c.id);if(error){alert(error.message);}else{setCourses(prev=>prev.map(x=>x.id===c.id?{...x,name:c.name,privacy:c.privacy,mode:c.mode,stageIds:c.stageIds}:x));}setShowCourseBuilder(false);setEditingCourse(null);}else{const{data,error}=await supabase.from('courses').insert({name:c.name,privacy:c.privacy,mode:c.mode,stage_ids:c.stageIds,created_by:user.id}).select().single();if(!error){setCourses(prev=>[...prev,{...c,id:data.id,created_by:user.id}]);logEvent(user.id,'course_created',`created a new course: ${c.name}`).then(()=>setRefreshTick(t=>t+1));}setShowCourseBuilder(false);setCoursesFilter("courses");setTab("stages");}}}/>
+      </div>
+    </div>
+  );
+
   // Statistics screen overlay
   if(showProgress)return(
     <div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
@@ -2289,12 +2381,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
       {/* Stage detail (from stages tab) */}
       {selectedStage&&tab!=="map"&&sheet!=='sections'&&(
       <><div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:45}} onClick={()=>setSelectedStage(null)}/><div className="slide-up" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:46,maxHeight:"88vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><StageDetailSheet stage={selectedStage} onClose={()=>setSelectedStage(null)} onRace={()=>{setActiveRace({id:Date.now(),name:selectedStage.name,stageIds:[selectedStage.id],mode:'race',times:{},bestPerStage:{}});setSelectedStage(null);}} onOpenSections={()=>setSheet('sections')} user={user} onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newName}:s));setSelectedStage(prev=>prev&&prev.id===id?{...prev,name:newName}:prev);}}/></div></>
-      )}
-
-       {/* Course builder */}
-       {sheet==="courseBuilder"&&(
-       <><div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:45}} onClick={()=>{setSheet(null);setEditingCourse(null);}}/><div className="slide-up" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:46,maxHeight:"90vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><CourseBuilderSheet stages={stages} course={editingCourse} onClose={()=>{setSheet(null);setEditingCourse(null);}} onSave={async c=>{if(c.id&&courses.some(x=>x.id===c.id)){const{error}=await supabase.from('courses').update({name:c.name,privacy:c.privacy,mode:c.mode,stage_ids:c.stageIds}).eq('id',c.id);if(error){alert(error.message);}else{setCourses(prev=>prev.map(x=>x.id===c.id?{...x,name:c.name,privacy:c.privacy,mode:c.mode,stageIds:c.stageIds}:x));}setSheet(null);setEditingCourse(null);}else{const{data,error}=await supabase.from('courses').insert({name:c.name,privacy:c.privacy,mode:c.mode,stage_ids:c.stageIds,created_by:user.id}).select().single();if(!error){setCourses(prev=>[...prev,{...c,id:data.id,created_by:user.id}]);logEvent(user.id,'course_created',`created a new course: ${c.name}`).then(()=>setRefreshTick(t=>t+1));}setSheet(null);setCoursesFilter("courses");setTab("stages");}}}/></div></>
-       )}
+      )}    
 
 
       {/* Lobby */}
