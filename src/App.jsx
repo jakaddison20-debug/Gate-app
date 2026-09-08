@@ -1304,95 +1304,105 @@ function CourseBuilderSheet({stages,course,onClose,onSave}){
   const canSave=name.trim()&&selectedIds.length>=2;
 
   return(
-    <div style={{padding:"0 16px 40px"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0 18px"}}>
-        <div><div style={{fontSize:17,fontWeight:700,color:C.text}}>{course?"Edit Course":"Build Course"}</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>{course?"Rename, add or remove stages":"String stages into a race"}</div></div>
-        <button className="tap" onClick={onClose} style={{background:C.surface,borderRadius:8,padding:"6px 14px",color:C.text,fontSize:13,fontWeight:500,border:`1px solid ${C.border}`}}>Cancel</button>
+    <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
+      <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+        <div>
+          <div style={{fontSize:17,fontWeight:700,color:C.text}}>{course?"Edit Course":"Build Course"}</div>
+          <div style={{fontSize:12,color:C.muted,marginTop:2}}>{course?"Rename, add or remove stages":"String stages into a race"}</div>
+        </div>
+        <button className="tap" onClick={onClose} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 12px",color:C.text,fontSize:13}}>Close</button>
       </div>
 
-      <input value={name} onChange={e=>setName(e.target.value)} placeholder="Course name e.g. Sunday Enduro" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"13px 14px",fontSize:15,color:C.text,background:C.surface,marginBottom:20}}/>
+      <div style={{flex:1,overflowY:"auto",padding:"16px"}}>
 
-      {/* Mode selector — the key new feature */}
-      <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase",marginBottom:10}}>Course Mode</div>
-      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
-             {COURSE_MODES.map(m=>(
-          <button key={m.id} className="tap" onClick={()=>setMode(m.id)} style={{display:"flex",alignItems:"flex-start",gap:12,background:mode===m.id?`${C.blue}10`:C.surface,border:`1.5px solid ${mode===m.id?C.blue:C.border}`,borderRadius:14,padding:"14px 16px",textAlign:"left",transition:"all 0.15s"}}>
-           <div style={{width:24,flexShrink:0,display:"flex",alignItems:"center"}}><m.Ic size={20} color={mode===m.id?C.blue:C.muted}/></div>
-            <div style={{flex:1}}>
-              <div style={{fontSize:14,fontWeight:700,color:mode===m.id?C.blue:C.text,marginBottom:2}}>{m.label}</div>
-              <div style={{fontSize:12,color:C.muted,lineHeight:1.4}}>{m.desc}</div>
-            </div>
-            {mode===m.id&&<Icon.Check size={18} color={C.blue}/>}
-          </button>
-        ))}
-      </div>
+        <input value={name} onChange={e=>setName(e.target.value)} placeholder="Course name e.g. Sunday Enduro" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"13px 14px",fontSize:15,color:C.text,background:C.surface,marginBottom:20}}/>
 
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-        <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase"}}>Select Stages ({selectedIds.length} selected)</div>
-        <div style={{display:"flex",background:C.surface,borderRadius:8,padding:2}}>
-          {["list","map"].map(m=>(
-            <button key={m} className="tap" onClick={()=>setPickMode(m)} style={{padding:"5px 10px",borderRadius:6,background:pickMode===m?"#fff":"none",border:"none",fontSize:11,fontWeight:pickMode===m?600:400,color:pickMode===m?C.text:C.muted,boxShadow:pickMode===m?"0 1px 3px rgba(0,0,0,0.1)":"none"}}>{m==="list"?"List":"Map"}</button>
+        <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase",marginBottom:10}}>Course Mode</div>
+        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
+          {COURSE_MODES.map(m=>(
+            <button key={m.id} className="tap" onClick={()=>setMode(m.id)} style={{display:"flex",alignItems:"flex-start",gap:12,background:mode===m.id?`${C.blue}10`:C.surface,border:`1.5px solid ${mode===m.id?C.blue:C.border}`,borderRadius:14,padding:"14px 16px",textAlign:"left",transition:"all 0.15s"}}>
+              <div style={{width:24,flexShrink:0,display:"flex",alignItems:"center"}}><m.Ic size={20} color={mode===m.id?C.blue:C.muted}/></div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:14,fontWeight:700,color:mode===m.id?C.blue:C.text,marginBottom:2}}>{m.label}</div>
+                <div style={{fontSize:12,color:C.muted,lineHeight:1.4}}>{m.desc}</div>
+              </div>
+              {mode===m.id&&<Icon.Check size={18} color={C.blue}/>}
+            </button>
           ))}
         </div>
-      </div>
-      {pickMode==="list"?stages.map(stage=>{
-        const on=selectedIds.includes(stage.id),pos=selectedIds.indexOf(stage.id);
-        return(
-          <button key={stage.id} className="tap" onClick={()=>toggle(stage.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,background:on?`${C.blue}0D`:C.surface,border:`1px solid ${on?C.blue:C.border}`,borderRadius:12,padding:"12px 14px",marginBottom:8,textAlign:"left",transition:"all 0.15s"}}>
-            <div style={{width:28,height:28,borderRadius:"50%",background:on?C.blue:"#E0E0E0",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:on?"white":"#999",flexShrink:0}}>{on?pos+1:"·"}</div>
-            <div style={{flex:1}}><div style={{fontSize:14,fontWeight:500,color:on?C.text:C.muted}}>{stage.name}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>{formatDist(haversine(stage.start,stage.finish))} · {stage.privacy}</div></div>
-            {on&&<Icon.Check size={18} color={C.blue}/>}
-          </button>
-        );
-      }):(
-        <div style={{marginBottom:16}}>
-          <div style={{textAlign:"center",fontSize:12,fontWeight:600,color:C.blue,background:`${C.blue}10`,borderRadius:8,padding:"8px",marginBottom:8}}>
-            {selectedIds.length===0?"Tap a stage to add it as Stage 1":`Tap a stage to add it as Stage ${selectedIds.length+1}`}
-          </div>
-          <div style={{width:"100%",height:420,borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`}}>
-            <CourseStagePickerMap stages={stages} selectedIds={selectedIds} onToggle={toggle}/>
+
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase"}}>Select Stages ({selectedIds.length} selected)</div>
+          <div style={{display:"flex",background:C.surface,borderRadius:8,padding:2}}>
+            {["list","map"].map(m=>(
+              <button key={m} className="tap" onClick={()=>setPickMode(m)} style={{padding:"5px 10px",borderRadius:6,background:pickMode===m?"#fff":"none",border:"none",fontSize:11,fontWeight:pickMode===m?600:400,color:pickMode===m?C.text:C.muted,boxShadow:pickMode===m?"0 1px 3px rgba(0,0,0,0.1)":"none"}}>{m==="list"?"List":"Map"}</button>
+            ))}
           </div>
         </div>
-      )}
 
-            {selectedIds.length>0&&(
-        <div style={{marginBottom:16}}>
-          <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase",marginBottom:10}}>Route Preview</div>
-          <CourseStagesMap courseStages={selectedIds.map(id=>stages.find(s=>s.id===id)).filter(Boolean)}/>
-        </div>
-      )}
-
-      {selectedIds.length>=2&&(
-        <div style={{marginTop:4,marginBottom:16}}>
-          <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase",marginBottom:10}}>Stage Order</div>
-          {selectedIds.map((id,i)=>{
-            const stage=stages.find(s=>s.id===id);if(!stage)return null;
-            return(
-              <div key={id} style={{display:"flex",alignItems:"center",gap:10,background:"white",border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",marginBottom:6}}>
-               <div style={{width:24,height:24,borderRadius:"50%",background:C.blue,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"white",flexShrink:0}}>{i+1}</div>
-                <div style={{flex:1,fontSize:13,fontWeight:500,color:C.text}}>{stage.name}</div>
-                <div style={{display:"flex",gap:4}}>
-                  <button className="tap" onClick={e=>{e.stopPropagation();moveUp(i);}} style={{width:28,height:28,borderRadius:6,background:C.surface,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon.ChevronUp size={14} color={i===0?C.mutedL:C.text}/></button>
-                  <button className="tap" onClick={e=>{e.stopPropagation();moveDown(i);}} style={{width:28,height:28,borderRadius:6,background:C.surface,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon.ChevronDown size={14} color={i===selectedIds.length-1?C.mutedL:C.text}/></button>
-                </div>
+        {pickMode==="list"?stages.map(stage=>{
+          const on=selectedIds.includes(stage.id),pos=selectedIds.indexOf(stage.id);
+          return(
+            <button key={stage.id} className="tap" onClick={()=>toggle(stage.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,background:on?`${C.blue}0D`:C.surface,border:`1px solid ${on?C.blue:C.border}`,borderRadius:12,padding:"12px 14px",marginBottom:8,textAlign:"left",transition:"all 0.15s"}}>
+              <div style={{width:28,height:28,borderRadius:"50%",background:on?C.blue:"#E0E0E0",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:on?"white":"#999",flexShrink:0}}>{on?pos+1:"·"}</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:14,fontWeight:500,color:on?C.text:C.muted}}>{stage.name}</div>
+                <div style={{fontSize:11,color:C.muted,marginTop:2}}>{formatDist(haversine(stage.start,stage.finish))} · {stage.privacy}</div>
               </div>
-            );
-          })}
-          {totalDist>0&&<div style={{textAlign:"center",fontSize:13,color:C.blue,fontWeight:600,marginTop:8}}>Total: {formatDist(totalDist)}</div>}
-        </div>
-      )}
+              {on&&<Icon.Check size={18} color={C.blue}/>}
+            </button>
+          );
+        }):(
+          <div style={{marginBottom:16}}>
+            <div style={{textAlign:"center",fontSize:12,fontWeight:600,color:C.blue,background:`${C.blue}10`,borderRadius:8,padding:"8px",marginBottom:8}}>
+              {selectedIds.length===0?"Tap a stage to add it as Stage 1":`Tap a stage to add it as Stage ${selectedIds.length+1}`}
+            </div>
+            <div style={{width:"100%",height:420,borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`}}>
+              <CourseStagePickerMap stages={stages} selectedIds={selectedIds} onToggle={toggle}/>
+            </div>
+          </div>
+        )}
 
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:20}}>
-               {[{val:"private",label:"Private"},{val:"group",label:"Group"},{val:"public",label:"Public"}].map(p=>(
-          <button key={p.val} className="tap" onClick={()=>setPrivacy(p.val)} style={{background:privacy===p.val?`${C.blue}10`:C.surface,border:`1.5px solid ${privacy===p.val?C.blue:C.border}`,borderRadius:10,padding:"11px 8px",textAlign:"center",fontSize:13,fontWeight:privacy===p.val?600:400,color:privacy===p.val?C.blue:C.text,transition:"all 0.15s"}}>{p.label}</button>
-        ))}
+        {selectedIds.length>0&&(
+          <div style={{marginBottom:16}}>
+            <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase",marginBottom:10}}>Route Preview</div>
+            <CourseStagesMap courseStages={selectedIds.map(id=>stages.find(s=>s.id===id)).filter(Boolean)}/>
+          </div>
+        )}
+
+        {selectedIds.length>=2&&(
+          <div style={{marginTop:4,marginBottom:16}}>
+            <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase",marginBottom:10}}>Stage Order</div>
+            {selectedIds.map((id,i)=>{
+              const stage=stages.find(s=>s.id===id);
+              if(!stage)return null;
+              return(
+                <div key={id} style={{display:"flex",alignItems:"center",gap:10,background:"white",border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",marginBottom:6}}>
+                  <div style={{width:24,height:24,borderRadius:"50%",background:C.blue,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"white",flexShrink:0}}>{i+1}</div>
+                  <div style={{flex:1,fontSize:13,fontWeight:500,color:C.text}}>{stage.name}</div>
+                  <div style={{display:"flex",gap:4}}>
+                    <button className="tap" onClick={e=>{e.stopPropagation();moveUp(i);}} style={{width:28,height:28,borderRadius:6,background:C.surface,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon.ChevronUp size={14} color={i===0?C.mutedL:C.text}/></button>
+                    <button className="tap" onClick={e=>{e.stopPropagation();moveDown(i);}} style={{width:28,height:28,borderRadius:6,background:C.surface,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon.ChevronDown size={14} color={i===selectedIds.length-1?C.mutedL:C.text}/></button>
+                  </div>
+                </div>
+              );
+            })}
+            {totalDist>0&&<div style={{textAlign:"center",fontSize:13,color:C.blue,fontWeight:600,marginTop:8}}>Total: {formatDist(totalDist)}</div>}
+          </div>
+        )}
+
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:20}}>
+          {[{val:"private",label:"Private"},{val:"group",label:"Group"},{val:"public",label:"Public"}].map(p=>(
+            <button key={p.val} className="tap" onClick={()=>setPrivacy(p.val)} style={{background:privacy===p.val?`${C.blue}10`:C.surface,border:`1.5px solid ${privacy===p.val?C.blue:C.border}`,borderRadius:10,padding:"11px 8px",textAlign:"center",fontSize:13,fontWeight:privacy===p.val?600:400,color:privacy===p.val?C.blue:C.text,transition:"all 0.15s"}}>{p.label}</button>
+          ))}
+        </div>
+
       </div>
 
-             </div>
       <div style={{padding:"12px 16px",borderTop:`1px solid ${C.border}`,flexShrink:0}}>
         <button className="tap" onClick={()=>canSave&&onSave({id:course?.id||Date.now(),name:name.trim(),stageIds:selectedIds,privacy,mode,times:{},bestPerStage:{}})} style={{width:"100%",background:canSave?"#fff":C.surface,border:`1.5px solid ${canSave?C.blue:C.border}`,borderRadius:12,padding:15,color:canSave?C.blue:C.muted,fontSize:15,fontWeight:700,transition:"all 0.2s"}}>
-        {canSave?(course?"Save Changes":`Create ${mode==="mashup"?"Mashup":"Race"} Course`):"Select at least 2 stages"}
-      </button>
+          {canSave?(course?"Save Changes":`Create ${mode==="mashup"?"Mashup":"Race"} Course`):"Select at least 2 stages"}
+        </button>
       </div>
     </div>
   );
