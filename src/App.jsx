@@ -296,8 +296,10 @@ function MapboxStyleMap({center,zoom,flyToTrigger,width:W,height:H,stages=[],cou
   const mapContainer=useRef(null);
   const map=useRef(null);
   const markersRef=useRef([]);
-  const userMarkerRef=useRef(null);
+    const userMarkerRef=useRef(null);
   const userMarkerInnerRef=useRef(null);
+  const onStagePressRef=useRef(onStagePress);
+  useEffect(()=>{onStagePressRef.current=onStagePress;},[onStagePress]);
 
   useEffect(()=>{
     if(map.current)return;
@@ -382,10 +384,10 @@ map.current.addImage('stage-pin',ctx.getImageData(0,0,24,24));
               if(midpointFeatures.length>0){
           map.current.addSource('stage-midpoints',{type:'geojson',data:{type:'FeatureCollection',features:midpointFeatures}});
           map.current.addLayer({id:'stage-midpoints-icon',type:'symbol',source:'stage-midpoints',layout:{'icon-image':'stage-pin','icon-size':['interpolate',['linear'],['zoom'],10,0.35,14,0.55,18,0.85],'icon-anchor':'center','icon-allow-overlap':true,'text-field':['get','name'],'text-size':['interpolate',['linear'],['zoom'],10,9,14,12,18,15],'text-offset':[1.1,0],'text-anchor':'left','text-allow-overlap':true},paint:{'text-color':'#1A1A1A','text-halo-color':'#ffffff','text-halo-width':1.4}});
-          map.current.on('click','stage-midpoints-icon',e=>{
+                    map.current.on('click','stage-midpoints-icon',e=>{
             const stageId=e.features[0].properties.stageId;
             const stage=stages.find(s=>String(s.id)===stageId);
-            if(stage&&onStagePress)onStagePress(stage);
+            if(stage&&onStagePressRef.current)onStagePressRef.current(stage);
           });
         }
         // User dot (direction-aware)
