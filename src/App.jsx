@@ -943,6 +943,117 @@ return(
 </div>
 );
 }
+
+function GroupRow({group,onPress}){
+  return(
+    <button className="tap" onClick={()=>onPress(group)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"14px 16px",borderBottom:`1px solid ${C.border}`,background:"white",textAlign:"left"}}>
+      <div style={{width:40,height:40,borderRadius:10,background:`${C.blue}12`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.Users size={20} color={C.blue}/></div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:14,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{group.name}</div>
+        <div style={{fontSize:12,color:C.muted,marginTop:2}}>{group.memberCount} members</div>
+      </div>
+      <Icon.ChevronRight size={16} color={C.mutedL}/>
+    </button>
+  );
+}
+function GroupsScreen({user,onBack,onOpenGroup}){
+  const [groups,setGroups]=useState(null);
+  const [view,setView]=useState('list');
+  const [newName,setNewName]=useState("");
+  const [creating,setCreating]=useState(false);
+  const [joinCode,setJoinCode]=useState("");
+  const [joinPreview,setJoinPreview]=useState(null);
+  const [joinError,setJoinError]=useState("");
+  const [joining,setJoining]=useState(false);
+
+  const loadGroups=()=>{
+    supabase.from('groups').select('id,name,code,created_by,group_members(count)').then(({data,error})=>{
+      if(error){console.log(error);setGroups([]);return;}
+      setGroups((data||[]).map(g=>({id:g.id,name:g.name,code:g.code,created_by:g.created_by,memberCount:g.group_members?.[0]?.count||0})));
+    });
+  };
+  useEffect(()=>{loadGroups();},[]);
+
+  const createGroup=async()=>{
+    const trimmed=newName.trim();
+    if(!trimmed)return;
+    setCreating(true);
+    const code=Math.random().toString(36).substring(2,8).toUpperCase();
+    const{data,error}=await supabase.from('groups').insert({name:trimmed,code,created_by:user.id}).select().single();
+    if(error){alert(error.message);setCreating(false);return;}
+    const{error:memberError}=await supabase.from('group_members').insert({group_id:data.id,user_id:user.id});
+    if(memberError){alert(memberError.message);setCreating(false);return;}
+    setCreating(false);setNewName("");setView('list');loadGroups();
+  };
+
+  const lookupCode=async()=>{
+    const code=joinCode.trim().toUpperCase();
+    if(code.length!==6)return;
+    setJoinError("");
+    const{data,error}=await supabase.rpc('preview_group_by_code',{p_code:code});
+    if(error||!data||data.length===0){setJoinError("No group found with that code");setJoinPreview(null);return;}
+    setJoinPreview(data[0]);
+  };
+
+  const confirmJoin=async()=>{
+    setJoining(true);
+    const{error}=await supabase.rpc('join_group_by_code',{p_code:joinCode.trim().toUpperCase()});
+    setJoining(false);
+    if(error){alert(error.message);return;}
+    setJoinCode("");setJoinPreview(null);setView('list');loadGroups();
+  };
+
+  return(
+    <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
+      <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+        <button className="tap" onClick={()=>view==='list'?onBack():setView('list')} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
+        <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>{view==='list'?'Groups':view==='create'?'New Group':'Join Group'}</div>
+        {view==='list'&&<button className="tap" onClick={()=>setView('create')} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"7px 12px",color:C.blue,fontSize:13,fontWeight:600}}><Icon.Plus size={14} color={C.blue}/>New</button>}
+      </div>
+      <div style={{flex:1,overflowY:"auto"}}>
+        {view==='list'&&(groups===null?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>:
+          groups.length===0?(
+            <div style={{textAlign:"center",padding:"48px 20px",color:C.muted}}>
+              <Icon.Users size={36} color={C.mutedL}/>
+              <div style={{fontSize:15,fontWeight:500,marginBottom:4,marginTop:12}}>No groups yet</div>
+              <div style={{fontSize:13,color:C.mutedL,marginBottom:16}}>Create one or join with a code</div>
+            </div>
+          ):groups.map(g=><GroupRow key={g.id} group={g} onPress={onOpenGroup}/>))}
+        {view==='list'&&(
+          <div style={{padding:"16px"}}>
+            <button className="tap" onClick={()=>setView('join')} style={{width:"100%",background:C.surface,border:`1px dashed ${C.border}`,borderRadius:10,padding:12,fontSize:13,color:C.muted,fontWeight:500}}>Have a code? Join a group</button>
+          </div>
+        )}
+        {view==='create'&&(
+          <div style={{padding:"20px 16px"}}>
+            <input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="Group name e.g. Sunday Grinders" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"13px 14px",fontSize:15,color:C.text,background:C.surface,marginBottom:16,boxSizing:"border-box"}}/>
+            <button className="tap" onClick={createGroup} disabled={!newName.trim()||creating} style={{width:"100%",background:newName.trim()?C.blue:C.surface,border:"none",borderRadius:12,padding:15,color:newName.trim()?"#fff":C.muted,fontSize:15,fontWeight:700}}>{creating?"Creating…":"Create Group"}</button>
+          </div>
+        )}
+        {view==='join'&&(
+          <div style={{padding:"20px 16px"}}>
+            <div style={{fontSize:13,color:C.muted,marginBottom:12}}>Enter the 6-character code your mate shared</div>
+            <input value={joinCode} onChange={e=>{setJoinCode(e.target.value.toUpperCase());setJoinPreview(null);setJoinError("");}} placeholder="ABC123" maxLength={6} style={{width:"100%",border:`1.5px solid ${joinCode.length===6?C.blue:C.border}`,borderRadius:12,padding:"18px",fontSize:28,fontWeight:800,color:C.blue,textAlign:"center",letterSpacing:6,background:C.surface,marginBottom:14,boxSizing:"border-box"}}/>
+            {joinError&&<div style={{fontSize:13,color:C.red,textAlign:"center",marginBottom:14}}>{joinError}</div>}
+            {!joinPreview?(
+              <button className="tap" onClick={lookupCode} disabled={joinCode.length!==6} style={{width:"100%",background:joinCode.length===6?C.blue:C.surface,border:"none",borderRadius:12,padding:15,color:joinCode.length===6?"#fff":C.muted,fontSize:15,fontWeight:700}}>Find Group</button>
+            ):(
+              <>
+                <div style={{background:C.surface,borderRadius:12,padding:"14px",border:`1px solid ${C.border}`,marginBottom:14,textAlign:"center"}}>
+                  <div style={{fontSize:15,fontWeight:700,color:C.text}}>{joinPreview.name}</div>
+                  <div style={{fontSize:12,color:C.muted,marginTop:2}}>{joinPreview.member_count} members</div>
+                </div>
+                <button className="tap" onClick={confirmJoin} disabled={joining} style={{width:"100%",background:C.blue,border:"none",borderRadius:12,padding:15,color:"#fff",fontSize:15,fontWeight:700}}>{joining?"Joining…":"Join Group"}</button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
 function StatisticsScreen({stages,courses,user,onBack}){
   const [view,setView]=useState('hub');
   const titles={hub:"Statistics",stages:"Stages",courses:"Courses"};
