@@ -1188,6 +1188,7 @@ function GroupDetailScreen({group,user,onBack,onOpenMap}){
             ))}
           </>
         )}
+                <button className="tap" onClick={onOpenMap} style={{width:"100%",background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"11px 16px",color:C.blue,fontSize:13,fontWeight:600,marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><Icon.Map size={15} color={C.blue}/>Group Map</button>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:C.surface,border:`1px dashed ${C.border}`,borderRadius:10,padding:"12px 14px",marginTop:8}}>
           <div>
             <div style={{fontSize:10,fontWeight:700,color:C.muted,letterSpacing:0.6,textTransform:"uppercase"}}>Group code</div>
