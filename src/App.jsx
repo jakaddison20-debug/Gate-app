@@ -1200,6 +1200,39 @@ function GroupDetailScreen({group,user,onBack}){
   );
 }
 
+function GroupMapScreen({group,stages,user,onBack,onAddStages}){
+  const [groupStageIds,setGroupStageIds]=useState(null);
+  const isCreator=group.created_by===user.id;
+  useEffect(()=>{
+    supabase.from('group_stages').select('stage_id').eq('group_id',group.id).then(({data})=>{
+      setGroupStageIds((data||[]).map(s=>s.stage_id));
+    });
+  },[group.id]);
+  const groupStages=groupStageIds?stages.filter(s=>groupStageIds.includes(s.id)):[];
+  return(
+    <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
+      <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+        <button className="tap" onClick={onBack} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
+        <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>{group.name} · Map</div>
+        {isCreator&&<button className="tap" onClick={onAddStages} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"7px 12px",color:C.blue,fontSize:13,fontWeight:600}}><Icon.Plus size={14} color={C.blue}/>Add</button>}
+      </div>
+      <div style={{flex:1,position:"relative"}}>
+        {groupStageIds===null?(
+          <div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>
+        ):groupStages.length===0?(
+          <div style={{padding:"48px 20px",textAlign:"center",color:C.muted}}>
+            <Icon.Map size={32} color={C.mutedL}/>
+            <div style={{fontSize:15,fontWeight:500,marginTop:12,marginBottom:4,color:C.text}}>No stages added yet</div>
+            <div style={{fontSize:13,color:C.mutedL}}>{isCreator?"Tap Add to pick stages from the main map":"Ask the group creator to add stages"}</div>
+          </div>
+        ):(
+          <MapboxStyleMap center={groupStages[0].start} zoom={12} stages={groupStages} onStagePress={s=>alert(`${s.name}\n${formatDist(haversine(s.start,s.finish))}`)}/>
+        )}
+      </div>
+    </div>
+  );
+}
+
 
 function StatisticsScreen({stages,courses,user,onBack}){
   const [view,setView]=useState('hub');
