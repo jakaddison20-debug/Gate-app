@@ -2245,7 +2245,7 @@ const shareDayRecap=()=>{const stageIds=[...new Set(todayStageTimes.map(t=>t.sta
     <div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif"}}>
       <style>{STYLES}</style>
       <div style={{height:44,background:"#fff"}}/>
-      <SettingsScreen settings={settings} onSave={setSettings} 
+           <SettingsScreen settings={settings} onSave={saveSettings} 
 onBack={()=>setShowSettings(false)}/>
 </div>
 );
