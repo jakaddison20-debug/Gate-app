@@ -1054,6 +1054,151 @@ function GroupsScreen({user,onBack,onOpenGroup}){
 }
 
 
+function GroupDetailScreen({group,user,onBack}){
+  const [members,setMembers]=useState(null);
+  const [groupStageIds,setGroupStageIds]=useState(null);
+  const [times,setTimes]=useState(null);
+  const [subView,setSubView]=useState(null);
+
+  useEffect(()=>{
+    supabase.from('group_members').select('user_id,profiles(display_name,avatar_url)').eq('group_id',group.id).then(({data})=>{
+      setMembers((data||[]).map(m=>({user_id:m.user_id,name:m.profiles?.display_name||'Rider',avatarUrl:m.profiles?.avatar_url||null})));
+    });
+    supabase.from('group_stages').select('stage_id').eq('group_id',group.id).then(({data})=>{
+      setGroupStageIds((data||[]).map(s=>s.stage_id));
+    });
+  },[group.id]);
+
+  useEffect(()=>{
+    if(!members||!groupStageIds)return;
+    if(groupStageIds.length===0||members.length===0){setTimes([]);return;}
+    const memberIds=members.map(m=>m.user_id);
+    supabase.from('stage_times').select('stage_id,user_id,time_ms').in('stage_id',groupStageIds).in('user_id',memberIds).then(({data})=>{
+      setTimes(data||[]);
+    });
+  },[members,groupStageIds]);
+
+  const{stagesRidden,records,fastest}=useMemo(()=>{
+    if(!members||!times)return{stagesRidden:[],records:[],fastest:[]};
+    const bestMap={};
+    times.forEach(t=>{
+      const key=t.stage_id+'_'+t.user_id;
+      if(!(key in bestMap)||t.time_ms<bestMap[key])bestMap[key]=t.time_ms;
+    });
+    const stagesCount={};
+    Object.keys(bestMap).forEach(key=>{
+      const userId=key.split('_')[1];
+      stagesCount[userId]=(stagesCount[userId]||0)+1;
+    });
+    const bestPerStage={};
+    Object.keys(bestMap).forEach(key=>{
+      const idx=key.lastIndexOf('_');
+      const stageId=key.substring(0,idx),userId=key.substring(idx+1);
+      if(!bestPerStage[stageId]||bestMap[key]<bestPerStage[stageId].time){bestPerStage[stageId]={userId,time:bestMap[key]};}
+    });
+    const recordsCount={};
+    Object.values(bestPerStage).forEach(({userId})=>{recordsCount[userId]=(recordsCount[userId]||0)+1;});
+    const winsCount={};
+    (groupStageIds||[]).forEach(stageId=>{
+      const entries=members.map(m=>({userId:m.user_id,time:bestMap[stageId+'_'+m.user_id]})).filter(e=>e.time!==undefined);
+      for(let i=0;i<entries.length;i++){
+        for(let j=i+1;j<entries.length;j++){
+          const winner=entries[i].time<entries[j].time?entries[i].userId:entries[j].userId;
+          winsCount[winner]=(winsCount[winner]||0)+1;
+        }
+      }
+    });
+    const toRanked=(countMap)=>members.map(m=>({...m,value:countMap[m.user_id]||0})).filter(m=>m.value>0).sort((a,b)=>b.value-a.value);
+    return{stagesRidden:toRanked(stagesCount),records:toRanked(recordsCount),fastest:toRanked(winsCount)};
+  },[members,times,groupStageIds]);
+
+  const shareGroup=()=>{
+    const shareText=`Join my GATE group "${group.name}" — code: ${group.code}`;
+    if(navigator.share){navigator.share({title:group.name,text:shareText}).catch(()=>{});}
+    else if(navigator.clipboard){navigator.clipboard.writeText(group.code).then(()=>alert('Code copied to clipboard'));}
+  };
+  const copyCode=()=>{if(navigator.clipboard)navigator.clipboard.writeText(group.code).then(()=>alert('Code copied'));};
+
+  const loading=members===null||groupStageIds===null||times===null;
+  const noStages=groupStageIds!==null&&groupStageIds.length===0;
+
+  if(subView){
+    const dataMap={stages:{title:'Stages ridden',data:stagesRidden,fmt:v=>v},records:{title:'Records',data:records,fmt:v=>v},fastest:{title:'Fastest overall',data:fastest,fmt:v=>`${v} win${v===1?'':'s'}`}};
+    const cfg=dataMap[subView];
+    return(
+      <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
+        <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+          <button className="tap" onClick={()=>setSubView(null)} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
+          <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>{cfg.title}</div>
+        </div>
+        <div style={{flex:1,overflowY:"auto",padding:"16px"}}>
+          {cfg.data.length===0?<div style={{textAlign:"center",padding:"40px 20px",color:C.muted,fontSize:13}}>Nothing here yet</div>:cfg.data.map((m,i)=>(
+            <div key={m.user_id} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 12px",background:m.user_id===user.id?C.orangeL:"white",borderRadius:10,marginBottom:6,border:`1px solid ${m.user_id===user.id?C.orange:C.border}`}}>
+              <PositionBadge pos={i+1} size={30}/>
+              <Avatar size={30} url={m.avatarUrl}/>
+              <div style={{flex:1,fontSize:13,fontWeight:m.user_id===user.id?700:500,color:C.text}}>{m.user_id===user.id?"You":m.name}</div>
+              <div style={{fontSize:14,fontWeight:700,color:m.user_id===user.id?C.orange:C.text}}>{cfg.fmt(m.value)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return(
+    <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
+      <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+        <button className="tap" onClick={onBack} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:17,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{group.name}</div>
+          <div style={{fontSize:12,color:C.muted}}>{members?members.length:'…'} members</div>
+        </div>
+        <button className="tap" onClick={shareGroup} style={{background:"none",border:"none",padding:6}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.6" x2="15.4" y2="6.4"/><line x1="8.6" y1="13.4" x2="15.4" y2="17.6"/></svg></button>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"16px"}}>
+        {loading?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>:noStages?(
+          <div style={{textAlign:"center",padding:"32px 20px",color:C.muted}}>
+            <Icon.Flag size={32} color={C.mutedL}/>
+            <div style={{fontSize:15,fontWeight:500,marginBottom:4,marginTop:12,color:C.text}}>No stages in this group yet</div>
+            <div style={{fontSize:13,color:C.mutedL}}>Leaderboards fill in once stages are added</div>
+          </div>
+        ):(
+          <>
+            {[{key:'stages',title:'Stages ridden',data:stagesRidden,fmt:v=>v},{key:'records',title:'Records',data:records,fmt:v=>v},{key:'fastest',title:'Fastest overall',data:fastest,fmt:v=>`${v} win${v===1?'':'s'}`}].map(section=>(
+              <div key={section.key} style={{marginBottom:20}}>
+                <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>{section.title}</div>
+                {section.data.length===0?(
+                  <div style={{fontSize:13,color:C.mutedL,padding:"8px 0"}}>Nothing here yet</div>
+                ):(
+                  <>
+                    {section.data.slice(0,3).map((m,i)=>(
+                      <div key={m.user_id} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 12px",background:m.user_id===user.id?C.orangeL:"white",borderRadius:10,marginBottom:6,border:`1px solid ${m.user_id===user.id?C.orange:C.border}`}}>
+                        <PositionBadge pos={i+1} size={30}/>
+                        <Avatar size={30} url={m.avatarUrl}/>
+                        <div style={{flex:1,fontSize:13,fontWeight:m.user_id===user.id?700:500,color:C.text}}>{m.user_id===user.id?"You":m.name}</div>
+                        <div style={{fontSize:14,fontWeight:700,color:m.user_id===user.id?C.orange:C.text}}>{section.fmt(m.value)}</div>
+                      </div>
+                    ))}
+                    {section.data.length>3&&<button className="tap" onClick={()=>setSubView(section.key)} style={{background:"none",border:"none",color:C.blue,fontSize:12,fontWeight:600,padding:"4px 0"}}>See more →</button>}
+                  </>
+                )}
+              </div>
+            ))}
+          </>
+        )}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:C.surface,border:`1px dashed ${C.border}`,borderRadius:10,padding:"12px 14px",marginTop:8}}>
+          <div>
+            <div style={{fontSize:10,fontWeight:700,color:C.muted,letterSpacing:0.6,textTransform:"uppercase"}}>Group code</div>
+            <div style={{fontSize:16,fontWeight:800,color:C.text,letterSpacing:2,marginTop:2}}>{group.code}</div>
+          </div>
+          <button className="tap" onClick={copyCode} style={{background:"none",border:"none",padding:6}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function StatisticsScreen({stages,courses,user,onBack}){
   const [view,setView]=useState('hub');
   const titles={hub:"Statistics",stages:"Stages",courses:"Courses"};
