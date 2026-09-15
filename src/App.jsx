@@ -587,7 +587,6 @@ function StageProgressCard({stage,user,lb,myAttempts}){
   const [topSeries,setTopSeries]=useState(null);
   const [tappedIdx,setTappedIdx]=useState(null);
 
-  const myPB=useMemo(()=>pbSeriesFromRuns(myAttempts||[]),[myAttempts]);
   const top5Ids=useMemo(()=>(lb||[]).slice(0,5).map(e=>e.user_id).join(','),[lb]);
 
   useEffect(()=>{
@@ -605,29 +604,73 @@ function StageProgressCard({stage,user,lb,myAttempts}){
     });
   },[top5Ids,stage.id]);
 
-  if(myPB.length===0&&(!lb||lb.length===0))return null;
+  if((!myAttempts||myAttempts.length===0)&&(!lb||lb.length===0))return null;
 
-  const seriesForScale=view==='you'?[{user_id:user?.id,name:'You',color:C.orange,points:myPB}]:(topSeries||[]);
+  const Header=(
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+      <div style={{fontSize:14,fontWeight:700,color:C.text}}>Progress</div>
+      <SegControl options={[{val:'you',label:'You'},{val:'top5',label:'Top 5'}]} value={view} onChange={v=>{setView(v);setTappedIdx(null);}}/>
+    </div>
+  );
 
-  if(view==='top5'&&topSeries===null)return(
-    <div style={{margin:"16px 16px 0",background:"#fff",borderRadius:12,padding:"14px",border:`1px solid ${C.border}`}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-        <div style={{fontSize:14,fontWeight:700,color:C.text}}>Progress</div>
-        <SegControl options={[{val:'you',label:'You'},{val:'top5',label:'Top 5'}]} value={view} onChange={v=>{setView(v);setTappedIdx(null);}}/>
+  if(view==='you'){
+    if(!myAttempts||myAttempts.length<2)return(
+      <div style={{margin:"16px 16px 0",background:"#fff",borderRadius:12,padding:"14px",border:`1px solid ${C.border}`}}>
+        {Header}
+        <div style={{textAlign:"center",padding:"20px",color:C.mutedL,fontSize:13}}>Ride this stage again to see your progress</div>
       </div>
+    );
+    const W=320,H=100,PAD=10;
+    const times=myAttempts.map(a=>a.time_ms);
+    const min=Math.min(...times),max=Math.max(...times);
+    const range=max-min||1;
+    const pts=myAttempts.map((a,i)=>({
+      x:PAD+(i/((myAttempts.length-1)||1))*(W-PAD*2),
+      y:PAD+((a.time_ms-min)/range)*(H-PAD*2),
+      time_ms:a.time_ms,
+      date:a.created_at
+    }));
+    const path=pts.map((p,i)=>`${i===0?'M':'L'}${p.x},${p.y}`).join(' ');
+    return(
+      <div style={{margin:"16px 16px 0",background:"#fff",borderRadius:12,padding:"14px",border:`1px solid ${C.border}`}}>
+        {Header}
+        <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{overflow:"visible"}}>
+          <path d={path} fill="none" stroke={C.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          {pts.map((p,i)=>{
+            const active=tappedIdx===i;
+            return(
+              <g key={i}>
+                <circle cx={p.x} cy={p.y} r={active?6:i===pts.length-1?4:2.5} fill={active||i===pts.length-1?C.blue:"#fff"} stroke={C.blue} strokeWidth="1.5"/>
+                <circle cx={p.x} cy={p.y} r="10" fill="transparent" style={{cursor:"pointer"}} onClick={()=>setTappedIdx(active?null:i)}/>
+              </g>
+            );
+          })}
+        </svg>
+        <div style={{marginTop:10,padding:"10px 12px",background:C.surface,borderRadius:8,borderLeft:`3px solid ${C.blue}`,fontSize:12,color:tappedIdx!==null?C.text:C.mutedL}}>
+          {tappedIdx!==null
+            ?<>{new Date(pts[tappedIdx].date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})} &middot; <span style={{fontWeight:800}}>{formatTime(pts[tappedIdx].time_ms)}</span></>
+            :"Tap a point to see that run"}
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:8}}>
+          <div style={{fontSize:10,color:C.mutedL}}>First: {formatTime(myAttempts[0].time_ms)}</div>
+          <div style={{fontSize:10,color:C.mutedL}}>Latest: {formatTime(myAttempts[myAttempts.length-1].time_ms)}</div>
+        </div>
+      </div>
+    );
+  }
+
+  if(topSeries===null)return(
+    <div style={{margin:"16px 16px 0",background:"#fff",borderRadius:12,padding:"14px",border:`1px solid ${C.border}`}}>
+      {Header}
       <div style={{textAlign:"center",padding:"20px",color:C.muted,fontSize:13}}>Loading…</div>
     </div>
   );
 
-  const allPoints=seriesForScale.flatMap(s=>s.points);
-
+  const allPoints=topSeries.flatMap(s=>s.points);
   if(allPoints.length===0)return(
     <div style={{margin:"16px 16px 0",background:"#fff",borderRadius:12,padding:"14px",border:`1px solid ${C.border}`}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-        <div style={{fontSize:14,fontWeight:700,color:C.text}}>Progress</div>
-        <SegControl options={[{val:'you',label:'You'},{val:'top5',label:'Top 5'}]} value={view} onChange={v=>{setView(v);setTappedIdx(null);}}/>
-      </div>
-      <div style={{textAlign:"center",padding:"20px",color:C.mutedL,fontSize:13}}>{view==='you'?"Ride this stage again to see your progress":"Nothing here yet"}</div>
+      {Header}
+      <div style={{textAlign:"center",padding:"20px",color:C.mutedL,fontSize:13}}>Nothing here yet</div>
     </div>
   );
 
@@ -650,60 +693,39 @@ function StageProgressCard({stage,user,lb,myAttempts}){
 
   const tickCount=6;
   const ticks=Array.from({length:tickCount},(_,i)=>minDate+(maxDate-minDate)*(i/(tickCount-1)));
-
-  const rightLabels=view==='top5'?resolveLabelCollisions(seriesForScale.filter(s=>s.points.length>0).map(s=>({key:s.user_id,y:yScale(s.points[s.points.length-1].time_ms),color:s.color,label:formatTime(s.points[s.points.length-1].time_ms),isYou:s.name==='You'}))):[];
-  const leftLabels=view==='top5'?resolveLabelCollisions(seriesForScale.filter(s=>s.points.length>0).map(s=>({key:s.user_id+'_l',y:yScale(s.points[0].time_ms),color:s.color,label:s.name}))):[];
+  const rightLabels=resolveLabelCollisions(topSeries.filter(s=>s.points.length>0).map(s=>({key:s.user_id,y:yScale(s.points[s.points.length-1].time_ms),color:s.color,label:formatTime(s.points[s.points.length-1].time_ms),isYou:s.name==='You'})));
+  const leftLabels=resolveLabelCollisions(topSeries.filter(s=>s.points.length>0).map(s=>({key:s.user_id+'_l',y:yScale(s.points[0].time_ms),color:s.color,label:s.name})));
 
   return(
     <div style={{margin:"16px 16px 0",background:"#fff",borderRadius:12,padding:"14px",border:`1px solid ${C.border}`}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-        <div style={{fontSize:14,fontWeight:700,color:C.text}}>Progress</div>
-        <SegControl options={[{val:'you',label:'You'},{val:'top5',label:'Top 5'}]} value={view} onChange={v=>{setView(v);setTappedIdx(null);}}/>
-      </div>
+      {Header}
       <svg viewBox="0 0 340 130" width="100%" height="130">
         {ticks.map((t,i)=>(
           <line key={i} x1={xScale(t)} y1={PROGRESS_PLOT_TOP} x2={xScale(t)} y2={PROGRESS_PLOT_BOTTOM} stroke="#EDEDED" strokeWidth="1" strokeDasharray="2,3"/>
         ))}
-        {seriesForScale.map(s=>s.points.length>0&&(
-          <path key={s.user_id} d={buildPath(s.points)} fill="none" stroke={s.color} strokeWidth={view==='you'||s.name==='You'?2.5:1.5} strokeLinecap="round" strokeLinejoin="round" opacity={view==='you'||s.name==='You'?1:0.85}/>
+        {topSeries.map(s=>s.points.length>0&&(
+          <path key={s.user_id} d={buildPath(s.points)} fill="none" stroke={s.color} strokeWidth={s.name==='You'?2.5:1.5} strokeLinecap="round" strokeLinejoin="round" opacity={s.name==='You'?1:0.85}/>
         ))}
-        {view==='you'&&myPB.map((p,i)=>{
-          const cx=xScale(p.date),cy=yScale(p.time_ms);
-          const active=tappedIdx===i;
-          return(
-            <g key={i}>
-              <circle cx={cx} cy={cy} r="6" fill="#fff"/>
-              <circle cx={cx} cy={cy} r={active?5:4} fill={C.orange} stroke={active?C.text:"none"} strokeWidth={active?1.5:0}/>
-              <circle cx={cx} cy={cy} r="12" fill="transparent" style={{cursor:"pointer"}} onClick={()=>setTappedIdx(active?null:i)}/>
-            </g>
-          );
-        })}
-        {view==='top5'&&seriesForScale.map(s=>s.points.length>0&&(
+        {topSeries.map(s=>s.points.length>0&&(
           <circle key={s.user_id+'_dot'} cx={PROGRESS_PLOT_RIGHT} cy={yScale(s.points[s.points.length-1].time_ms)} r={s.name==='You'?3:2.5} fill={s.color}/>
         ))}
-        {view==='top5'&&rightLabels.map(l=>(
+        {rightLabels.map(l=>(
           <g key={l.key}>
             {Math.abs(l.labelY-l.y)>3&&<line x1={PROGRESS_PLOT_RIGHT+1} y1={l.y} x2={PROGRESS_PLOT_RIGHT+4} y2={l.labelY} stroke={l.color} strokeWidth="1" opacity="0.4"/>}
             <text x={PROGRESS_PLOT_RIGHT+6} y={l.labelY+3} fontSize={l.isYou?11:10} fontWeight={l.isYou?800:700} fill={l.color}>{l.label}</text>
           </g>
         ))}
-        {view==='top5'&&leftLabels.map(l=>(
+        {leftLabels.map(l=>(
           <text key={l.key} x={PROGRESS_PLOT_LEFT-8} y={l.labelY+4} fontSize="11" fontWeight={l.label==='You'?700:500} fill={l.color} textAnchor="end">{l.label}</text>
         ))}
         {ticks.map((t,i)=>(
           <text key={'tick'+i} x={xScale(t)} y={122} fontSize="9" fill="#C4C4C4" textAnchor={i===0?"start":i===ticks.length-1?"end":"middle"}>{new Date(t).toLocaleDateString('en-GB',{month:'short'})}</text>
         ))}
       </svg>
-      {view==='you'&&(
-        <div style={{marginTop:10,padding:"10px 12px",background:C.surface,borderRadius:8,borderLeft:`3px solid ${C.orange}`,fontSize:12,color:tappedIdx!==null?C.text:C.mutedL}}>
-          {tappedIdx!==null
-            ?<><span style={{color:C.orange,fontWeight:700}}>New record</span> &middot; {new Date(myPB[tappedIdx].date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})} &middot; <span style={{fontWeight:800}}>{formatTime(myPB[tappedIdx].time_ms)}</span></>
-            :"Tap a point to see that record"}
-        </div>
-      )}
     </div>
   );
 }
+
 
 // ── Stage Detail Sheet ────────────────────────────────────────────────────────
     function StageDetailSheet({stage,onClose,onRace,onOpenSections,user,onRename}){
