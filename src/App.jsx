@@ -2540,11 +2540,13 @@ if(showBikeSetup)return(
   if(showGroups)return(
     <div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
       <style>{STYLES}</style>
-      <GroupsScreen user={user} onBack={()=>setShowGroups(false)} onOpenGroup={g=>alert(`Open ${g.name} — group detail screen coming next`)}/>
+      {activeGroup
+        ?<GroupDetailScreen group={activeGroup} user={user} onBack={()=>setActiveGroup(null)}/>
+        :<GroupsScreen user={user} onBack={()=>setShowGroups(false)} onOpenGroup={g=>setActiveGroup(g)}/>}
     </div>
   );
 
-  
+
   if(activeRace)return(
     <div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif"}}>
       <style>{STYLES}</style>
