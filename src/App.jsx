@@ -1056,7 +1056,7 @@ function GroupsScreen({user,onBack,onOpenGroup}){
 }
 
 
-function GroupDetailScreen({group,user,onBack}){
+function GroupDetailScreen({group,user,onBack,onOpenMap}){
   const [members,setMembers]=useState(null);
   const [groupStageIds,setGroupStageIds]=useState(null);
   const [times,setTimes]=useState(null);
