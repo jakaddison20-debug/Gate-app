@@ -2582,12 +2582,21 @@ if(showBikeSetup)return(
     </div>
   );
 
-  // Groups screen overlay
+    // Groups screen overlay
   if(showGroups)return(
     <div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
       <style>{STYLES}</style>
       {activeGroup
-        ?<GroupDetailScreen group={activeGroup} user={user} onBack={()=>setActiveGroup(null)}/>
+        ?(groupMapOpen
+            ?<GroupMapScreen group={activeGroup} stages={stages} user={user} onBack={()=>setGroupMapOpen(false)} onAddStages={()=>{
+                const g=activeGroup;
+                setPickingGroup(g);
+                supabase.from('group_stages').select('stage_id').eq('group_id',g.id).then(({data})=>{setPickingExistingIds((data||[]).map(s=>s.stage_id));});
+                setGroupMapOpen(false);
+                setShowGroups(false);
+                setTab('map');
+              }}/>
+            :<GroupDetailScreen group={activeGroup} user={user} onBack={()=>setActiveGroup(null)} onOpenMap={()=>setGroupMapOpen(true)}/>)
         :<GroupsScreen user={user} onBack={()=>setShowGroups(false)} onOpenGroup={g=>setActiveGroup(g)}/>}
     </div>
   );
