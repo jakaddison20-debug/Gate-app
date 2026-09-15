@@ -2383,6 +2383,9 @@ export default function App(){
   const [showProgress,setShowProgress]=useState(false);
   const [showGroups,setShowGroups]=useState(false);
   const [activeGroup,setActiveGroup]=useState(null);
+  const [groupMapOpen,setGroupMapOpen]=useState(false);
+  const [pickingGroup,setPickingGroup]=useState(null);
+  const [pickingExistingIds,setPickingExistingIds]=useState([]);
   const [showBikeSetup,setShowBikeSetup]=useState(false);
   const [settings,setSettings]=useState(DEFAULT_SETTINGS);
   const saveSettings=async(s)=>{setSettings(s);if(!user)return;await supabase.from('profiles').update({app_settings:{units:s.units,gpsAccuracy:s.gpsAccuracy,notifications:s.notifications,privacy:s.privacy}}).eq('id',user.id);};
