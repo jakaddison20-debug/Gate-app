@@ -2390,6 +2390,13 @@ export default function App(){
   const [settings,setSettings]=useState(DEFAULT_SETTINGS);
   const saveSettings=async(s)=>{setSettings(s);if(!user)return;await supabase.from('profiles').update({app_settings:{units:s.units,gpsAccuracy:s.gpsAccuracy,notifications:s.notifications,privacy:s.privacy}}).eq('id',user.id);};
   const [user,setUser]=useState(null);
+  const handlePickStage=async(s)=>{
+  if(pickingExistingIds.includes(s.id)){alert(`${s.name} is already in this group`);return;}
+  if(!window.confirm(`Add "${s.name}" to ${pickingGroup.name}?`))return;
+  const{error}=await supabase.from('group_stages').insert({group_id:pickingGroup.id,stage_id:s.id,added_by:user.id});
+  if(error){alert(error.message);return;}
+  setPickingExistingIds(prev=>[...prev,s.id]);
+  };
   const [showAuth,setShowAuth]=useState(false);
   const [refreshTick,setRefreshTick]=useState(0);
   useEffect(()=>{
