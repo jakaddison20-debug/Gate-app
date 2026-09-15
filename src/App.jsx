@@ -2298,7 +2298,7 @@ if(showBikeSetup)return(
           <div style={{padding:"12px 16px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:`1px solid ${C.border}`,position:"sticky",top:0,background:"#fff",zIndex:5}}>
             <div style={{fontSize:22,fontWeight:800,color:C.text}}>Feed</div>
             <div style={{display:"flex",gap:8}}>
-              <button className="tap" onClick={()=>setSheet("lobby")} style={{display:"flex",alignItems:"center",gap:6,background:C.orangeL,border:`1px solid ${C.orange}22`,borderRadius:9,padding:"8px 13px",color:C.orange,fontSize:13,fontWeight:600}}><Icon.Users size={15} color={C.orange}/>Session</button>
+              <button className="tap" onClick={()=>setSheet("lobby")} style={{display:"flex",alignItems:"center",gap:6,background:`${C.blue}12`,border:`1px solid ${C.blue}33`,borderRadius:9,padding:"8px 13px",color:C.blue,fontSize:13,fontWeight:600}}><Icon.Users size={15} color={C.blue}/>Session</button>
               <button className="tap" style={{width:36,height:36,borderRadius:9,background:C.surface,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon.Bell size={18} color={C.muted}/></button>
             </div>
           </div>
