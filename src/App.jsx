@@ -2636,7 +2636,7 @@ if(showBikeSetup)return(
       {tab==="map"&&(
         <div style={{position:"absolute",inset:0}}>
           <div style={{position:"absolute",inset:0,cursor:"grab",touchAction:"none"}} onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
-              <MapboxStyleMap center={mapCenter} zoom={zoom} flyToTrigger={flyToTrigger} width={mapSize.w} height={mapSize.h} stages={stages} courses={courses} userPos={userPos} userHeading={userHeading} onStagePress={s=>setSelectedStage(s)}/>
+              <MapboxStyleMap center={mapCenter} zoom={zoom} flyToTrigger={flyToTrigger} width={mapSize.w} height={mapSize.h} stages={stages} courses={courses} userPos={userPos} userHeading={userHeading} onStagePress={s=>pickingGroup?handlePickStage(s):setSelectedStage(s)}/>
           </div>
                     <div style={{position:"absolute",top:52,left:16,right:16,zIndex:10}}>
             <div style={{display:"flex",gap:10}}>
