@@ -2102,7 +2102,7 @@ export default function App(){
   return()=>{document.removeEventListener('visibilitychange',onVisible);window.removeEventListener('pageshow',onVisible);};
   },[]);
 
-  useEffect(()=>{if(!user)return;supabase.from('profiles').select('display_name,avatar_url').eq('id',user.id).single().then(({data})=>{if(data)setSettings(prev=>({...prev,displayName:data.display_name||prev.displayName,avatarUrl:data.avatar_url||null}));});},[user,refreshTick]);
+  useEffect(()=>{if(!user)return;supabase.from('profiles').select('display_name,avatar_url,app_settings').eq('id',user.id).single().then(({data})=>{if(data)setSettings(prev=>({...prev,displayName:data.display_name||prev.displayName,avatarUrl:data.avatar_url||null,...(data.app_settings||{})}));});},[user,refreshTick]);
   const containerRef=useRef(null);
   const wakeLockRef=useRef(null);
   const [mapSize,setMapSize]=useState({w:390,h:844});
