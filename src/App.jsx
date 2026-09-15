@@ -2292,14 +2292,16 @@ if(showBikeSetup)return(
       <style>{STYLES}</style>
       <div style={{height:44,background:tab==="map"?"transparent":"#fff",position:"relative",zIndex:10}}/>
 
-      {/* HOME */}
+            {/* HOME */}
       {tab==="home"&&(
         <div style={{height:"calc(100vh - 44px - 83px)",overflowY:"auto"}}>
-          <div style={{padding:"12px 16px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:`1px solid ${C.border}`,position:"sticky",top:0,background:"#fff",zIndex:5}}>
-            <div style={{fontSize:22,fontWeight:800,color:C.text}}>Feed</div>
-            <div style={{display:"flex",gap:8}}>
-              <button className="tap" onClick={()=>setSheet("lobby")} style={{display:"flex",alignItems:"center",gap:6,background:`${C.blue}12`,border:`1px solid ${C.blue}33`,borderRadius:9,padding:"8px 13px",color:C.blue,fontSize:13,fontWeight:600}}><Icon.Users size={15} color={C.blue}/>Session</button>
-              <button className="tap" style={{width:36,height:36,borderRadius:9,background:C.surface,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon.Bell size={18} color={C.muted}/></button>
+          <div style={{padding:"12px 16px 14px",borderBottom:`1px solid ${C.border}`,position:"sticky",top:0,background:"#fff",zIndex:5}}>
+            <div style={{fontSize:22,fontWeight:800,color:C.text,marginBottom:12}}>Feed</div>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <button className="tap" style={{width:38,height:38,borderRadius:11,background:"#fff",border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}><Icon.Users size={17} color={C.text}/></button>
+              <button className="tap" style={{width:38,height:38,borderRadius:11,background:"#fff",border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}><Icon.Plus size={19} color={C.text}/></button>
+              <button className="tap" style={{flex:1,height:38,display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:"#fff",border:`1px solid ${C.border}`,borderRadius:11,padding:"0 12px",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}><svg width="13" height="13" viewBox="0 0 24 24"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10" fill={C.blue}/></svg><span style={{color:C.text,fontSize:14,fontWeight:700}}>Upgrade</span></button>
+              <button className="tap" style={{width:38,height:38,borderRadius:11,background:"#fff",border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}><Icon.Bell size={17} color={C.text}/></button>
             </div>
           </div>
           {todayStageTimes.length>0&&!daySharedToday&&<button className="tap" onClick={shareDayRecap} style={{width:"calc(100% - 32px)",margin:"14px 16px 0",background:C.surface,border:`1px dashed ${C.border}`,borderRadius:10,padding:"12px 14px",color:C.text,fontSize:13,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><Icon.BarChart size={15} color={C.green}/>Share today's ride · {new Set(todayStageTimes.map(t=>t.stage_id)).size} stages</button>}
