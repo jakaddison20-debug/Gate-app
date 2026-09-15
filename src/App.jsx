@@ -2259,13 +2259,13 @@ if(showBikeSetup)return(
 </div>
 );
 
-    // Course builder overlay
+        // Course builder overlay
   if(showCourseBuilder)return(
     <div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
       <style>{STYLES}</style>
       <div style={{height:44,background:"#fff"}}/>
       <div style={{height:"calc(100vh - 44px)"}}>
-        <CourseBuilderSheet stages={stages} course={editingCourse} onClose={()=>{setShowCourseBuilder(false);setEditingCourse(null);}} onSave={async c=>{if(c.id&&courses.some(x=>x.id===c.id)){const{error}=await supabase.from('courses').update({name:c.name,privacy:c.privacy,mode:c.mode,stage_ids:c.stageIds}).eq('id',c.id);if(error){alert(error.message);}else{setCourses(prev=>prev.map(x=>x.id===c.id?{...x,name:c.name,privacy:c.privacy,mode:c.mode,stageIds:c.stageIds}:x));}setShowCourseBuilder(false);setEditingCourse(null);}else{const{data,error}=await supabase.from('courses').insert({name:c.name,privacy:c.privacy,mode:c.mode,stage_ids:c.stageIds,created_by:user.id}).select().single();if(!error){setCourses(prev=>[...prev,{...c,id:data.id,created_by:user.id}]);logEvent(user.id,'course_created',`created a new course: ${c.name}`).then(()=>setRefreshTick(t=>t+1));}setShowCourseBuilder(false);setCoursesFilter("courses");setTab("stages");}}}/>
+        <CourseBuilderSheet stages={stages} course={editingCourse} onClose={()=>{setShowCourseBuilder(false);setEditingCourse(null);}} onSave={async c=>{if(c.id&&courses.some(x=>x.id===c.id)){const{error}=await supabase.from('courses').update({name:c.name,privacy:c.privacy,mode:c.mode,stage_ids:c.stageIds}).eq('id',c.id);if(error){alert(error.message);}else{setCourses(prev=>prev.map(x=>x.id===c.id?{...x,name:c.name,privacy:c.privacy,mode:c.mode,stageIds:c.stageIds}:x));}setShowCourseBuilder(false);setEditingCourse(null);}else{const{data,error}=await supabase.from('courses').insert({name:c.name,privacy:c.privacy,mode:c.mode,stage_ids:c.stageIds,created_by:user.id}).select().single();if(!error){setCourses(prev=>[...prev,{...c,id:data.id,created_by:user.id}]);if(c.privacy!=="private"&&window.confirm(`Share "${c.name}" to the feed?`)){logEvent(user.id,'course_created',`created a new course: ${c.name}`).then(()=>setRefreshTick(t=>t+1));}}setShowCourseBuilder(false);setCoursesFilter("courses");setTab("stages");}}}/>
       </div>
     </div>
   );
@@ -2348,7 +2348,7 @@ user={user}
 onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newName}:s));setSelectedStage(prev=>prev&&prev.id===id?{...prev,name:newName}:prev);}}/></div></>
 )}
 {sheet==="stageBuilder"&&(
-           <><div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.25)",zIndex:39}} onClick={()=>setSheet(null)}/><div className="slide-up" style={{position:"absolute",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:40,maxHeight:"88vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><StageBuilderSheet onClose={()=>setSheet(null)} onSave={async s=>{const{data,error}=await supabase.from('stages').insert({name:s.name,note:s.note,privacy:s.privacy,start_lat:s.start.lat,start_lng:s.start.lng,finish_lat:s.finish.lat,finish_lng:s.finish.lng,created_by:user.id,line_coords:s.lineCoords||null}).select().single();if(error){alert(error.message);}else{setStages(prev=>[...prev,{...s,id:data.id,created_by:user.id,line_coords:s.lineCoords||null}]);logEvent(user.id,'stage_created',`created a new stage: ${s.name.trim()}`,data.id).then(()=>setRefreshTick(t=>t+1));}setSheet(null);}}/></div></>
+           <><div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.25)",zIndex:39}} onClick={()=>setSheet(null)}/><div className="slide-up" style={{position:"absolute",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:40,maxHeight:"88vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><StageBuilderSheet onClose={()=>setSheet(null)} onSave={async s=>{const{data,error}=await supabase.from('stages').insert({name:s.name,note:s.note,privacy:s.privacy,start_lat:s.start.lat,start_lng:s.start.lng,finish_lat:s.finish.lat,finish_lng:s.finish.lng,created_by:user.id,line_coords:s.lineCoords||null}).select().single();if(error){alert(error.message);}else{setStages(prev=>[...prev,{...s,id:data.id,created_by:user.id,line_coords:s.lineCoords||null}]);if(s.privacy!=="private"&&window.confirm(`Share "${s.name.trim()}" to the feed?`)){logEvent(user.id,'stage_created',`created a new stage: ${s.name.trim()}`,data.id).then(()=>setRefreshTick(t=>t+1));}}setSheet(null);}}/></div></>
           )}
         </div>
       )}
