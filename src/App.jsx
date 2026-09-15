@@ -565,6 +565,146 @@ function SectionsSheet({stage,user,onClose}){
   );
 }
 
+const PROGRESS_COLORS=["#2563EB","#15803D","#7C3AED","#0891B2","#DB2777"];
+const PROGRESS_PLOT_LEFT=70,PROGRESS_PLOT_RIGHT=255,PROGRESS_PLOT_TOP=6,PROGRESS_PLOT_BOTTOM=108,PROGRESS_LABEL_GAP=13;
+
+function resolveLabelCollisions(items){
+  const sorted=[...items].sort((a,b)=>a.y-b.y).map(it=>({...it,labelY:it.y}));
+  for(let i=1;i<sorted.length;i++){
+    if(sorted[i].labelY<sorted[i-1].labelY+PROGRESS_LABEL_GAP)sorted[i].labelY=sorted[i-1].labelY+PROGRESS_LABEL_GAP;
+  }
+  return sorted;
+}
+
+function pbSeriesFromRuns(runs){
+  let best=Infinity;const points=[];
+  runs.forEach(r=>{if(r.time_ms<best){best=r.time_ms;points.push({time_ms:r.time_ms,date:r.created_at});}});
+  return points;
+}
+
+function StageProgressCard({stage,user,lb,myAttempts}){
+  const [view,setView]=useState('you');
+  const [topSeries,setTopSeries]=useState(null);
+  const [tappedIdx,setTappedIdx]=useState(null);
+
+  const myPB=useMemo(()=>pbSeriesFromRuns(myAttempts||[]),[myAttempts]);
+  const top5Ids=useMemo(()=>(lb||[]).slice(0,5).map(e=>e.user_id).join(','),[lb]);
+
+  useEffect(()=>{
+    const top5=(lb||[]).slice(0,5);
+    if(top5.length===0){setTopSeries([]);return;}
+    const userIds=top5.map(e=>e.user_id);
+    supabase.from('stage_times').select('user_id,time_ms,created_at').eq('stage_id',stage.id).in('user_id',userIds).order('created_at',{ascending:true}).then(({data})=>{
+      if(!data)return;
+      const byUser={};
+      data.forEach(t=>{(byUser[t.user_id]=byUser[t.user_id]||[]).push(t);});
+      setTopSeries(top5.map((e,i)=>{
+        const isYou=user&&e.user_id===user.id;
+        return{user_id:e.user_id,name:isYou?'You':e.name,color:isYou?C.orange:PROGRESS_COLORS[i%PROGRESS_COLORS.length],points:pbSeriesFromRuns(byUser[e.user_id]||[])};
+      }).filter(r=>r.points.length>0));
+    });
+  },[top5Ids,stage.id]);
+
+  if(myPB.length===0&&(!lb||lb.length===0))return null;
+
+  const seriesForScale=view==='you'?[{user_id:user?.id,name:'You',color:C.orange,points:myPB}]:(topSeries||[]);
+
+  if(view==='top5'&&topSeries===null)return(
+    <div style={{margin:"16px 16px 0",background:"#fff",borderRadius:12,padding:"14px",border:`1px solid ${C.border}`}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div style={{fontSize:14,fontWeight:700,color:C.text}}>Progress</div>
+        <SegControl options={[{val:'you',label:'You'},{val:'top5',label:'Top 5'}]} value={view} onChange={v=>{setView(v);setTappedIdx(null);}}/>
+      </div>
+      <div style={{textAlign:"center",padding:"20px",color:C.muted,fontSize:13}}>Loading…</div>
+    </div>
+  );
+
+  const allPoints=seriesForScale.flatMap(s=>s.points);
+
+  if(allPoints.length===0)return(
+    <div style={{margin:"16px 16px 0",background:"#fff",borderRadius:12,padding:"14px",border:`1px solid ${C.border}`}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div style={{fontSize:14,fontWeight:700,color:C.text}}>Progress</div>
+        <SegControl options={[{val:'you',label:'You'},{val:'top5',label:'Top 5'}]} value={view} onChange={v=>{setView(v);setTappedIdx(null);}}/>
+      </div>
+      <div style={{textAlign:"center",padding:"20px",color:C.mutedL,fontSize:13}}>{view==='you'?"Ride this stage again to see your progress":"Nothing here yet"}</div>
+    </div>
+  );
+
+  const dates=allPoints.map(p=>new Date(p.date).getTime());
+  const minDate=Math.min(...dates),maxDate=Math.max(...dates,Date.now());
+  const times=allPoints.map(p=>p.time_ms);
+  const minTime=Math.min(...times),maxTime=Math.max(...times);
+  const xScale=d=>PROGRESS_PLOT_LEFT+(maxDate===minDate?(PROGRESS_PLOT_RIGHT-PROGRESS_PLOT_LEFT)/2:((new Date(d).getTime()-minDate)/(maxDate-minDate))*(PROGRESS_PLOT_RIGHT-PROGRESS_PLOT_LEFT));
+  const yScale=t=>PROGRESS_PLOT_TOP+(maxTime===minTime?(PROGRESS_PLOT_BOTTOM-PROGRESS_PLOT_TOP)/2:((t-minTime)/(maxTime-minTime))*(PROGRESS_PLOT_BOTTOM-PROGRESS_PLOT_TOP));
+
+  const buildPath=(points)=>{
+    if(points.length===0)return "";
+    let d=`M${xScale(points[0].date)},${yScale(points[0].time_ms)}`;
+    for(let i=1;i<points.length;i++){
+      d+=` L${xScale(points[i].date)},${yScale(points[i-1].time_ms)} L${xScale(points[i].date)},${yScale(points[i].time_ms)}`;
+    }
+    d+=` L${PROGRESS_PLOT_RIGHT},${yScale(points[points.length-1].time_ms)}`;
+    return d;
+  };
+
+  const tickCount=6;
+  const ticks=Array.from({length:tickCount},(_,i)=>minDate+(maxDate-minDate)*(i/(tickCount-1)));
+
+  const rightLabels=view==='top5'?resolveLabelCollisions(seriesForScale.filter(s=>s.points.length>0).map(s=>({key:s.user_id,y:yScale(s.points[s.points.length-1].time_ms),color:s.color,label:formatTime(s.points[s.points.length-1].time_ms),isYou:s.name==='You'}))):[];
+  const leftLabels=view==='top5'?resolveLabelCollisions(seriesForScale.filter(s=>s.points.length>0).map(s=>({key:s.user_id+'_l',y:yScale(s.points[0].time_ms),color:s.color,label:s.name}))):[];
+
+  return(
+    <div style={{margin:"16px 16px 0",background:"#fff",borderRadius:12,padding:"14px",border:`1px solid ${C.border}`}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div style={{fontSize:14,fontWeight:700,color:C.text}}>Progress</div>
+        <SegControl options={[{val:'you',label:'You'},{val:'top5',label:'Top 5'}]} value={view} onChange={v=>{setView(v);setTappedIdx(null);}}/>
+      </div>
+      <svg viewBox="0 0 340 130" width="100%" height="130">
+        {ticks.map((t,i)=>(
+          <line key={i} x1={xScale(t)} y1={PROGRESS_PLOT_TOP} x2={xScale(t)} y2={PROGRESS_PLOT_BOTTOM} stroke="#EDEDED" strokeWidth="1" strokeDasharray="2,3"/>
+        ))}
+        {seriesForScale.map(s=>s.points.length>0&&(
+          <path key={s.user_id} d={buildPath(s.points)} fill="none" stroke={s.color} strokeWidth={view==='you'||s.name==='You'?2.5:1.5} strokeLinecap="round" strokeLinejoin="round" opacity={view==='you'||s.name==='You'?1:0.85}/>
+        ))}
+        {view==='you'&&myPB.map((p,i)=>{
+          const cx=xScale(p.date),cy=yScale(p.time_ms);
+          const active=tappedIdx===i;
+          return(
+            <g key={i}>
+              <circle cx={cx} cy={cy} r="6" fill="#fff"/>
+              <circle cx={cx} cy={cy} r={active?5:4} fill={C.orange} stroke={active?C.text:"none"} strokeWidth={active?1.5:0}/>
+              <circle cx={cx} cy={cy} r="12" fill="transparent" style={{cursor:"pointer"}} onClick={()=>setTappedIdx(active?null:i)}/>
+            </g>
+          );
+        })}
+        {view==='top5'&&seriesForScale.map(s=>s.points.length>0&&(
+          <circle key={s.user_id+'_dot'} cx={PROGRESS_PLOT_RIGHT} cy={yScale(s.points[s.points.length-1].time_ms)} r={s.name==='You'?3:2.5} fill={s.color}/>
+        ))}
+        {view==='top5'&&rightLabels.map(l=>(
+          <g key={l.key}>
+            {Math.abs(l.labelY-l.y)>3&&<line x1={PROGRESS_PLOT_RIGHT+1} y1={l.y} x2={PROGRESS_PLOT_RIGHT+4} y2={l.labelY} stroke={l.color} strokeWidth="1" opacity="0.4"/>}
+            <text x={PROGRESS_PLOT_RIGHT+6} y={l.labelY+3} fontSize={l.isYou?11:10} fontWeight={l.isYou?800:700} fill={l.color}>{l.label}</text>
+          </g>
+        ))}
+        {view==='top5'&&leftLabels.map(l=>(
+          <text key={l.key} x={PROGRESS_PLOT_LEFT-8} y={l.labelY+4} fontSize="11" fontWeight={l.label==='You'?700:500} fill={l.color} textAnchor="end">{l.label}</text>
+        ))}
+        {ticks.map((t,i)=>(
+          <text key={'tick'+i} x={xScale(t)} y={122} fontSize="9" fill="#C4C4C4" textAnchor={i===0?"start":i===ticks.length-1?"end":"middle"}>{new Date(t).toLocaleDateString('en-GB',{month:'short'})}</text>
+        ))}
+      </svg>
+      {view==='you'&&(
+        <div style={{marginTop:10,padding:"10px 12px",background:C.surface,borderRadius:8,borderLeft:`3px solid ${C.orange}`,fontSize:12,color:tappedIdx!==null?C.text:C.mutedL}}>
+          {tappedIdx!==null
+            ?<><span style={{color:C.orange,fontWeight:700}}>New record</span> &middot; {new Date(myPB[tappedIdx].date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})} &middot; <span style={{fontWeight:800}}>{formatTime(myPB[tappedIdx].time_ms)}</span></>
+            :"Tap a point to see that record"}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Stage Detail Sheet ────────────────────────────────────────────────────────
     function StageDetailSheet({stage,onClose,onRace,onOpenSections,user,onRename}){
   const [lb,setLb]=useState([]);
@@ -621,17 +761,7 @@ const myEntry=lb.find(e=>user&&e.user_id===user.id);
 
       {lb.length>0&&<div style={{margin:"16px 16px 0",background:"#FFFBEB",borderRadius:12,padding:"12px 14px",border:"1px solid #FDE68A",display:"flex",alignItems:"center",gap:10}}><Icon.Crown size={18} color="#92400E"/><div style={{flex:1}}><div style={{fontSize:11,color:"#92400E",fontWeight:600,marginBottom:1}}>STAGE RECORD</div><div style={{fontSize:13,fontWeight:700,color:"#92400E"}}>{lb[0].name} · {formatTime(lb[0].time)}</div></div><div style={{fontSize:11,color:"#B45309"}}>{lb[0].date}</div></div>}
       {stage.note&&<div style={{margin:"12px 16px 0",background:C.surface,borderRadius:10,padding:"11px 14px",border:`1px solid ${C.border}`}}><div style={{fontSize:11,fontWeight:600,color:C.muted,marginBottom:4}}>STAGE NOTES</div><div style={{fontSize:13,color:C.text,lineHeight:1.5}}>📋 {stage.note}</div></div>}
-      {myAttempts.length>=2&&<div style={{margin:"16px 16px 0",background:"#fff",borderRadius:12,padding:"14px",border:`1px solid ${C.border}`}}>
-<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-<div style={{fontSize:14,fontWeight:700,color:C.text}}>Your Progress</div>
-<div style={{fontSize:11,color:C.muted}}>{myAttempts.length} attempts</div>
-</div>
-<ProgressChart attempts={myAttempts}/>
-<div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
-<div style={{fontSize:10,color:C.mutedL}}>First: {formatTime(myAttempts[0].time_ms)}</div>
-<div style={{fontSize:10,color:C.mutedL}}>Latest: {formatTime(myAttempts[myAttempts.length-1].time_ms)}</div>
-</div>
-</div>}
+            <StageProgressCard stage={stage} user={user} lb={lb} myAttempts={myAttempts}/>
 <div style={{padding:"16px 16px 0"}}>
 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
 <div style={{fontSize:15,fontWeight:700,color:C.text}}>Leaderboard</div>
