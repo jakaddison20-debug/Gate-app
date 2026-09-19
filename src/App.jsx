@@ -789,14 +789,18 @@ const myEntry=lb.find(e=>user&&e.user_id===user.id);
 <div style={{fontSize:15,fontWeight:700,color:C.text}}>Leaderboard</div>
           <div style={{fontSize:11,color:C.muted,background:C.surface,borderRadius:6,padding:"3px 8px",border:`1px solid ${C.border}`}}>Free · Top 10</div>
         </div>
-        {lb.length===0?<div style={{textAlign:"center",padding:"20px",color:C.muted,fontSize:13}}>No times yet — be the first!</div>:lb.map((entry,i)=>{
+                {lb.length===0?<div style={{textAlign:"center",padding:"20px",color:C.muted,fontSize:13}}>No times yet — be the first!</div>:lb.map((entry,i)=>{
           const isMe=!!(user&&entry.user_id===user.id),mc=medalColor(entry.pos);
+          const gap=i===0?0:entry.time-lb[0].time;
           return(
             <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"11px 12px",background:isMe?C.orangeL:"white",borderRadius:10,marginBottom:6,border:`1px solid ${isMe?C.orange:C.border}`}}>
               <div style={{width:34}}><PositionBadge pos={entry.pos} size={30}/></div>
                             <Avatar size={32} url={entry.avatarUrl}/>
               <div style={{flex:1}}><div style={{fontSize:13,fontWeight:isMe?700:500,color:C.text}}>{isMe?"You":entry.name}</div><div style={{fontSize:11,color:C.muted}}>{entry.date}</div></div>
-              <div style={{fontSize:15,fontWeight:700,color:isMe?C.orange:C.text}}>{formatTime(entry.time)}</div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:15,fontWeight:700,color:isMe?C.orange:C.text}}>{formatTime(entry.time)}</div>
+                {gap>0&&<div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:3,marginTop:2}}><svg width="7" height="7" viewBox="0 0 10 10"><path d="M1 1 L9 1 L5 9 Z" fill={C.muted}/></svg><span style={{fontSize:10,fontWeight:700,color:C.muted}}>{formatTime(gap)}</span></div>}
+              </div>
             </div>
           );
         })}
