@@ -1403,11 +1403,11 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
   const titles={hub:"Statistics",stages:"Stages",courses:"Courses",fastest:"Fastest Stages",records:"Course Records"};
   const tiles=[
     {key:'cr',onClick:()=>setView('fastest'),content:<>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><Icon.Crown size={18} color="#C9A227"/><Icon.ChevronRight size={16} color={C.mutedL}/></div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><Icon.Crown size={18} color="#92400E"/><Icon.ChevronRight size={16} color={C.mutedL}/></div>
       <div><div style={{fontSize:28,fontWeight:800,color:C.text,lineHeight:1}}>{crCount}</div><div style={{fontSize:13,color:C.muted,marginTop:4}}>Stage CRs</div></div>
     </>},
     {key:'courseCr',onClick:()=>setView('records'),content:<>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><Icon.Crown size={18} color="#C9A227"/><Icon.ChevronRight size={16} color={C.mutedL}/></div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><Icon.Crown size={18} color="#92400E"/><Icon.ChevronRight size={16} color={C.mutedL}/></div>
       <div><div style={{fontSize:28,fontWeight:800,color:C.text,lineHeight:1}}>{courseCRCount}</div><div style={{fontSize:13,color:C.muted,marginTop:4}}>Course CRs</div></div>
     </>},
     {key:'stages',onClick:()=>setView('stages'),content:<>
