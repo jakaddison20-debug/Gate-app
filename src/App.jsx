@@ -2752,11 +2752,14 @@ if(showBikeSetup)return(
     </div>
   );
 
-  // Statistics screen overlay
+    // Statistics screen overlay
   if(showProgress)return(
     <div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
       <style>{STYLES}</style>
-      <StatisticsScreen stages={stages} courses={courses} user={user} onBack={()=>setShowProgress(false)}/>
+      <StatisticsScreen stages={stages} courses={courses} user={user} onBack={()=>setShowProgress(false)}
+        crCount={stages.filter(s=>s.cr).length} courseCRCount={courseCRCount}
+        stagesRiddenCount={stages.filter(s=>s.time).length} coursesCompleteCount={courseResults.length}
+        onOpenStat={key=>{setShowProgress(false);setSheet('stat-'+key);}}/>
     </div>
   );
 
