@@ -1525,17 +1525,6 @@ function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,cou
         </div>
       </div>
 
-      <div style={{padding:"16px 16px 28px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        <button className="tap" onClick={()=>onStatPress&&onStatPress('fastest')} style={{background:"#fff",border:`1px solid ${C.blue}`,borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-          <div style={{fontSize:17,fontWeight:700,color:C.text}}>{crCount}</div>
-          <div style={{fontSize:12,color:C.muted}}>CR</div>
-        </button>
-               <button className="tap" onClick={()=>onStatPress&&onStatPress('records')} style={{background:"#fff",border:`1px solid ${C.blue}`,borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-          <div style={{fontSize:17,fontWeight:700,color:C.text}}>{courseCRCount}</div>
-          <div style={{fontSize:12,color:C.muted}}>Course CR</div>
-        </button>
-      </div>
-
       <div style={{padding:"0 16px 24px"}}>
                {[
           {label:"Statistics",Ic:Icon.BarChart,onClick:onOpenProgress},
