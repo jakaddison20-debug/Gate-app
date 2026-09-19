@@ -646,7 +646,7 @@ function StageProgressCard({stage,user,lb,myAttempts}){
             );
           })}
         </svg>
-        <div style={{marginTop:10,padding:"10px 12px",background:C.surface,borderRadius:8,borderLeft:`3px solid ${C.blue}`,fontSize:12,color:tappedIdx!==null?C.text:C.mutedL}}>
+                <div style={{marginTop:10,padding:"10px 12px",background:C.surface,borderRadius:8,fontSize:12,color:tappedIdx!==null?C.text:C.mutedL}}>
           {tappedIdx!==null
             ?<>{new Date(pts[tappedIdx].date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})} &middot; <span style={{fontWeight:800}}>{formatTime(pts[tappedIdx].time_ms)}</span></>
             :"Tap a point to see that run"}
@@ -674,13 +674,16 @@ function StageProgressCard({stage,user,lb,myAttempts}){
     </div>
   );
 
-  const dates=allPoints.map(p=>new Date(p.date).getTime());
+    const dates=allPoints.map(p=>new Date(p.date).getTime());
   const minDate=Math.min(...dates),maxDate=Math.max(...dates,Date.now());
-  const times=allPoints.map(p=>p.time_ms);
-  const minTime=Math.min(...times),maxTime=Math.max(...times);
+  const recentTimes=topSeries.filter(s=>s.points.length>0).map(s=>s.points[s.points.length-1].time_ms);
+  let domMin=Math.min(...recentTimes),domMax=Math.max(...recentTimes);
+  if(domMax===domMin){domMin-=1000;domMax+=1000;}
+  const domPad=(domMax-domMin)*0.6;
+  domMin-=domPad;domMax+=domPad;
   const xScale=d=>PROGRESS_PLOT_LEFT+(maxDate===minDate?(PROGRESS_PLOT_RIGHT-PROGRESS_PLOT_LEFT)/2:((new Date(d).getTime()-minDate)/(maxDate-minDate))*(PROGRESS_PLOT_RIGHT-PROGRESS_PLOT_LEFT));
-  const yScale=t=>PROGRESS_PLOT_TOP+(maxTime===minTime?(PROGRESS_PLOT_BOTTOM-PROGRESS_PLOT_TOP)/2:((t-minTime)/(maxTime-minTime))*(PROGRESS_PLOT_BOTTOM-PROGRESS_PLOT_TOP));
-
+  const yScale=t=>{const clamped=Math.min(Math.max(t,domMin),domMax);return PROGRESS_PLOT_TOP+((clamped-domMin)/(domMax-domMin))*(PROGRESS_PLOT_BOTTOM-PROGRESS_PLOT_TOP);};
+  const isClamped=t=>t>domMax||t<domMin;
   const buildPath=(points)=>{
     if(points.length===0)return "";
     let d=`M${xScale(points[0].date)},${yScale(points[0].time_ms)}`;
