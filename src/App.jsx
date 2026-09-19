@@ -808,11 +808,10 @@ const myEntry=lb.find(e=>user&&e.user_id===user.id);
                 <button className="tap" onClick={onRace} style={{width:"100%",background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"12px 16px",color:C.blue,fontSize:14,fontWeight:700,marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><Icon.Flag size={16} color={C.blue}/>Race Stage</button>
         <button className="tap" onClick={onOpenSections} style={{width:"100%",background:"none",border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 16px",color:C.text,fontSize:13,fontWeight:600,marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><Icon.Lightning size={15} color={C.muted}/>Sections</button>
 
-        <div style={{background:"linear-gradient(135deg,#1A1A1A,#2A2A2A)",borderRadius:14,padding:"16px",marginTop:8,textAlign:"center"}}>
-          <div style={{fontSize:14,fontWeight:700,color:"white",marginBottom:4}}>Unlock Full Leaderboard</div>
-          <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginBottom:12}}>See all riders, filter by date, export results</div>
-          <button className="tap" style={{background:C.orange,border:"none",borderRadius:10,padding:"10px 24px",color:"white",fontSize:13,fontWeight:700}}>Upgrade to Pro</button>
-        </div>
+                <button className="tap" style={{width:"100%",height:38,background:"#fff",border:`1px solid ${C.border}`,borderRadius:11,display:"flex",alignItems:"center",justifyContent:"center",gap:7,boxShadow:"0 1px 2px rgba(0,0,0,0.04)",marginTop:8}}>
+          <svg width="13" height="13" viewBox="0 0 24 24"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10" fill={C.blue}/></svg>
+          <span style={{fontSize:14,fontWeight:700,color:C.text}}>Upgrade</span>
+        </button>
       </div>
     </div>
   );
