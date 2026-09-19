@@ -1397,15 +1397,16 @@ function GroupMapScreen({group,stages,user,onBack,onAddStages}){
   );
 }
 
-function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stagesRiddenCount,coursesCompleteCount,onOpenStat}){
+function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stagesRiddenCount,coursesCompleteCount,courseCRList}){
   const [view,setView]=useState('hub');
-  const titles={hub:"Statistics",stages:"Stages",courses:"Courses"};
+  const [expandedCRCourse,setExpandedCRCourse]=useState(null);
+  const titles={hub:"Statistics",stages:"Stages",courses:"Courses",fastest:"Fastest Stages",records:"Course Records"};
   const tiles=[
-    {key:'cr',onClick:()=>onOpenStat('fastest'),content:<>
+    {key:'cr',onClick:()=>setView('fastest'),content:<>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><Icon.Crown size={18} color="#C9A227"/><Icon.ChevronRight size={16} color={C.mutedL}/></div>
       <div><div style={{fontSize:28,fontWeight:800,color:C.text,lineHeight:1}}>{crCount}</div><div style={{fontSize:13,color:C.muted,marginTop:4}}>Stage CRs</div></div>
     </>},
-    {key:'courseCr',onClick:()=>onOpenStat('records'),content:<>
+    {key:'courseCr',onClick:()=>setView('records'),content:<>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><Icon.Crown size={18} color="#C9A227"/><Icon.ChevronRight size={16} color={C.mutedL}/></div>
       <div><div style={{fontSize:28,fontWeight:800,color:C.text,lineHeight:1}}>{courseCRCount}</div><div style={{fontSize:13,color:C.muted,marginTop:4}}>Course CRs</div></div>
     </>},
@@ -1418,6 +1419,7 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
       <div><div style={{fontSize:16,fontWeight:700,color:C.text}}>Courses</div><div style={{fontSize:12,color:C.muted,marginTop:4}}>{coursesCompleteCount} completed</div></div>
     </>},
   ];
+  const crStages=stages.filter(s=>s.cr);
   return(
     <div style={{width:"100%",height:"100vh",display:"flex",flexDirection:"column",background:"#fff"}}>
       <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
@@ -1436,6 +1438,43 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
         )}
         {view==='stages'&&<ProgressSheet stages={stages} user={user}/>}
         {view==='courses'&&<CourseProgressSheet courses={courses} user={user}/>}
+        {view==='fastest'&&(
+          <div style={{padding:"0 16px 40px"}}>
+            {crStages.length===0?<div style={{textAlign:"center",padding:"20px",color:C.muted,fontSize:13}}>No stage records yet</div>:crStages.map(s=>(
+              <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 0",borderBottom:`1px solid ${C.border}`}}>
+                <Icon.Crown size={18} color="#92400E"/>
+                <div style={{flex:1,fontSize:14,fontWeight:600,color:C.text}}>{s.name}</div>
+                <div style={{fontSize:14,fontWeight:700,color:"#92400E"}}>{formatTime(s.time)}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        {view==='records'&&(
+          <div style={{padding:"16px 16px 40px"}}>
+            {(!courseCRList||courseCRList.length===0)?<div style={{textAlign:"center",padding:"20px",color:C.muted,fontSize:13}}>No course records yet</div>:courseCRList.map(c=>{
+              const isOpen=expandedCRCourse===c.id;
+              const trackNames=(c.stageIds||[]).map(id=>stages.find(s=>s.id===id)?.name).filter(Boolean);
+              return(
+                <div key={c.id} style={{marginBottom:8,border:`1px solid ${C.border}`,borderRadius:10,overflow:"hidden"}}>
+                  <button className="tap" onClick={()=>setExpandedCRCourse(isOpen?null:c.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"11px 12px",background:"#fff",border:"none",textAlign:"left"}}>
+                    <Icon.Crown size={18} color="#92400E"/>
+                    <div style={{flex:1,fontSize:14,fontWeight:600,color:C.text}}>{c.name}</div>
+                    <div style={{fontSize:14,fontWeight:700,color:"#92400E"}}>{formatTime(c.totalTime)}</div>
+                    {isOpen?<Icon.ChevronUp size={14} color={C.mutedL}/>:<Icon.ChevronDown size={14} color={C.mutedL}/>}
+                  </button>
+                  {isOpen&&<div style={{padding:"8px 12px 12px",background:C.surface}}>
+                    {trackNames.length===0?<div style={{fontSize:12,color:C.muted}}>No stages found</div>:trackNames.map((name,i)=>(
+                      <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0"}}>
+                        <Icon.Lightning size={13} color={C.blue}/>
+                        <div style={{fontSize:13,color:C.text}}>{i+1}. {name}</div>
+                      </div>
+                    ))}
+                  </div>}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
