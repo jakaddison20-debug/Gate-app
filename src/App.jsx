@@ -706,9 +706,14 @@ function StageProgressCard({stage,user,lb,myAttempts}){
         {ticks.map((t,i)=>(
           <line key={i} x1={xScale(t)} y1={PROGRESS_PLOT_TOP} x2={xScale(t)} y2={PROGRESS_PLOT_BOTTOM} stroke="#EDEDED" strokeWidth="1" strokeDasharray="2,3"/>
         ))}
-        {topSeries.map(s=>s.points.length>0&&(
+                {topSeries.map(s=>s.points.length>0&&(
           <path key={s.user_id} d={buildPath(s.points)} fill="none" stroke={s.color} strokeWidth={s.name==='You'?2.5:1.5} strokeLinecap="round" strokeLinejoin="round" opacity={s.name==='You'?1:0.85}/>
         ))}
+        {topSeries.map(s=>{
+          if(s.points.length===0||!isClamped(s.points[0].time_ms))return null;
+          const x=xScale(s.points[0].date);
+          return <line key={s.user_id+'_stub'} x1={x} y1={PROGRESS_PLOT_BOTTOM} x2={x} y2={PROGRESS_PLOT_BOTTOM-6} stroke={s.color} strokeWidth="1.5" strokeDasharray="1,2.5" opacity="0.5"/>;
+        })}
         {topSeries.map(s=>s.points.length>0&&(
           <circle key={s.user_id+'_dot'} cx={PROGRESS_PLOT_RIGHT} cy={yScale(s.points[s.points.length-1].time_ms)} r={s.name==='You'?3:2.5} fill={s.color}/>
         ))}
