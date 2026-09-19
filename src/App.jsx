@@ -1397,10 +1397,27 @@ function GroupMapScreen({group,stages,user,onBack,onAddStages}){
   );
 }
 
-
-function StatisticsScreen({stages,courses,user,onBack}){
+function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stagesRiddenCount,coursesCompleteCount,onOpenStat}){
   const [view,setView]=useState('hub');
   const titles={hub:"Statistics",stages:"Stages",courses:"Courses"};
+  const tiles=[
+    {key:'cr',onClick:()=>onOpenStat('fastest'),content:<>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><Icon.Crown size={18} color="#C9A227"/><Icon.ChevronRight size={16} color={C.mutedL}/></div>
+      <div><div style={{fontSize:28,fontWeight:800,color:C.text,lineHeight:1}}>{crCount}</div><div style={{fontSize:13,color:C.muted,marginTop:4}}>Stage CRs</div></div>
+    </>},
+    {key:'courseCr',onClick:()=>onOpenStat('records'),content:<>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><Icon.Crown size={18} color="#C9A227"/><Icon.ChevronRight size={16} color={C.mutedL}/></div>
+      <div><div style={{fontSize:28,fontWeight:800,color:C.text,lineHeight:1}}>{courseCRCount}</div><div style={{fontSize:13,color:C.muted,marginTop:4}}>Course CRs</div></div>
+    </>},
+    {key:'stages',onClick:()=>setView('stages'),content:<>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><Icon.Lightning size={20} color={C.muted}/><Icon.ChevronRight size={16} color={C.mutedL}/></div>
+      <div><div style={{fontSize:16,fontWeight:700,color:C.text}}>Stages</div><div style={{fontSize:12,color:C.muted,marginTop:4}}>{stagesRiddenCount} ridden</div></div>
+    </>},
+    {key:'courses',onClick:()=>setView('courses'),content:<>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><Icon.Flag size={20} color={C.muted}/><Icon.ChevronRight size={16} color={C.mutedL}/></div>
+      <div><div style={{fontSize:16,fontWeight:700,color:C.text}}>Courses</div><div style={{fontSize:12,color:C.muted,marginTop:4}}>{coursesCompleteCount} completed</div></div>
+    </>},
+  ];
   return(
     <div style={{width:"100%",height:"100vh",display:"flex",flexDirection:"column",background:"#fff"}}>
       <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
@@ -1409,12 +1426,10 @@ function StatisticsScreen({stages,courses,user,onBack}){
       </div>
       <div style={{flex:1,overflowY:"auto"}}>
         {view==='hub'&&(
-          <div style={{padding:"16px"}}>
-            {[{key:'stages',label:'Stages',Ic:Icon.Lightning},{key:'courses',label:'Courses',Ic:Icon.Flag}].map((item,i,arr)=>(
-              <button key={item.key} className="tap" onClick={()=>setView(item.key)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"14px 0",background:"none",border:"none",borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none",textAlign:"left"}}>
-                <item.Ic size={18} color={C.muted}/>
-                <div style={{flex:1,fontSize:15,fontWeight:600,color:C.text}}>{item.label}</div>
-                <Icon.ChevronRight size={16} color={C.mutedL}/>
+          <div style={{padding:16,display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            {tiles.map(t=>(
+              <button key={t.key} className="tap" onClick={t.onClick} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:"18px 16px",minHeight:118,display:"flex",flexDirection:"column",justifyContent:"space-between",textAlign:"left"}}>
+                {t.content}
               </button>
             ))}
           </div>
