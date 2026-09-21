@@ -1484,11 +1484,11 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
   const titles={hub:"Statistics",stages:"Stages",courses:"Courses",fastest:"Fastest Stages",records:"Course Records"};
   const tiles=[
     {key:'cr',onClick:()=>setView('fastest'),content:<>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><svg width="20" height="17" viewBox="0 0 24 20"><path d="M3 19l-1.5-10L7 13l5-9 5 9 5.5-4L20 19H3z" fill="#C9A227" stroke="#C9A227" strokeLinejoin="round" strokeWidth="1"/></svg><Icon.ChevronRight size={16} color={C.mutedL}/></div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><svg width="20" height="17" viewBox="0 0 24 20"><path d="M3 19l-1.5-10L7 13l5-9 5 9 5.5-4L20 19H3z" fill="#C9A227" stroke="#C9A227" strokeLinejoin="round" strokeWidth="1"/><rect x="3" y="17" width="17" height="2.6" rx="1" fill="#C9A227"/></svg>
       <div><div style={{fontSize:28,fontWeight:800,color:C.text,lineHeight:1}}>{crCount}</div><div style={{fontSize:13,color:C.muted,marginTop:4}}>Stage CRs</div></div>
     </>},
     {key:'courseCr',onClick:()=>setView('records'),content:<>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><svg width="20" height="17" viewBox="0 0 24 20"><path d="M3 19l-1.5-10L7 13l5-9 5 9 5.5-4L20 19H3z" fill="#C9A227" stroke="#C9A227" strokeLinejoin="round" strokeWidth="1"/></svg><Icon.ChevronRight size={16} color={C.mutedL}/></div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><svg width="20" height="17" viewBox="0 0 24 20"><path d="M3 19l-1.5-10L7 13l5-9 5 9 5.5-4L20 19H3z" fill="#C9A227" stroke="#C9A227" strokeLinejoin="round" strokeWidth="1"/><rect x="3" y="17" width="17" height="2.6" rx="1" fill="#C9A227"/></svg>
       <div><div style={{fontSize:28,fontWeight:800,color:C.text,lineHeight:1}}>{courseCRCount}</div><div style={{fontSize:13,color:C.muted,marginTop:4}}>Course CRs</div></div>
     </>},
     {key:'stages',onClick:()=>setView('stages'),content:<>
