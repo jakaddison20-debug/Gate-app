@@ -2678,6 +2678,14 @@ export default function App(){
   const [settings,setSettings]=useState(DEFAULT_SETTINGS);
   const saveSettings=async(s)=>{setSettings(s);if(!user)return;await supabase.from('profiles').update({app_settings:{units:s.units,gpsAccuracy:s.gpsAccuracy,notifications:s.notifications,privacy:s.privacy}}).eq('id',user.id);};
   const [user,setUser]=useState(null);
+    const goToStage=(stageId)=>{
+  const stage=stages.find(s=>String(s.id)===String(stageId));
+  if(!stage){alert("Couldn't find that stage");return;}
+  setSelectedStage(stage);
+  setMapCenter({lat:stage.start.lat,lng:stage.start.lng});
+  setZoom(15);
+  setTab('map');
+  };
   const handlePickStage=async(s)=>{
   if(pickingExistingIds.includes(s.id)){alert(`${s.name} is already in this group`);return;}
   if(!window.confirm(`Add "${s.name}" to ${pickingGroup.name}?`))return;
