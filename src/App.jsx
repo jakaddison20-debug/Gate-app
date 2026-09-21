@@ -2686,6 +2686,7 @@ export default function App(){
   setPickingExistingIds(prev=>[...prev,s.id]);
   };
   const [showAuth,setShowAuth]=useState(false);
+  const [pendingShareStage,setPendingShareStage]=useState(null);
   const [refreshTick,setRefreshTick]=useState(0);
   useEffect(()=>{
   const onVisible=()=>{if(document.visibilityState==="visible")setRefreshTick(t=>t+1);};
