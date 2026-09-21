@@ -341,16 +341,19 @@ ctx.closePath();
 ctx.fill();
 map.current.addImage('stage-pin',ctx.getImageData(0,0,24,24));
 
-        // Add stages as lines
+                // Add stages as lines
         const midpointFeatures=[];
+        gateMarkersRef.current=[];
 
         stages.forEach(stage=>{
 
           
-          const startEl=document.createElement('div');startEl.innerHTML='<div style="width:18px;height:18px;border-radius:50%;background:#F59E0B;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3)"></div>';
+          const startEl=document.createElement('div');startEl.innerHTML='<div style="width:18px;height:18px;border-radius:50%;background:#F59E0B;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);transform-origin:center;transition:transform 0.1s ease;"></div>';
           new mapboxgl.Marker({element:startEl}).setLngLat([stage.start.lng,stage.start.lat]).addTo(map.current);
-          const finishEl=document.createElement('div');finishEl.innerHTML='<div style="width:18px;height:18px;border-radius:50%;background:white;border:2px solid #1A1A1A;box-shadow:0 2px 6px rgba(0,0,0,0.3);overflow:hidden"><svg width="14" height="14" viewBox="0 0 8 8"><rect width="2" height="2" fill="#1A1A1A"/><rect x="4" width="2" height="2" fill="#1A1A1A"/><rect x="2" y="2" width="2" height="2" fill="#1A1A1A"/><rect x="6" y="2" width="2" height="2" fill="#1A1A1A"/><rect y="4" width="2" height="2" fill="#1A1A1A"/><rect x="4" y="4" width="2" height="2" fill="#1A1A1A"/><rect x="2" y="6" width="2" height="2" fill="#1A1A1A"/><rect x="6" y="6" width="2" height="2" fill="#1A1A1A"/></svg></div>';
+          gateMarkersRef.current.push(startEl.firstElementChild);
+          const finishEl=document.createElement('div');finishEl.innerHTML='<div style="width:18px;height:18px;border-radius:50%;background:white;border:2px solid #1A1A1A;box-shadow:0 2px 6px rgba(0,0,0,0.3);overflow:hidden;transform-origin:center;transition:transform 0.1s ease;"><svg width="14" height="14" viewBox="0 0 8 8"><rect width="2" height="2" fill="#1A1A1A"/><rect x="4" width="2" height="2" fill="#1A1A1A"/><rect x="2" y="2" width="2" height="2" fill="#1A1A1A"/><rect x="6" y="2" width="2" height="2" fill="#1A1A1A"/><rect y="4" width="2" height="2" fill="#1A1A1A"/><rect x="4" y="4" width="2" height="2" fill="#1A1A1A"/><rect x="2" y="6" width="2" height="2" fill="#1A1A1A"/><rect x="6" y="6" width="2" height="2" fill="#1A1A1A"/></svg></div>';
           new mapboxgl.Marker({element:finishEl}).setLngLat([stage.finish.lng,stage.finish.lat]).addTo(map.current);
+          gateMarkersRef.current.push(finishEl.firstElementChild);
 
                               let midLat,midLng;
                 if(stage.line_coords&&stage.line_coords.length>1){
@@ -384,13 +387,20 @@ map.current.addImage('stage-pin',ctx.getImageData(0,0,24,24));
 
           midpointFeatures.push({type:'Feature',properties:{stageId:String(stage.id),name:stage.name},geometry:{type:'Point',coordinates:[midLng,midLat]}});
 
-          if(stage.line_coords&&stage.line_coords.length>1){
+                    if(stage.line_coords&&stage.line_coords.length>1){
 
             const id='line-'+stage.id;
             map.current.addSource(id,{type:'geojson',data:{type:'Feature',geometry:{type:'LineString',coordinates:stage.line_coords.map(c=>[c.lng,c.lat])}}});
             map.current.addLayer({id,type:'line',source:id,paint:{'line-color':'#F59E0B','line-width':3,'line-opacity':0.9}});
           }
         });
+
+        const updateGateMarkerScale=()=>{
+          const scale=gateMarkerScale(map.current.getZoom());
+          gateMarkersRef.current.forEach(el=>{if(el)el.style.transform=`scale(${scale})`;});
+        };
+        map.current.on('zoom',updateGateMarkerScale);
+        updateGateMarkerScale();
 
               if(midpointFeatures.length>0){
           map.current.addSource('stage-midpoints',{type:'geojson',data:{type:'FeatureCollection',features:midpointFeatures}});
