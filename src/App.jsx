@@ -20,6 +20,17 @@ function getMonday(d){const date=new Date(d);const day=date.getDay();const diff=
 function project(coord,center,zoom,w,h){const scale=Math.pow(2,zoom)*256,mercY=c=>Math.log(Math.tan(Math.PI/4+(c*Math.PI)/360)),cx=(center.lng+180)/360,cy=(1-mercY(center.lat)/Math.PI)/2;return{x:((coord.lng+180)/360-cx)*scale+w/2,y:((1-mercY(coord.lat)/Math.PI)/2-cy)*scale+h/2};}
 function unproject(x,y,center,zoom,w,h){const scale=Math.pow(2,zoom)*256,mercY=c=>Math.log(Math.tan(Math.PI/4+(c*Math.PI)/360)),cx=(center.lng+180)/360,cy=(1-mercY(center.lat)/Math.PI)/2,lng=((x-w/2)/scale+cx)*360-180,lat=((Math.atan(Math.exp(((1-2*((y-h/2)/scale+cy))*Math.PI)))*2-Math.PI/2)*180)/Math.PI;return{lat,lng};}
 
+function gateMarkerScale(zoom){
+  const stops=[[8,0.4],[11,0.55],[14,0.75],[17,1]];
+  if(zoom<=stops[0][0])return stops[0][1];
+  if(zoom>=stops[stops.length-1][0])return stops[stops.length-1][1];
+  for(let i=0;i<stops.length-1;i++){
+    const z0=stops[i][0],s0=stops[i][1],z1=stops[i+1][0],s1=stops[i+1][1];
+    if(zoom>=z0&&zoom<=z1)return s0+(s1-s0)*((zoom-z0)/(z1-z0));
+  }
+  return 1;
+}
+
 const C={orange:"#F59E0B",orangeL:"#FFF8E7",bg:"#FFFFFF",surface:"#F5F5F5",border:"#E6E6E6",text:"#1A1A1A",muted:"#6B6B6B",mutedL:"#C4C4C4",blue:"#2563EB",green:"#15803D",red:"#DC2626",yellow:"#B45309",mapBase:"#EAE6DF",mapWater:"#A8D3E8",mapWaterDark:"#8BBDD4",mapPark:"#D4E8D0",mapParkDark:"#BDDBB7",mapBuilding:"#D9D5CC",mapBuildingBorder:"#C8C4BB",mapHighwayBorder:"#C0B89A",mapHighway:"#F5D490",mapMajorRoad:"#FFFFFF",mapMajorBorder:"#C8C0A4",mapMinorRoad:"#FFFFFF",mapMinorBorder:"#D4CDB8",mapLabel:"#5A5A5A"};
 
 const SAMPLE_STAGES=[];
