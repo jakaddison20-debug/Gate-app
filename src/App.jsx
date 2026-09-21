@@ -846,18 +846,78 @@ const myEntry=lb.find(e=>user&&e.user_id===user.id);
   );
 }
 
+function stageRouteThumb(stage,w,h,pad){
+  const raw=stage.line_coords&&stage.line_coords.length>1?stage.line_coords:[stage.start,stage.finish];
+  const lats=raw.map(c=>c.lat),lngs=raw.map(c=>c.lng);
+  const minLat=Math.min(...lats),maxLat=Math.max(...lats),minLng=Math.min(...lngs),maxLng=Math.max(...lngs);
+  const latRange=maxLat-minLat||0.0001,lngRange=maxLng-minLng||0.0001;
+  const pts=raw.map(c=>({x:pad+((c.lng-minLng)/lngRange)*(w-pad*2),y:pad+(1-(c.lat-minLat)/latRange)*(h-pad*2)}));
+  const d=pts.map((p,i)=>`${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  return{d,start:pts[0],end:pts[pts.length-1]};
+}
+function RouteThumbSvg({stage,height=90}){
+  const W=320,H=height,PAD=14;
+  const{d,start,end}=stageRouteThumb(stage,W,H,PAD);
+  return(
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{display:"block"}}>
+      <rect width={W} height={H} fill={C.mapPark}/>
+      <path d={d} fill="none" stroke={C.orange} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/>
+      <circle cx={start.x} cy={start.y} r="6.5" fill={C.orange} stroke="#fff" strokeWidth="2"/>
+      <circle cx={end.x} cy={end.y} r="6.5" fill="#fff" stroke={C.text} strokeWidth="2"/>
+    </svg>
+  );
+}
+function RouteThumbnail({stage}){
+  return(
+    <div style={{borderRadius:10,overflow:"hidden",border:`1px solid ${C.border}`,marginTop:10}}>
+      <RouteThumbSvg stage={stage}/>
+    </div>
+  );
+}
+function ShareStageSheet({stage,onShare,onDismiss}){
+  const dist=haversine(stage.start,stage.finish);
+  return(
+    <div style={{padding:"0 20px 20px"}}>
+      <div style={{fontSize:17,fontWeight:700,color:C.text,marginBottom:4}}>Share to feed?</div>
+      <div style={{fontSize:13,color:C.muted,marginBottom:14}}>Other riders on GATE will see this in their feed.</div>
+      <div style={{borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`,marginBottom:16}}>
+        <RouteThumbSvg stage={stage}/>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",background:C.surface}}>
+          <div style={{fontSize:14,fontWeight:700,color:C.text}}>{stage.name}</div>
+          <div style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:C.muted}}>
+            <span>{formatDist(dist)}</span><span>·</span>
+            {stage.privacy==="public"?<Icon.Globe size={11} color={C.mutedL}/>:<Icon.Users size={11} color={C.mutedL}/>}
+            <span>{stage.privacy}</span>
+          </div>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:10}}>
+        <button className="tap" onClick={onDismiss} style={{flex:1,background:"#fff",border:`1px solid ${C.border}`,borderRadius:12,padding:13,color:C.muted,fontSize:14,fontWeight:600}}>Not now</button>
+        <button className="tap" onClick={onShare} style={{flex:2,background:C.blue,border:"none",borderRadius:12,padding:13,color:"#fff",fontSize:14,fontWeight:700}}>Share to Feed</button>
+      </div>
+    </div>
+  );
+}
+
 // ── Activity Card ─────────────────────────────────────────────────────────────
-  function FeedCard({item}){
-const icons={stage_record:{Ic:Icon.Crown,color:"#92400E",bg:"#FFFBEB"},course_finish:{Ic:Icon.Flag,color:C.orange,bg:C.orangeL},stage_created:{Ic:Icon.Lightning,color:C.blue,bg:`${C.blue}15`},course_created:{Ic:Icon.Flag,color:C.blue,bg:`${C.blue}15`},day_recap:{Ic:Icon.BarChart,color:C.green,bg:`${C.green}15`}};
+    function FeedCard({item,stage,onViewStage}){
+const icons={stage_record:{Ic:Icon.Crown,color:"#92400E",bg:"#FFFBEB"},personal_best:{kind:"up",color:C.blue,bg:"#EFF6FF"},course_finish:{Ic:Icon.Flag,color:C.orange,bg:C.orangeL},stage_created:{Ic:Icon.Lightning,color:C.blue,bg:`${C.blue}15`},course_created:{Ic:Icon.Flag,color:C.blue,bg:`${C.blue}15`},day_recap:{Ic:Icon.BarChart,color:C.green,bg:`${C.green}15`}};
 const cfg=icons[item.event_type]||{Ic:Icon.Lightning,color:C.muted,bg:C.surface};
+const showViewStage=item.stage_id&&['stage_record','personal_best','stage_created'].includes(item.event_type);
 return(
-<div style={{display:"flex",alignItems:"flex-start",gap:12,padding:"14px 16px",borderBottom:`1px solid ${C.border}`}}>
+<div style={{padding:"14px 16px",borderBottom:`1px solid ${C.border}`}}>
+<div style={{display:"flex",alignItems:"flex-start",gap:12}}>
 <Avatar size={38} url={item.avatarUrl}/>
 <div style={{flex:1}}>
 <div style={{fontSize:13,color:C.text,lineHeight:1.4}}><span style={{fontWeight:700}}>{item.userName}</span> {item.message}</div>
-<div style={{fontSize:11,color:C.muted,marginTop:2}}>{item.ago}</div>
+<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:4}}>
+<div style={{fontSize:11,color:C.muted}}>{item.ago}</div>
+{showViewStage&&<button className="tap" onClick={()=>onViewStage&&onViewStage(item.stage_id)} style={{background:"none",border:"none",padding:0,display:"flex",alignItems:"center",gap:3,fontSize:12,fontWeight:700,color:C.blue}}>View Stage →</button>}
 </div>
-<div style={{width:30,height:30,borderRadius:8,background:cfg.bg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><cfg.Ic size={15} color={cfg.color}/></div>
+</div>
+<div style={{width:30,height:30,borderRadius:8,background:cfg.bg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{cfg.kind==='up'?<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={cfg.color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>:<cfg.Ic size={15} color={cfg.color}/>}</div>
+</div>
+{item.event_type==='stage_created'&&stage&&<RouteThumbnail stage={stage}/>}
 </div>
 );
 }
