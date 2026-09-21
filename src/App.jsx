@@ -295,8 +295,8 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
 function MapboxStyleMap({center,zoom,flyToTrigger,width:W,height:H,stages=[],courses=[],userPos,userHeading,onStagePress}){
   const mapContainer=useRef(null);
   const map=useRef(null);
-  const markersRef=useRef([]);
-    const userMarkerRef=useRef(null);
+  const gateMarkersRef=useRef([]);
+  const userMarkerRef=useRef(null);
   const userMarkerInnerRef=useRef(null);
   const onStagePressRef=useRef(onStagePress);
   useEffect(()=>{onStagePressRef.current=onStagePress;},[onStagePress]);
