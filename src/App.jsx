@@ -16,6 +16,36 @@ function formatDist(m){return m>=1000?`${(m/1000).toFixed(1)}km`:`${Math.round(m
 function timeAgo(iso){const s=(Date.now()-new Date(iso).getTime())/1000;if(s<60)return'just now';if(s<3600)return`${Math.floor(s/60)}m ago`;if(s<86400)return`${Math.floor(s/3600)}h ago`;if(s<604800)return`${Math.floor(s/86400)}d ago`;return new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short'});}
 function playBeep(freq=880,duration=150){try{const ctx=new(window.AudioContext||window.webkitAudioContext)();const osc=ctx.createOscillator();const gain=ctx.createGain();osc.connect(gain);gain.connect(ctx.destination);osc.frequency.value=freq;osc.type='sine';gain.gain.setValueAtTime(0.3,ctx.currentTime);gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+duration/1000);osc.start();osc.stop(ctx.currentTime+duration/1000);}catch(e){console.log(e);}}
 function logEvent(userId,type,message,stageId=null,context=null){if(!userId)return Promise.resolve();return supabase.from('app_events').insert({user_id:userId,event_type:type,message,stage_id:stageId?String(stageId):null,context}).then(()=>{}).catch(err=>console.log('logEvent failed:',err?.message||err));}
+async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at}){
+  const overallRes=await supabase.from('stage_times').select('time_ms').eq('stage_id',stage_id).order('time_ms',{ascending:true}).limit(1);
+  const ownRes=await supabase.from('stage_times').select('time_ms').eq('stage_id',stage_id).eq('user_id',user_id).order('time_ms',{ascending:true}).limit(1);
+  const prevBest=overallRes.data&&overallRes.data[0]?overallRes.data[0].time_ms:null;
+  const ownPrevBest=ownRes.data&&ownRes.data[0]?ownRes.data[0].time_ms:null;
+  const payload={stage_id,user_id,time_ms};
+  if(created_at)payload.created_at=created_at;
+  const{error}=await supabase.from('stage_times').insert(payload);
+  if(error)throw error;
+  if(prevBest===null||time_ms<prevBest){
+    logEvent(user_id,'stage_record',`set a new record on ${stage_name} · ${formatTime(time_ms)}`,stage_id,{time_ms});
+  } else if(ownPrevBest!==null&&time_ms<ownPrevBest){
+    logEvent(user_id,'personal_best',`set a new personal best on ${stage_name} · ${formatTime(time_ms)}`,stage_id,{time_ms});
+  }
+}
+function getOfflineTimesQueue(){try{return JSON.parse(localStorage.getItem('gate_offline_times')||'[]');}catch(e){return [];}}
+function saveOfflineTimesQueue(q){try{localStorage.setItem('gate_offline_times',JSON.stringify(q));}catch(e){}}
+function queueOfflineTime(entry){const q=getOfflineTimesQueue();q.push(entry);saveOfflineTimesQueue(q);}
+async function syncOfflineTimes(){
+  const q=getOfflineTimesQueue();
+  if(q.length===0)return{synced:0,remaining:0};
+  const remaining=[];
+  let synced=0;
+  for(const entry of q){
+    try{await saveStageTime(entry);synced++;}
+    catch(err){console.log('offline sync failed, will retry later',err);remaining.push(entry);}
+  }
+  saveOfflineTimesQueue(remaining);
+  return{synced,remaining:remaining.length};
+}
 function getMonday(d){const date=new Date(d);const day=date.getDay();const diff=(day===0?-6:1-day);date.setDate(date.getDate()+diff);date.setHours(0,0,0,0);return date;}
 function project(coord,center,zoom,w,h){const scale=Math.pow(2,zoom)*256,mercY=c=>Math.log(Math.tan(Math.PI/4+(c*Math.PI)/360)),cx=(center.lng+180)/360,cy=(1-mercY(center.lat)/Math.PI)/2;return{x:((coord.lng+180)/360-cx)*scale+w/2,y:((1-mercY(coord.lat)/Math.PI)/2-cy)*scale+h/2};}
 function unproject(x,y,center,zoom,w,h){const scale=Math.pow(2,zoom)*256,mercY=c=>Math.log(Math.tan(Math.PI/4+(c*Math.PI)/360)),cx=(center.lng+180)/360,cy=(1-mercY(center.lat)/Math.PI)/2,lng=((x-w/2)/scale+cx)*360-180,lat=((Math.atan(Math.exp(((1-2*((y-h/2)/scale+cy))*Math.PI)))*2-Math.PI/2)*180)/Math.PI;return{lat,lng};}
