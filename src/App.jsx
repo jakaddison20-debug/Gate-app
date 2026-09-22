@@ -2215,7 +2215,10 @@ return{...prev,[currentStage.id]:(!current||finalTime<current)?finalTime:current
 });
 }
 setPhase("split");
-if(saveTime&&!isPractice){Promise.all([supabase.from('stage_times').select('time_ms').eq('stage_id',currentStage.id).order('time_ms',{ascending:true}).limit(1),supabase.from('stage_times').select('time_ms').eq('stage_id',currentStage.id).eq('user_id',user.id).order('time_ms',{ascending:true}).limit(1)]).then(([overallRes,ownRes])=>{const prevBest=overallRes.data&&overallRes.data[0]?overallRes.data[0].time_ms:null;const ownPrevBest=ownRes.data&&ownRes.data[0]?ownRes.data[0].time_ms:null;supabase.from('stage_times').insert({stage_id:currentStage.id,user_id:user.id,time_ms:finalTime}).then(()=>{if(prevBest===null||finalTime<prevBest){logEvent(user.id,'stage_record',`set a new record on ${currentStage.name} · ${formatTime(finalTime)}`,currentStage.id,{time_ms:finalTime}).then(()=>onActivity&&onActivity());}else if(ownPrevBest!==null&&finalTime<ownPrevBest){logEvent(user.id,'personal_best',`set a new personal best on ${currentStage.name} · ${formatTime(finalTime)}`,currentStage.id,{time_ms:finalTime}).then(()=>onActivity&&onActivity());}}).catch(err=>console.log(err));});}
+if(saveTime&&!isPractice){
+  const entry={stage_id:currentStage.id,stage_name:currentStage.name,user_id:user.id,time_ms:finalTime,created_at:new Date(crossTs||Date.now()).toISOString()};
+  saveStageTime(entry).then(()=>onActivity&&onActivity()).catch(err=>{console.log('save failed, storing offline',err);queueOfflineTime(entry);onActivity&&onActivity();});
+}
 };
 
              useEffect(()=>{
