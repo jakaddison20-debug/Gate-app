@@ -173,6 +173,31 @@ function Toggle({value,onChange}){
     </div>
   );
 }
+function OfflineBanner(){
+  const [count,setCount]=useState(0);
+  const [syncing,setSyncing]=useState(false);
+  useEffect(()=>{
+    const check=()=>setCount(getOfflineTimesQueue().length);
+    check();
+    const interval=setInterval(check,5000);
+    window.addEventListener('online',check);
+    document.addEventListener('visibilitychange',check);
+    return()=>{clearInterval(interval);window.removeEventListener('online',check);document.removeEventListener('visibilitychange',check);};
+  },[]);
+  const retry=async()=>{
+    setSyncing(true);
+    await syncOfflineTimes();
+    setCount(getOfflineTimesQueue().length);
+    setSyncing(false);
+  };
+  if(count===0)return null;
+  return(
+    <div style={{margin:"10px 16px 0",background:C.orangeL,border:`1px solid ${C.orange}`,borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:10}}>
+      <div style={{flex:1,fontSize:12,color:"#92400E",fontWeight:600}}>{count} time{count===1?'':'s'} waiting to sync</div>
+      <button className="tap" onClick={retry} disabled={syncing} style={{background:"#fff",border:`1px solid ${C.orange}`,borderRadius:8,padding:"5px 10px",color:C.orange,fontSize:11,fontWeight:700}}>{syncing?"…":"Retry"}</button>
+    </div>
+  );
+}
 
 // ── Settings Screen ───────────────────────────────────────────────────────────
 
