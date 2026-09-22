@@ -2986,7 +2986,7 @@ if(showBikeSetup)return(
             </div>
           </div>
           <OfflineBanner/>
-          {todayStageTimes.length>0&&!daySharedToday&&
+          {todayStageTimes.length>0&&!daySharedToday&&<button className="tap" onClick={shareDayRecap} style={{width:"calc(100% - 32px)",margin:"14px 16px 0",background:C.surface,border:`1px dashed ${C.border}`,borderRadius:10,padding:"12px 14px",color:C.text,fontSize:13,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><Icon.BarChart size={15} color={C.green}/>Share today's ride · {new Set(todayStageTimes.map(t=>t.stage_id)).size} stages</button>}
           {feed.length===0?<div style={{textAlign:"center",padding:"48px 20px",color:C.muted,fontSize:13}}>No activity yet — set a record, finish a course, or add a stage to get things started.</div>:feed.map(item=><FeedCard key={item.id} item={item} stage={stages.find(s=>String(s.id)===String(item.stage_id))} onViewStage={goToStage}/>)}
         </div>
       )}
