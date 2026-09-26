@@ -813,11 +813,18 @@ function StageProgressCard({stage,user,lb,myAttempts}){
 
 // ── Stage Detail Sheet ────────────────────────────────────────────────────────
     function StageDetailSheet({stage,onClose,onRace,onOpenSections,user,onRename}){
-  const [lb,setLb]=useState([]);
+    const [lb,setLb]=useState([]);
 const [myAttempts,setMyAttempts]=useState([]);
 const [editingName,setEditingName]=useState(false);
 const [nameVal,setNameVal]=useState(stage.name);
 const [savingName,setSavingName]=useState(false);
+const [difficulty,setDifficulty]=useState(stage.difficulty||'blue');
+const [editingDifficulty,setEditingDifficulty]=useState(false);
+const saveDifficulty=async(val)=>{
+  setDifficulty(val);setEditingDifficulty(false);
+  const{error}=await supabase.from('stages').update({difficulty:val}).eq('id',stage.id);
+  if(error)alert(error.message);
+};
  
     useEffect(()=>{supabase.from('stage_times').select('time_ms,user_id,created_at,profiles(display_name,avatar_url)').eq('stage_id',stage.id).order('time_ms',{ascending:true}).then(({data})=>{if(data){const seen={};const best=data.filter(t=>{const id=t.user_id;if(seen[id])return false;seen[id]=true;return true;});setLb(best.slice(0,10).map((t,i)=>({pos:i+1,name:t.profiles?.display_name||'Rider',avatarUrl:t.profiles?.avatar_url||null,time:t.time_ms,date:new Date(t.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}),user_id:t.user_id})))}});},[stage.id]);
 
