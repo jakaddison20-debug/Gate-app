@@ -1772,7 +1772,7 @@ function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,cou
 }
 
 // ── Stage Builder ─────────────────────────────────────────────────────────────
- function pointAtDistance(coords,targetDist){
+  function pointAtDistance(coords,targetDist){
  if(!coords||coords.length<2)return coords&&coords[0]?coords[0]:null;
  let acc=0;
  for(let i=0;i<coords.length-1;i++){
@@ -1787,7 +1787,23 @@ function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,cou
  } 
  return coords[coords.length-1];
  }
-  function StageBuilderSheet({onClose,onSave}){
+ function trimLineFromStart(coords,targetDist){
+ if(!coords||coords.length<2)return coords||[];
+ let acc=0;
+ for(let i=0;i<coords.length-1;i++){
+ const a=coords[i],b=coords[i+1];
+ const segDist=haversine(a,b);
+ if(acc+segDist>=targetDist){
+ const remain=targetDist-acc;
+ const frac=segDist===0?0:remain/segDist;
+ const point={lat:a.lat+(b.lat-a.lat)*frac,lng:a.lng+(b.lng-a.lng)*frac};
+ return[point,...coords.slice(i+1)];
+ }
+ acc+=segDist;
+ }
+ return[coords[coords.length-1]];
+ }
+ function StageBuilderSheet({onClose,onSave}){
   const [name,setName]=useState("");
   const [difficulty,setDifficulty]=useState("blue");
   const [privacy,setPrivacy]=useState("private");
