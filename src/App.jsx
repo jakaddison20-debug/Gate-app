@@ -1796,7 +1796,7 @@ function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,cou
         <Icon.Location size={16} color={C.muted}/>{!start?"Place Start Gate":!finish?"Place Finish Gate":"Both gates placed ✓"}
       </button>
       {dist&&<div style={{textAlign:"center",fontSize:13,color:C.blue,marginBottom:16,fontWeight:600}}>Stage length: {formatDist(dist)}</div>}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}}>
         {[{val:"private",label:"Private",Icon:Icon.Lock},{val:"group",label:"Group",Icon:Icon.Users},{val:"public",label:"Public",Icon:Icon.Globe}].map(({val,label,Icon:Ic})=>(
           <button key={val} className="tap" onClick={()=>setPrivacy(val)} style={{background:privacy===val?C.orangeL:C.surface,border:`1.5px solid ${privacy===val?C.orange:C.border}`,borderRadius:10,padding:"12px 8px",textAlign:"center",transition:"all 0.15s"}}>
             <div style={{display:"flex",justifyContent:"center",marginBottom:4}}><Ic size={16} color={privacy===val?C.orange:C.muted}/></div>
@@ -1804,7 +1804,9 @@ function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,cou
           </button>
         ))}
       </div>
-      <textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Notes — hazards, line choice…" rows={2} style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"12px 14px",fontSize:13,color:C.text,background:C.surface,marginBottom:20}}/>
+      <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase",marginBottom:10}}>Difficulty</div>
+      <div style={{marginBottom:16}}><DifficultyPicker value={difficulty} onChange={setDifficulty}/></div>
+      <textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Notes — hazards, line choice…" rows={2}
        <button className="tap" onClick={()=>canSave&&onSave({id:Date.now(),name:name.trim(),start,finish,privacy,note,time:null,cr:false,crHolder:null,crDate:null,lineCoords})}
         style={{width:"100%",background:canSave?C.orange:C.surface,border:"none",borderRadius:12,padding:15,color:canSave?"#fff":C.muted,fontSize:15,fontWeight:700,transition:"all 0.2s"}}>
         {canSave?"Create Stage":"Complete all fields"}
