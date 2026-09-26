@@ -1030,6 +1030,22 @@ function SegmentRow({stage,onPress,onDelete,userId}){
   );
 }
 function PositionBadge({pos,size=32}){const crownColor=pos===1?"#C9A227":pos===2?"#AEB2B8":pos===3?"#AD8158":null;return(<div style={{display:"flex",flexDirection:"column",alignItems:"center"}}>{crownColor&&<svg width={size*0.5} height={size*0.4} viewBox="0 0 24 20" style={{marginBottom:-size*0.06}}><path d="M3 19l-1.5-10L7 13l5-9 5 9 5.5-4L20 19H3z" fill={crownColor} stroke={crownColor} strokeLinejoin="round" strokeWidth="1"/><rect x="3" y="17" width="17" height="2.6" rx="1" fill={crownColor}/></svg>}<span style={{fontSize:size*0.44,fontWeight:800,color:C.text,letterSpacing:-0.5}}>P{pos}</span></div>);}
+const DIFFICULTIES=[{val:"blue",label:"Blue",color:C.blue},{val:"red",label:"Red",color:C.red},{val:"black",label:"Black",color:"#1A1A1A"}];
+function DifficultyDiamond({color,size=20}){
+  return <svg width={size} height={size} viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" fill={color} transform="rotate(45 12 12)"/></svg>;
+}
+function DifficultyPicker({value,onChange}){
+  return(
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+      {DIFFICULTIES.map(d=>(
+        <button key={d.val} className="tap" onClick={()=>onChange(d.val)} style={{background:value===d.val?`${d.color}15`:C.surface,border:`1.5px solid ${value===d.val?d.color:C.border}`,borderRadius:10,padding:"12px 8px",textAlign:"center",transition:"all 0.15s"}}>
+          <div style={{display:"flex",justifyContent:"center",marginBottom:6}}><DifficultyDiamond color={d.color}/></div>
+          <div style={{fontSize:12,fontWeight:value===d.val?700:400,color:value===d.val?d.color:C.text}}>{d.label}</div>
+        </button>
+      ))}
+    </div>
+  );
+}
 function ProgressChart({attempts}){
   const W=280,H=100,PAD=10;
   const times=attempts.map(a=>a.time_ms);
@@ -1747,8 +1763,9 @@ function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,cou
  } 
  return coords[coords.length-1];
  }
- function StageBuilderSheet({onClose,onSave}){
+  function StageBuilderSheet({onClose,onSave}){
   const [name,setName]=useState("");
+  const [difficulty,setDifficulty]=useState("blue");
   const [privacy,setPrivacy]=useState("private");
   const [start,setStart]=useState(null);
   const [finish,setFinish]=useState(null);
