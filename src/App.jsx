@@ -1807,7 +1807,7 @@ function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,cou
       <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase",marginBottom:10}}>Difficulty</div>
       <div style={{marginBottom:16}}><DifficultyPicker value={difficulty} onChange={setDifficulty}/></div>
       <textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Notes — hazards, line choice…" rows={2}
-       <button className="tap" onClick={()=>canSave&&onSave({id:Date.now(),name:name.trim(),start,finish,privacy,note,time:null,cr:false,crHolder:null,crDate:null,lineCoords})}
+      <button className="tap" onClick={()=>canSave&&onSave({id:Date.now(),name:name.trim(),start,finish,privacy,difficulty,note,time:null,cr:false,crHolder:null,crDate:null,lineCoords})}
         style={{width:"100%",background:canSave?C.orange:C.surface,border:"none",borderRadius:12,padding:15,color:canSave?"#fff":C.muted,fontSize:15,fontWeight:700,transition:"all 0.2s"}}>
         {canSave?"Create Stage":"Complete all fields"}
       </button>
