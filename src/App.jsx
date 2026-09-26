@@ -852,7 +852,24 @@ const myEntry=lb.find(e=>user&&e.user_id===user.id);
 {isCreator&&<button className="tap" onClick={()=>setEditingName(true)} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:6,padding:"3px 8px",color:C.muted,fontSize:11,fontWeight:600}}>Edit</button>}
 </div>
 )}
-<div style={{fontSize:12,color:C.muted,marginTop:4}}>{formatDist(dist)} · {stage.privacy}</div>
+<div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
+  <span style={{fontSize:12,color:C.muted}}>{formatDist(dist)}</span>
+  <span style={{fontSize:12,color:C.muted}}>·</span>
+  <span style={{fontSize:12,color:C.muted}}>{stage.privacy}</span>
+  <span style={{fontSize:12,color:C.muted}}>·</span>
+  {isCreator?(
+    <button className="tap" onClick={()=>setEditingDifficulty(v=>!v)} style={{background:"none",border:"none",padding:0,display:"flex",alignItems:"center",gap:4}}>
+      <DifficultyDiamond color={DIFFICULTIES.find(d=>d.val===difficulty)?.color} size={12}/>
+      <span style={{fontSize:12,fontWeight:600,color:DIFFICULTIES.find(d=>d.val===difficulty)?.color}}>{DIFFICULTIES.find(d=>d.val===difficulty)?.label}</span>
+    </button>
+  ):(
+    <div style={{display:"flex",alignItems:"center",gap:4}}>
+      <DifficultyDiamond color={DIFFICULTIES.find(d=>d.val===difficulty)?.color} size={12}/>
+      <span style={{fontSize:12,fontWeight:600,color:DIFFICULTIES.find(d=>d.val===difficulty)?.color}}>{DIFFICULTIES.find(d=>d.val===difficulty)?.label}</span>
+    </div>
+  )}
+</div>
+{editingDifficulty&&<div style={{marginTop:10}}><DifficultyPicker value={difficulty} onChange={saveDifficulty}/></div>}
 </div>
 <button className="tap" onClick={onClose} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 12px",color:C.text,fontSize:13}}>Close</button>
 </div>
