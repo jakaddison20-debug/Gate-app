@@ -881,6 +881,18 @@ const myEntry=lb.find(e=>user&&e.user_id===user.id);
   )}
 </div>
 {editingDifficulty&&<div style={{marginTop:10}}><DifficultyPicker value={difficulty} onChange={saveDifficulty}/></div>}
+{(builtBy||isCreator)&&(editingBuiltBy?(
+  <div style={{display:"flex",alignItems:"center",gap:8,marginTop:10}}>
+    <input autoFocus value={builtByVal} onChange={e=>setBuiltByVal(e.target.value)} maxLength={60} placeholder="Who built this trail?" style={{flex:1,fontSize:13,color:C.text,border:`1.5px solid ${C.blue}`,borderRadius:8,padding:"7px 10px",background:"#fff"}}/>
+    <button className="tap" onClick={saveBuiltBy} style={{background:C.blue,border:"none",borderRadius:8,padding:"8px 12px",color:"#fff",fontSize:12,fontWeight:700}}>Save</button>
+    <button className="tap" onClick={()=>{setEditingBuiltBy(false);setBuiltByVal(builtBy);}} style={{background:"none",border:"none",color:C.muted,fontSize:12}}>Cancel</button>
+  </div>
+):(
+  <div style={{display:"flex",alignItems:"center",gap:6,marginTop:8,fontSize:12,color:C.muted}}>
+    {builtBy?<span>Trail built by <span style={{fontWeight:600,color:C.text}}>{builtBy}</span></span>:<span>No trail builder credited</span>}
+    {isCreator&&<button className="tap" onClick={()=>setEditingBuiltBy(true)} style={{background:"none",border:"none",padding:0,color:C.blue,fontSize:12,fontWeight:600}}>{builtBy?"Edit":"Add"}</button>}
+  </div>
+))}
 </div>
 <button className="tap" onClick={onClose} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 12px",color:C.text,fontSize:13}}>Close</button>
 </div>
