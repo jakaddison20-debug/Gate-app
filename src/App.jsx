@@ -1622,7 +1622,7 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
           <div style={{padding:"0 16px 40px"}}>
             {crStages.length===0?<div style={{textAlign:"center",padding:"20px",color:C.muted,fontSize:13}}>No stage records yet</div>:crStages.map(s=>(
               <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 0",borderBottom:`1px solid ${C.border}`}}>
-                <Icon.Crown size={18} color="#92400E"/>
+                <GoldCrown size={20}/>
                 <div style={{flex:1,fontSize:14,fontWeight:600,color:C.text}}>{s.name}</div>
                 <div style={{fontSize:14,fontWeight:700,color:"#92400E"}}>{formatTime(s.time)}</div>
               </div>
@@ -1637,7 +1637,7 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
               return(
                 <div key={c.id} style={{marginBottom:8,border:`1px solid ${C.border}`,borderRadius:10,overflow:"hidden"}}>
                   <button className="tap" onClick={()=>setExpandedCRCourse(isOpen?null:c.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"11px 12px",background:"#fff",border:"none",textAlign:"left"}}>
-                    <Icon.Crown size={18} color="#92400E"/>
+                    <GoldCrown size={20}/>
                     <div style={{flex:1,fontSize:14,fontWeight:600,color:C.text}}>{c.name}</div>
                     <div style={{fontSize:14,fontWeight:700,color:"#92400E"}}>{formatTime(c.totalTime)}</div>
                     {isOpen?<Icon.ChevronUp size={14} color={C.mutedL}/>:<Icon.ChevronDown size={14} color={C.mutedL}/>}
@@ -3194,7 +3194,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
             <div style={{fontSize:17,fontWeight:700,color:C.text,marginBottom:16}}>{sheet==='stat-fastest'?'Fastest Stages':sheet==='stat-courses'?'Best Courses':sheet==='stat-completed'?'Stages Completed':'Course Records'}</div>
                        {sheet==='stat-fastest'&&stages.filter(s=>s.cr).map(s=>(
               <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 0",borderBottom:`1px solid ${C.border}`}}>
-                <Icon.Crown size={18} color="#92400E"/>
+                <GoldCrown size={20}/>
                 <div style={{flex:1,fontSize:14,fontWeight:600,color:C.text}}>{s.name}</div>
                 <div style={{fontSize:14,fontWeight:700,color:"#92400E"}}>{formatTime(s.time)}</div>
               </div>
@@ -3205,7 +3205,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
               return(
                 <div key={c.id} style={{marginBottom:8,border:`1px solid ${C.border}`,borderRadius:10,overflow:"hidden"}}>
                   <button className="tap" onClick={()=>setExpandedCRCourse(isOpen?null:c.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"11px 12px",background:"#fff",border:"none",textAlign:"left"}}>
-                    <Icon.Crown size={18} color="#92400E"/>
+                    <GoldCrown size={20}/>
                     <div style={{flex:1,fontSize:14,fontWeight:600,color:C.text}}>{c.name}</div>
                     <div style={{fontSize:14,fontWeight:700,color:"#92400E"}}>{formatTime(c.totalTime)}</div>
                     {isOpen?<Icon.ChevronUp size={14} color={C.mutedL}/>:<Icon.ChevronDown size={14} color={C.mutedL}/>}
