@@ -1602,7 +1602,7 @@ function GroupMapScreen({group,stages,user,onBack,onAddStages}){
 function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stagesRiddenCount,coursesCompleteCount,courseCRList}){
   const [view,setView]=useState('hub');
   const [expandedCRCourse,setExpandedCRCourse]=useState(null);
-  const titles={hub:"Statistics",stages:"Stages",courses:"Courses",fastest:"Fastest Stages",records:"Course Records",myStages:"Your Stages",myCourses:"Your Courses"};
+  const titles={hub:"Statistics",stages:"Stages",courses:"Courses",fastest:"Stage records",records:"Course Records",myStages:"Your Stages",myCourses:"Your Courses"};
   const myStages=useMemo(()=>stages.filter(s=>s.created_by===user.id),[stages,user.id]);
   const myCourses=useMemo(()=>courses.filter(c=>c.created_by===user.id),[courses,user.id]);
   const [creatorStats,setCreatorStats]=useState(null);
