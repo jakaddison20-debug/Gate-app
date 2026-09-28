@@ -1917,6 +1917,7 @@ function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,cou
  function StageBuilderSheet({onClose,onSave}){
   const [name,setName]=useState("");
   const [difficulty,setDifficulty]=useState("blue");
+  const [builtBy,setBuiltBy]=useState("");
   const [privacy,setPrivacy]=useState("private");
   const [start,setStart]=useState(null);
   const [finish,setFinish]=useState(null);
@@ -1957,6 +1958,8 @@ function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,cou
       </div>
       <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase",marginBottom:10}}>Difficulty</div>
       <div style={{marginBottom:16}}><DifficultyPicker value={difficulty} onChange={setDifficulty}/></div>
+      <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase",marginBottom:10}}>Trail built by <span style={{textTransform:"none",letterSpacing:0,fontWeight:400}}>(optional)</span></div>
+      <input value={builtBy} onChange={e=>setBuiltBy(e.target.value)} maxLength={60} placeholder="Give the builders credit" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"12px 14px",fontSize:14,color:C.text,background:C.surface,marginBottom:16}}/>
       <textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Notes — hazards, line choice…" rows={2} style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"12px 14px",fontSize:13,color:C.text,background:C.surface,marginBottom:20}}/>
        <button className="tap" onClick={()=>canSave&&onSave({id:Date.now(),name:name.trim(),start,finish,privacy,difficulty,note,time:null,cr:false,crHolder:null,crDate:null,lineCoords})}
         style={{width:"100%",background:canSave?C.orange:C.surface,border:"none",borderRadius:12,padding:15,color:canSave?"#fff":C.muted,fontSize:15,fontWeight:700,transition:"all 0.2s"}}>
