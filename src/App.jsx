@@ -1679,7 +1679,12 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
           <div style={{padding:"0 16px 32px"}}>
             <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase",margin:"6px 0 10px"}}>Your creations</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-              {creatorTiles.map(t=>(
+              {[creatorTiles[0],creatorTiles[2],creatorTiles[1],creatorTiles[3]].map(t=>(t.key==='stageRides'||t.key==='courseRides')?(
+                <div key={t.key} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:"18px 16px",minHeight:118,display:"flex",flexDirection:"column",justifyContent:"space-between",textAlign:"left"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>{t.icon}</div>
+                  <div><div style={{fontSize:28,fontWeight:800,color:C.text,lineHeight:1}}>{t.value}</div><div style={{fontSize:13,color:C.muted,marginTop:4}}>{t.label}</div></div>
+                </div>
+              ):(
                 <button key={t.key} className="tap" onClick={t.onClick} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:"18px 16px",minHeight:118,display:"flex",flexDirection:"column",justifyContent:"space-between",textAlign:"left"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>{t.icon}<Icon.ChevronRight size={16} color={C.mutedL}/></div>
                   <div><div style={{fontSize:28,fontWeight:800,color:C.text,lineHeight:1}}>{t.value}</div><div style={{fontSize:13,color:C.muted,marginTop:4}}>{t.label}</div></div>
