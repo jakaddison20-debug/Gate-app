@@ -832,7 +832,7 @@ const saveBuiltBy=async()=>{
   setBuiltBy(trimmed);setBuiltByVal(trimmed);setEditingBuiltBy(false);
 };
 const saveDifficulty=async(val)=>{
-  setDifficulty(val);setEditingDifficulty(false);
+  setDifficulty(val);setEditingDifficulty(false);stage.difficulty=val;
   const{error}=await supabase.from('stages').update({difficulty:val}).eq('id',stage.id);
   if(error)alert(error.message);
 };
