@@ -1071,6 +1071,9 @@ function DifficultyPicker({value,onChange}){
     </div>
   );
 }
+function GoldCrown({size=20}){
+  return <svg width={size} height={size*0.85} viewBox="0 0 24 20" style={{flexShrink:0}}><path d="M3 19l-1.5-10L7 13l5-9 5 9 5.5-4L20 19H3z" fill="#C9A227" stroke="#C9A227" strokeLinejoin="round" strokeWidth="1"/><rect x="3" y="17" width="17" height="2.6" rx="1" fill="#C9A227"/></svg>;
+}
 function ProgressChart({attempts}){
   const W=280,H=100,PAD=10;
   const times=attempts.map(a=>a.time_ms);
