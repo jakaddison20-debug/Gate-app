@@ -821,6 +821,16 @@ const [nameVal,setNameVal]=useState(stage.name);
 const [savingName,setSavingName]=useState(false);
 const [difficulty,setDifficulty]=useState(stage.difficulty||'blue');
 const [editingDifficulty,setEditingDifficulty]=useState(false);
+const [builtBy,setBuiltBy]=useState(stage.built_by||'');
+const [editingBuiltBy,setEditingBuiltBy]=useState(false);
+const [builtByVal,setBuiltByVal]=useState(stage.built_by||'');
+const saveBuiltBy=async()=>{
+  const trimmed=builtByVal.trim().slice(0,60);
+  const{error}=await supabase.from('stages').update({built_by:trimmed||null}).eq('id',stage.id);
+  if(error){alert(error.message);return;}
+  stage.built_by=trimmed||null;
+  setBuiltBy(trimmed);setBuiltByVal(trimmed);setEditingBuiltBy(false);
+};
 const saveDifficulty=async(val)=>{
   setDifficulty(val);setEditingDifficulty(false);
   const{error}=await supabase.from('stages').update({difficulty:val}).eq('id',stage.id);
