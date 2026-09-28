@@ -1580,7 +1580,44 @@ function GroupMapScreen({group,stages,user,onBack,onAddStages}){
 function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stagesRiddenCount,coursesCompleteCount,courseCRList}){
   const [view,setView]=useState('hub');
   const [expandedCRCourse,setExpandedCRCourse]=useState(null);
-  const titles={hub:"Statistics",stages:"Stages",courses:"Courses",fastest:"Fastest Stages",records:"Course Records"};
+  const titles={hub:"Statistics",stages:"Stages",courses:"Courses",fastest:"Fastest Stages",records:"Course Records",myStages:"Your Stages",myCourses:"Your Courses"};
+  const myStages=useMemo(()=>stages.filter(s=>s.created_by===user.id),[stages,user.id]);
+  const myCourses=useMemo(()=>courses.filter(c=>c.created_by===user.id),[courses,user.id]);
+  const [creatorStats,setCreatorStats]=useState(null);
+  const myStageKey=myStages.map(s=>s.id).join(',');
+  const myCourseKey=myCourses.map(c=>c.id).join(',');
+  useEffect(()=>{
+    let cancelled=false;
+    const load=async()=>{
+      const stageRides={},stageRiders={},courseRides={},courseRiders={};
+      const allStageRiders=new Set(),allCourseRiders=new Set();
+      let stageTotal=0,courseTotal=0;
+      if(myStages.length>0){
+        const{data}=await supabase.from('stage_times').select('stage_id,user_id').in('stage_id',myStages.map(s=>s.id)).neq('user_id',user.id);
+        (data||[]).forEach(t=>{stageTotal++;stageRides[t.stage_id]=(stageRides[t.stage_id]||0)+1;(stageRiders[t.stage_id]=stageRiders[t.stage_id]||new Set()).add(t.user_id);allStageRiders.add(t.user_id);});
+      }
+      if(myCourses.length>0){
+        const{data}=await supabase.from('course_results').select('course_id,user_id').in('course_id',myCourses.map(c=>c.id)).neq('user_id',user.id);
+        (data||[]).forEach(r=>{courseTotal++;courseRides[r.course_id]=(courseRides[r.course_id]||0)+1;(courseRiders[r.course_id]=courseRiders[r.course_id]||new Set()).add(r.user_id);allCourseRiders.add(r.user_id);});
+      }
+      if(cancelled)return;
+      setCreatorStats({
+        stageTotal,stageRiders:allStageRiders.size,courseTotal,courseRiders:allCourseRiders.size,
+        stageRows:myStages.map(s=>({id:s.id,name:s.name,difficulty:s.difficulty||'blue',rides:stageRides[s.id]||0,riders:stageRiders[s.id]?stageRiders[s.id].size:0})).sort((a,b)=>b.rides-a.rides),
+        courseRows:myCourses.map(c=>({id:c.id,name:c.name,rides:courseRides[c.id]||0,riders:courseRiders[c.id]?courseRiders[c.id].size:0})).sort((a,b)=>b.rides-a.rides),
+      });
+    };
+    load();
+    return()=>{cancelled=true;};
+  },[myStageKey,myCourseKey,user.id]);
+  const ridesIcon=<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>;
+  const fmtStat=v=>v===null||v===undefined?"—":String(v);
+  const creatorTiles=[
+    {key:'stagesCreated',onClick:()=>setView('myStages'),icon:<Icon.Lightning size={20} color={C.muted}/>,value:String(myStages.length),label:"Stages created"},
+    {key:'stageRides',onClick:()=>setView('myStages'),icon:ridesIcon,value:fmtStat(creatorStats&&creatorStats.stageTotal),label:"Rides on your stages"},
+    {key:'coursesCreated',onClick:()=>setView('myCourses'),icon:<Icon.Flag size={20} color={C.muted}/>,value:String(myCourses.length),label:"Courses created"},
+    {key:'courseRides',onClick:()=>setView('myCourses'),icon:ridesIcon,value:fmtStat(creatorStats&&creatorStats.courseTotal),label:"Rides on your courses"},
+  ];
   const tiles=[
     {key:'cr',onClick:()=>setView('fastest'),content:<>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><svg width="20" height="17" viewBox="0 0 24 20"><path d="M3 19l-1.5-10L7 13l5-9 5 9 5.5-4L20 19H3z" fill="#C9A227" stroke="#C9A227" strokeLinejoin="round" strokeWidth="1"/><rect x="3" y="17" width="17" height="2.6" rx="1" fill="#C9A227"/></svg><Icon.ChevronRight size={16} color={C.mutedL}/></div>
@@ -1614,6 +1651,76 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
                 {t.content}
               </button>
             ))}
+          </div>
+        )}
+        {view==='hub'&&(
+          <div style={{padding:"0 16px 32px"}}>
+            <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase",margin:"6px 0 10px"}}>Your creations</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              {creatorTiles.map(t=>(
+                <button key={t.key} className="tap" onClick={t.onClick} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:"18px 16px",minHeight:118,display:"flex",flexDirection:"column",justifyContent:"space-between",textAlign:"left"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>{t.icon}<Icon.ChevronRight size={16} color={C.mutedL}/></div>
+                  <div><div style={{fontSize:28,fontWeight:800,color:C.text,lineHeight:1}}>{t.value}</div><div style={{fontSize:13,color:C.muted,marginTop:4}}>{t.label}</div></div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {view==='myStages'&&(
+          <div style={{padding:"16px 16px 40px"}}>
+            {creatorStats===null?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>:creatorStats.stageRows.length===0?(
+              <div style={{textAlign:"center",padding:"32px 20px",color:C.muted,fontSize:13}}>You haven't created any stages yet</div>
+            ):(
+              <>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:6}}>
+                  <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:12,textAlign:"center"}}><div style={{fontSize:20,fontWeight:800,color:C.text}}>{creatorStats.stageTotal}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>Total rides</div></div>
+                  <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:12,textAlign:"center"}}><div style={{fontSize:20,fontWeight:800,color:C.text}}>{creatorStats.stageRiders}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>Different riders</div></div>
+                </div>
+                <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase",margin:"16px 0 4px"}}>Most popular</div>
+                {creatorStats.stageRows.map(r=>{
+                  const color=(DIFFICULTIES.find(d=>d.val===r.difficulty)||DIFFICULTIES[0]).color;
+                  const max=creatorStats.stageRows[0].rides||1;
+                  return(
+                    <div key={r.id} style={{padding:"12px 0",borderBottom:`1px solid ${C.border}`}}>
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        <svg width="16" height="16" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5" fill={color} transform="rotate(45 12 12)"/></svg>
+                        <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</div><div style={{fontSize:12,color:C.muted,marginTop:1}}>{r.riders} rider{r.riders===1?"":"s"}</div></div>
+                        <div style={{textAlign:"right"}}><div style={{fontSize:16,fontWeight:800,color:C.text}}>{r.rides}</div><div style={{fontSize:10,color:C.muted}}>ride{r.rides===1?"":"s"}</div></div>
+                      </div>
+                      <div style={{height:4,background:"#F0F0F0",borderRadius:2,marginTop:9}}><div style={{width:`${r.rides>0?Math.max((r.rides/max)*100,4):0}%`,height:4,background:color,borderRadius:2}}/></div>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
+        )}
+        {view==='myCourses'&&(
+          <div style={{padding:"16px 16px 40px"}}>
+            {creatorStats===null?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>:creatorStats.courseRows.length===0?(
+              <div style={{textAlign:"center",padding:"32px 20px",color:C.muted,fontSize:13}}>You haven't created any courses yet</div>
+            ):(
+              <>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:6}}>
+                  <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:12,textAlign:"center"}}><div style={{fontSize:20,fontWeight:800,color:C.text}}>{creatorStats.courseTotal}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>Total rides</div></div>
+                  <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:12,textAlign:"center"}}><div style={{fontSize:20,fontWeight:800,color:C.text}}>{creatorStats.courseRiders}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>Different riders</div></div>
+                </div>
+                <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase",margin:"16px 0 4px"}}>Most popular</div>
+                {creatorStats.courseRows.map(r=>{
+                  const max=creatorStats.courseRows[0].rides||1;
+                  return(
+                    <div key={r.id} style={{padding:"12px 0",borderBottom:`1px solid ${C.border}`}}>
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        <Icon.Flag size={16} color={C.blue}/>
+                        <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</div><div style={{fontSize:12,color:C.muted,marginTop:1}}>{r.riders} rider{r.riders===1?"":"s"}</div></div>
+                        <div style={{textAlign:"right"}}><div style={{fontSize:16,fontWeight:800,color:C.text}}>{r.rides}</div><div style={{fontSize:10,color:C.muted}}>ride{r.rides===1?"":"s"}</div></div>
+                      </div>
+                      <div style={{height:4,background:"#F0F0F0",borderRadius:2,marginTop:9}}><div style={{width:`${r.rides>0?Math.max((r.rides/max)*100,4):0}%`,height:4,background:C.blue,borderRadius:2}}/></div>
+                    </div>
+                  );
+                })}
+              </>
+            )}
           </div>
         )}
         {view==='stages'&&<ProgressSheet stages={stages} user={user}/>}
