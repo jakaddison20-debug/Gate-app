@@ -3092,9 +3092,10 @@ const shareDayRecap=()=>{const stageIds=[...new Set(todayStageTimes.map(t=>t.sta
   const mapSearchResults=mapSearchQuery.trim()?stages.filter(s=>s.name.toLowerCase().includes(mapSearchQuery.trim().toLowerCase())).slice(0,6):[];
 
     const TABS=[{id:"home",label:"Home",Ic:Icon.Home},{id:"map",label:"Map",Ic:Icon.Map},{id:"stages",label:"Stages",Ic:Icon.Lightning},{id:"profile",label:"Profile",Ic:Icon.User}];
-  if(!user)return(
+    if(!user)return(
     <div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",overflow:"hidden"}}>
       <style>{STYLES}</style>
+      <Analytics/>
       <AuthScreen/>
     </div>
   );
