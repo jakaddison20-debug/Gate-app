@@ -3170,8 +3170,9 @@ if(showBikeSetup)return(
   );
 
   return(
-    <div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",background:"#fff",overflow:"hidden",fontFamily:"'Inter',sans-serif"}}>
+        <div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",background:"#fff",overflow:"hidden",fontFamily:"'Inter',sans-serif"}}>
       <style>{STYLES}</style>
+      <Analytics/>
       <div style={{height:44,background:tab==="map"?"transparent":"#fff",position:"relative",zIndex:10}}/>
 
             {/* HOME */}
