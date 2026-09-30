@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { createClient } from '@supabase/supabase-js';
+import { Analytics } from "@vercel/analytics/react";
 const supabase=createClient(import.meta.env.VITE_SUPABASE_URL,import.meta.env.VITE_SUPABASE_ANON_KEY);
 
 const DEFAULT_CENTER={lat:53.4919264,lng:-0.3294266};
