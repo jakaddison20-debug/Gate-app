@@ -1099,7 +1099,7 @@ function SegmentRow({stage,onPress,onDelete,userId}){
   const privIcon=stage.privacy==="public"?<Icon.Globe size={12} color={C.mutedL}/>:stage.privacy==="group"?<Icon.Users size={12} color={C.mutedL}/>:<Icon.Lock size={12} color={C.mutedL}/>;
   return(
     <button className="tap" onClick={()=>onPress&&onPress(stage)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"13px 16px",borderBottom:`1px solid ${C.border}`,background:"white",textAlign:"left"}}>
-      <div style={{width:40,height:40,borderRadius:10,background:`${(DIFFICULTIES.find(d=>d.val===stage.difficulty)||DIFFICULTIES[0]).color}12`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><DifficultyDiamond color={(DIFFICULTIES.find(d=>d.val===stage.difficulty)||DIFFICULTIES[0]).color} size={22}/></div>
+      <div style={{width:40,height:40,borderRadius:10,background:`${C.blue}12`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.Lightning size={20} color={C.blue}/></div>
       <div style={{flex:1,minWidth:0}}>
         <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}><div style={{fontSize:14,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{stage.name}</div>{stage.cr&&<span style={{fontSize:9,background:"#FEF3C7",color:"#92400E",borderRadius:4,padding:"1px 5px",fontWeight:700,flexShrink:0}}>CR</span>}</div>
         <div style={{display:"flex",alignItems:"center",gap:4,fontSize:12,color:C.muted}}>{privIcon}<span>{formatDist(dist)}</span></div>
