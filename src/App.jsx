@@ -1163,6 +1163,45 @@ function NotificationsScreen({notifications,onBack,onMarkAll,onOpen}){
   );
 }
 
+function DifficultyChips({value,onChange,shadow=false}){
+  const keys=Object.keys(value);
+  const toggle=d=>{
+    if(d==='all'){onChange({});return;}
+    const next={...value};
+    if(next[d])delete next[d];else next[d]=true;
+    onChange(next);
+  };
+  const chipStyle=(active,color)=>({display:"flex",alignItems:"center",gap:6,padding:"7px 12px",borderRadius:20,fontSize:13,whiteSpace:"nowrap",background:active?`${color}15`:C.surface,border:`1px solid ${active?color:C.border}`,color:active?color:C.text,fontWeight:active?600:400,boxShadow:shadow?"0 2px 8px rgba(0,0,0,0.12)":"none"});
+  return(
+    <div style={{display:"flex",gap:8,overflowX:"auto"}}>
+      <button className="tap" onClick={()=>toggle('all')} style={chipStyle(keys.length===0,C.blue)}>All</button>
+      {DIFFICULTIES.map(d=>(
+        <button key={d.val} className="tap" onClick={()=>toggle(d.val)} style={chipStyle(!!value[d.val],d.color)}><DifficultyDiamond color={d.color} size={14}/>{d.label}</button>
+      ))}
+    </div>
+  );
+}
+function PopularStageCard({stage,rank,rides,distKm,onPress}){
+  const color=(DIFFICULTIES.find(d=>d.val===stage.difficulty)||DIFFICULTIES[0]).color;
+  const{d,start,end}=stageRouteThumb(stage,150,70,12);
+  return(
+    <button className="tap" onClick={()=>onPress(stage)} style={{flex:"0 0 150px",background:"#fff",border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden",textAlign:"left",padding:0}}>
+      <div style={{position:"relative"}}>
+        <svg viewBox="0 0 150 70" width="150" height="70" style={{display:"block"}}>
+          <rect width="150" height="70" fill={C.mapPark}/>
+          <path d={d} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+          <g transform={`translate(${start.x},${start.y}) rotate(45)`}><rect x="-4.5" y="-4.5" width="9" height="9" rx="1" fill={color} stroke="#fff" strokeWidth="1.6"/></g>
+          <circle cx={end.x} cy={end.y} r="4.5" fill="#fff" stroke={C.text} strokeWidth="1.6"/>
+        </svg>
+        <div style={{position:"absolute",top:6,left:6,background:"#fff",borderRadius:6,padding:"2px 7px",fontSize:11,fontWeight:800,color:C.text,boxShadow:"0 1px 3px rgba(0,0,0,0.15)"}}>#{rank}</div>
+      </div>
+      <div style={{padding:"9px 10px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:5}}><DifficultyDiamond color={color} size={13}/><span style={{fontSize:13,fontWeight:700,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{stage.name}</span></div>
+        <div style={{fontSize:11,color:C.muted,marginTop:3}}>{rides} ride{rides===1?"":"s"} · {distKm.toFixed(1)}km away</div>
+      </div>
+    </button>
+  );
+}
 function ProgressChart({attempts}){
   const W=280,H=100,PAD=10;
   const times=attempts.map(a=>a.time_ms);
