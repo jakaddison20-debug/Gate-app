@@ -1097,6 +1097,51 @@ function DifficultyPicker({value,onChange}){
 function GoldCrown({size=20}){
   return <svg width={size} height={size*0.85} viewBox="0 0 24 20" style={{flexShrink:0}}><path d="M3 19l-1.5-10L7 13l5-9 5 9 5.5-4L20 19H3z" fill="#C9A227" stroke="#C9A227" strokeLinejoin="round" strokeWidth="1"/><rect x="3" y="17" width="17" height="2.6" rx="1" fill="#C9A227"/></svg>;
 }
+
+function NotificationsScreen({notifications,onBack,onMarkAll,onOpen}){
+  const unread=notifications.filter(n=>!n.read_at).length;
+  const describe=n=>{
+    const who=<span style={{fontWeight:700}}>{n.actor_name}</span>;
+    if(n.kind==='record_lost')return{icon:<GoldCrown size={16}/>,bg:"#FFFBEB",main:<>{who} took your record on {n.subject_name}</>,sub:`${formatTime(n.new_time_ms)} · you had ${formatTime(n.old_time_ms)}`};
+    if(n.kind==='course_record_lost')return{icon:<GoldCrown size={16}/>,bg:"#FFFBEB",main:<>{who} took your course record on {n.subject_name}</>,sub:`${formatTime(n.new_time_ms)} · you had ${formatTime(n.old_time_ms)}`};
+    if(n.kind==='time_beaten')return{icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>,bg:"#EFF6FF",main:<>{who} beat your time on {n.subject_name}</>,sub:`${formatTime(n.new_time_ms)}${n.new_position?` · you're now P${n.new_position}`:""}`};
+    const rides=n.ride_count||1,riders=(n.rider_ids||[]).length||1;
+    return{icon:<Icon.Lightning size={16} color={C.muted}/>,bg:C.surface,main:<><span style={{fontWeight:700}}>{rides} ride{rides===1?"":"s"}</span> on your stage {n.subject_name}</>,sub:`${riders} rider${riders===1?"":"s"}`};
+  };
+  return(
+    <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
+      <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+        <button className="tap" onClick={onBack} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
+        <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>Notifications</div>
+        {unread>0&&<button className="tap" onClick={onMarkAll} style={{background:"none",border:"none",color:C.blue,fontSize:12,fontWeight:600}}>Mark all read</button>}
+      </div>
+      <div style={{flex:1,overflowY:"auto"}}>
+        {notifications.length===0?(
+          <div style={{textAlign:"center",padding:"56px 24px",color:C.muted}}>
+            <Icon.Bell size={34} color={C.mutedL}/>
+            <div style={{fontSize:15,fontWeight:500,marginTop:12,marginBottom:4,color:C.text}}>Nothing yet</div>
+            <div style={{fontSize:13,color:C.mutedL,lineHeight:1.5}}>You'll see an alert here when someone beats your time or takes your record.</div>
+          </div>
+        ):notifications.map(n=>{
+          const d=describe(n);
+          const isUnread=!n.read_at;
+          return(
+            <button key={n.id} className="tap" onClick={()=>onOpen(n)} style={{width:"100%",display:"flex",alignItems:"flex-start",gap:12,padding:"14px 16px",borderBottom:"1px solid #F0F0F0",background:isUnread?"#F8FAFF":"#fff",textAlign:"left"}}>
+              <div style={{width:34,height:34,borderRadius:9,background:d.bg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{d.icon}</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,color:C.text,lineHeight:1.4}}>{d.main}</div>
+                <div style={{fontSize:12,color:C.muted,marginTop:2}}>{d.sub}</div>
+                <div style={{fontSize:11,color:"#9A9A9A",marginTop:4}}>{timeAgo(n.created_at)}</div>
+              </div>
+              <div style={{width:8,height:8,borderRadius:"50%",background:isUnread?C.blue:"transparent",marginTop:6,flexShrink:0}}/>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function ProgressChart({attempts}){
   const W=280,H=100,PAD=10;
   const times=attempts.map(a=>a.time_ms);
