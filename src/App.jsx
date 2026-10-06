@@ -1970,7 +1970,7 @@ function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,cou
             {item}<Icon.ChevronRight/>
           </button>
         ))}
-        <button className="tap" onClick={()=>supabase.auth.signOut()} style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 0",background:"none",color:C.red,fontSize:14,fontWeight:500,border:"none"}}>Sign Out<Icon.ChevronRight/></button>
+        <button className="tap" onClick={async()=>{try{if('serviceWorker' in navigator){const reg=await navigator.serviceWorker.getRegistration();const sub=reg&&await reg.pushManager.getSubscription();if(sub)await supabase.rpc('remove_push_subscription',{p_endpoint:sub.endpoint});}}catch(e){}supabase.auth.signOut();}} style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 0",background:"none",color:C.red,fontSize:14,fontWeight:500,border:"none"}}>Sign Out<Icon.ChevronRight/></button>
       </div>
     </div>
   );
