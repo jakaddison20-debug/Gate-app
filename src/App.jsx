@@ -3215,7 +3215,40 @@ const turnOnNotifications=async()=>{
   else alert("Couldn't turn on notifications: "+r.reason);
 };
 const dismissIosHint=()=>{try{localStorage.setItem('gate_ios_hint_dismissed','1');}catch(e){}setPushState('hidden');};
- const [notifications,setNotifications]=useState([]);
+ const [rivals,setRivals]=useState([]);
+const rivalStageKey=useMemo(()=>stages.filter(s=>s.time).map(s=>s.id).join(','),[stages]);
+useEffect(()=>{
+  if(!user||!rivalStageKey){setRivals([]);return;}
+  const ids=rivalStageKey.split(',');
+  supabase.from('stage_times').select('stage_id,user_id,time_ms,profiles(display_name)').in('stage_id',ids).then(({data})=>{
+    if(!data)return;
+    const byStage={};
+    data.forEach(t=>{
+      const st=(byStage[t.stage_id]=byStage[t.stage_id]||{});
+      const cur=st[t.user_id];
+      if(!cur||t.time_ms<cur.time)st[t.user_id]={user_id:t.user_id,time:t.time_ms,name:(t.profiles&&t.profiles.display_name)||'Rider'};
+    });
+    const cards=[];
+    Object.keys(byStage).forEach(stageId=>{
+      const list=Object.values(byStage[stageId]).sort((a,b)=>a.time-b.time);
+      const idx=list.findIndex(e=>e.user_id===user.id);
+      if(idx<0)return;
+      const me=list[idx];
+      const limit=Math.max(2000,me.time*0.05);
+      const stage=stages.find(s=>String(s.id)===String(stageId));
+      if(!stage)return;
+      const ahead=idx>0?list[idx-1]:null;
+      const behind=idx<list.length-1?list[idx+1]:null;
+      const aGap=ahead?me.time-ahead.time:Infinity;
+      const bGap=behind?behind.time-me.time:Infinity;
+      if(aGap<=limit&&aGap<=bGap)cards.push({key:stageId+'a',kind:'chase',stageId,stageName:stage.name,name:ahead.name.split(' ')[0],gap:aGap});
+      else if(bGap<=limit)cards.push({key:stageId+'b',kind:'defend',stageId,stageName:stage.name,name:behind.name.split(' ')[0],gap:bGap,pos:idx+1});
+    });
+    cards.sort((a,b)=>a.gap-b.gap);
+    setRivals(cards.slice(0,3));
+  });
+},[rivalStageKey,user,refreshTick]);
+const [notifications,setNotifications]=useState([]);
 const [showNotifications,setShowNotifications]=useState(false);
 useEffect(()=>{if(!user)return;supabase.from('notifications').select('*').eq('user_id',user.id).order('created_at',{ascending:false}).limit(50).then(({data})=>{if(data)setNotifications(data);});},[user,refreshTick]);
 const unreadCount=notifications.filter(n=>!n.read_at).length;
