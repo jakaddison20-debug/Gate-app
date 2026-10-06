@@ -3224,7 +3224,13 @@ if(showBikeSetup)return(
     </div>
   );
 
-
+  
+  if(showNotifications)return(
+    <div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
+      <style>{STYLES}</style>
+      <NotificationsScreen notifications={notifications} onBack={()=>setShowNotifications(false)} onMarkAll={markAllNotificationsRead} onOpen={openNotification}/>
+    </div>
+  );
   if(activeRace)return(
     <div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif"}}>
       <style>{STYLES}</style>
