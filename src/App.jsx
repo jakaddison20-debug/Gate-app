@@ -3094,6 +3094,25 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
     const [recentStageTimes,setRecentStageTimes]=useState([]);
 const [feed,setFeed]=useState([]);
 useEffect(()=>{if(!user)return;supabase.from('app_events').select('id,event_type,message,created_at,stage_id,profiles(display_name,avatar_url)').in('event_type',['stage_record','personal_best','course_finish','stage_created','course_created','day_recap']).order('created_at',{ascending:false}).limit(50).then(({data})=>{if(data)setFeed(data.map(e=>({id:e.id,event_type:e.event_type,message:e.message,stage_id:e.stage_id,userName:e.profiles?.display_name||'Rider',avatarUrl:e.profiles?.avatar_url||null,ago:timeAgo(e.created_at)})));});},[user,refreshTick]);
+  const [pushState,setPushState]=useState('hidden');
+useEffect(()=>{
+  if(!user)return;
+  if(pushSupported()){
+    if(Notification.permission==='granted'){setPushState('hidden');savePushSubscription().catch(e=>console.log('push save failed',e));}
+    else if(Notification.permission==='default')setPushState('prompt');
+    else setPushState('hidden');
+  }else if(isIOS()&&!isStandalone()){
+    let dismissed=false;try{dismissed=!!localStorage.getItem('gate_ios_hint_dismissed');}catch(e){}
+    setPushState(dismissed?'hidden':'ios');
+  }else setPushState('hidden');
+},[user?.id]);
+const turnOnNotifications=async()=>{
+  const r=await enablePush();
+  if(r.ok)setPushState('done');
+  else if(r.reason==='denied')setPushState('hidden');
+  else alert("Couldn't turn on notifications: "+r.reason);
+};
+const dismissIosHint=()=>{try{localStorage.setItem('gate_ios_hint_dismissed','1');}catch(e){}setPushState('hidden');};
  const [notifications,setNotifications]=useState([]);
 const [showNotifications,setShowNotifications]=useState(false);
 useEffect(()=>{if(!user)return;supabase.from('notifications').select('*').eq('user_id',user.id).order('created_at',{ascending:false}).limit(50).then(({data})=>{if(data)setNotifications(data);});},[user,refreshTick]);
