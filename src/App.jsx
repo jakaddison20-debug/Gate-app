@@ -3284,6 +3284,35 @@ const shareDayRecap=()=>{const stageIds=[...new Set(todayStageTimes.map(t=>t.sta
     return buckets.map(b=>({stages:b.stages,mins:Math.round(b.mins)}));
   },[recentStageTimes,todayKey]);
 
+const weekStats=useMemo(()=>{
+  const thisMonday=getMonday(new Date());
+  const buckets=[];
+  for(let wk=11;wk>=0;wk--){
+    const start=new Date(thisMonday);
+    start.setDate(start.getDate()-wk*7);
+    const end=new Date(start);
+    end.setDate(end.getDate()+6);
+    end.setHours(23,59,59,999);
+    buckets.push({start,end,stageSet:new Set(),runs:0,mins:0,pbs:0,days:[false,false,false,false,false,false,false]});
+  }
+  const bestByStage={};
+  [...recentStageTimes].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).forEach(t=>{
+    const created=new Date(t.created_at);
+    const prev=bestByStage[t.stage_id];
+    const isPb=prev!==undefined&&t.time_ms<prev;
+    if(prev===undefined||t.time_ms<prev)bestByStage[t.stage_id]=t.time_ms;
+    const bucket=buckets.find(b=>created>=b.start&&created<=b.end);
+    if(!bucket)return;
+    bucket.stageSet.add(t.stage_id);
+    bucket.runs+=1;
+    bucket.mins+=t.time_ms/60000;
+    if(isPb)bucket.pbs+=1;
+    const dayIdx=Math.round((new Date(created.getFullYear(),created.getMonth(),created.getDate())-new Date(bucket.start.getFullYear(),bucket.start.getMonth(),bucket.start.getDate()))/86400000);
+    if(dayIdx>=0&&dayIdx<7)bucket.days[dayIdx]=true;
+  });
+  return buckets.map(b=>({stages:b.stageSet.size,runs:b.runs,mins:Math.round(b.mins),pbs:b.pbs,days:b.days}));
+},[recentStageTimes,todayKey]);
+
   const dragRef=useRef(null),pinchRef=useRef(null);
   const onTouchStart=useCallback(e=>{if(e.touches.length===2){return;}else{dragRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY,center:{...mapCenter}};pinchRef.current=null;}},[mapCenter,zoom]);
   const onTouchMove=useCallback(e=>{e.preventDefault();if(e.touches.length===1&&dragRef.current){const dx=e.touches[0].clientX-dragRef.current.x,dy=e.touches[0].clientY-dragRef.current.y,scale=Math.pow(2,zoom)*256,mercY=Math.log(Math.tan(Math.PI/4+(dragRef.current.center.lat*Math.PI)/360)),newMercY=mercY+(dy/scale)*Math.PI*2;setMapCenter({lng:dragRef.current.center.lng-(dx/scale)*360,lat:((Math.atan(Math.exp(newMercY))*2-Math.PI/2)*180)/Math.PI});}},[zoom]);
