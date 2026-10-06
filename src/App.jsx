@@ -1862,6 +1862,108 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
 }
 
 // ── Profile ───────────────────────────────────────────────────────────────────
+function ProfileScreen({stages,settings,courseResults,pastWeeks,onSettingsPress,onGoToStages,onGoToCourses,onOpenProgress,onOpenBikeSetup}){
+  const [selectedWeek,setSelectedWeek]=useState(pastWeeks.length-1);
+  const stagesRidden=stages.filter(s=>s.time).length;
+  const coursesComplete=courseResults.length;
+  const w=pastWeeks[selectedWeek]||{stages:0,runs:0,mins:0,pbs:0,days:[false,false,false,false,false,false,false]};
+  const weeksAgo=pastWeeks.length-1-selectedWeek;
+  const weekLabel=weeksAgo===0?"This week":weeksAgo===1?"1 week ago":`${weeksAgo} weeks ago`;
+  const fmtMins=m=>m>=60?`${Math.floor(m/60)}h ${m%60}m`:`${m}m`;
+  const weekMax=Math.max(...pastWeeks.map(x=>x.mins),1);
+  const dayLabels=["M","T","W","T","F","S","S"];
+  const stats=[{label:"Stages",value:String(w.stages)},{label:"Runs",value:String(w.runs)},{label:"Time",value:fmtMins(w.mins)},{label:"New PBs",value:String(w.pbs),green:w.pbs>0}];
+  return(
+    <div>
+      <div style={{background:"#fff",padding:"16px 20px 18px",borderBottom:`1px solid ${C.border}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:20}}>
+          <div style={{width:60,height:60,borderRadius:"50%",background:C.surface,border:`2px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>{settings.avatarUrl?<img src={settings.avatarUrl} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<Icon.User size={28} color={C.muted}/>}</div>
+          <div style={{flex:1}}><div style={{fontSize:20,fontWeight:800,color:C.text}}>{settings.displayName}</div></div>
+          <button className="tap" onClick={onSettingsPress} style={{width:36,height:36,borderRadius:9,background:C.surface,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon.Settings size={18} color={C.muted}/></button>
+        </div>
+        <div style={{display:"flex",gap:28}}>
+          {[{label:"Followers",value:"—"},{label:"Stages Ridden",value:String(stagesRidden)},{label:"Courses Complete",value:String(coursesComplete)}].map(s=>(
+            <div key={s.label}>
+              <div style={{fontSize:11,color:C.muted,fontWeight:500}}>{s.label}</div>
+              <div style={{fontSize:17,color:C.text,fontWeight:700,marginTop:3}}>{s.value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{padding:"18px 16px 0"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
+          <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase"}}>Your week</div>
+          <div style={{fontSize:12,color:C.muted}}>{weekLabel}</div>
+        </div>
+        <div style={{border:`1px solid ${C.border}`,borderRadius:14,padding:14}}>
+          <div style={{display:"flex",gap:24,marginBottom:14}}>
+            {stats.map(s=>(
+              <div key={s.label}>
+                <div style={{fontSize:20,fontWeight:800,color:s.green?C.green:C.text,lineHeight:1.1}}>{s.value}</div>
+                <div style={{fontSize:11,color:C.muted,marginTop:2}}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{display:"flex",gap:5}}>
+            {dayLabels.map((l,i)=>(
+              <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:5}}>
+                <div style={{width:"100%",height:5,borderRadius:3,background:w.days[i]?C.blue:"#F0F0F0"}}/>
+                <div style={{fontSize:9,color:C.muted,fontWeight:500}}>{l}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{borderTop:`1px solid ${C.border}`,marginTop:14,paddingTop:12}}>
+            <div style={{display:"flex",alignItems:"flex-end",gap:3,height:40,marginBottom:6}}>
+              {pastWeeks.map((x,i)=>{
+                const pct=x.mins>0?Math.max((x.mins/weekMax)*100,10):6;
+                const on=i===selectedWeek;
+                return(
+                  <button key={i} onClick={()=>setSelectedWeek(i)} style={{flex:1,height:"100%",display:"flex",alignItems:"flex-end",background:"none",border:"none",padding:0,cursor:"pointer"}}>
+                    <div style={{width:"100%",boxSizing:"border-box",height:`${pct}%`,background:on?`${C.blue}22`:C.mutedL,border:on?`1.5px solid ${C.blue}`:"none",borderRadius:2,minHeight:3}}/>
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between"}}>
+              <div style={{fontSize:9,color:C.muted}}>12 wks ago</div>
+              <div style={{fontSize:9,color:C.muted}}>Now</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{padding:"10px 16px 24px"}}>
+        {[
+          {label:"Statistics",Ic:Icon.BarChart,onClick:onOpenProgress},
+          {label:"Stages",Ic:Icon.Lightning,onClick:onGoToStages},
+          {label:"Courses",Ic:Icon.Flag,onClick:onGoToCourses},
+          {label:"Bike Setup",Ic:Icon.Bike,onClick:onOpenBikeSetup},
+          {label:"Posts",Ic:Icon.Image,onClick:null},
+        ].map((item,i,arr)=>(
+          <button key={item.label} className="tap" onClick={item.onClick||undefined} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"13px 0",background:"none",border:"none",borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none",textAlign:"left"}}>
+            <item.Ic size={18} color={C.muted}/>
+            <div style={{flex:1,fontSize:14,fontWeight:600,color:C.text}}>{item.label}</div>
+            <Icon.ChevronRight size={16} color={C.mutedL}/>
+          </button>
+        ))}
+      </div>
+
+      <div style={{padding:"0 16px 60px"}}>
+        <button className="tap" onClick={onSettingsPress} style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 0",borderBottom:`1px solid ${C.border}`,background:"none",color:C.text,fontSize:14,fontWeight:500}}>
+          Settings<Icon.ChevronRight/>
+        </button>
+        {["Connected Apps","Privacy"].map((item,i)=>(
+          <button key={item} className="tap" style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 0",borderBottom:i<1?`1px solid ${C.border}`:"none",background:"none",color:C.text,fontSize:14,fontWeight:500}}>
+            {item}<Icon.ChevronRight/>
+          </button>
+        ))}
+        <button className="tap" onClick={async()=>{try{if('serviceWorker' in navigator){const reg=await navigator.serviceWorker.getRegistration();const sub=reg&&await reg.pushManager.getSubscription();if(sub)await supabase.rpc('remove_push_subscription',{p_endpoint:sub.endpoint});}}catch(e){}supabase.auth.signOut();}} style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 0",background:"none",color:C.red,fontSize:14,fontWeight:500,border:"none"}}>Sign Out<Icon.ChevronRight/></button>
+      </div>
+    </div>
+  );
+}
+
 function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,courseCRCount,onSettingsPress,onStatPress,onGoToStages,onGoToCourses,onOpenProgress,onOpenBikeSetup}){
   const [selectedWeek,setSelectedWeek]=useState(pastWeeks.length-1);
   const stagesRidden=stages.filter(s=>s.time).length;
