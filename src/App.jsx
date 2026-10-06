@@ -3478,6 +3478,25 @@ if(showBikeSetup)return(
               <button className="tap" onClick={dismissIosHint} style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:9,padding:"8px 12px",color:C.text,fontSize:12,fontWeight:600}}>Got it</button>
             </div>
           )}
+          {rivals.length>0&&(
+            <div style={{padding:"16px 16px 0"}}>
+              <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase",marginBottom:8}}>Rivals</div>
+              <div style={{border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden"}}>
+                {rivals.map((r,i)=>(
+                  <button key={r.key} className="tap" onClick={()=>goToStage(r.stageId)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"12px 14px",background:"#fff",border:"none",borderBottom:i<rivals.length-1?`1px solid ${C.border}`:"none",textAlign:"left"}}>
+                    <div style={{width:34,height:34,borderRadius:9,background:r.kind==='chase'?"#EFF6FF":"#FFFBEB",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      {r.kind==='chase'?<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>:r.pos===1?<GoldCrown size={16}/>:<span style={{fontSize:11,fontWeight:800,color:C.yellow}}>P{r.pos}</span>}
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:11,fontWeight:700,color:r.kind==='chase'?C.blue:C.yellow,letterSpacing:0.5}}>{r.kind==='chase'?"CHASE":"DEFEND"}</div>
+                      <div style={{fontSize:13,color:C.text,lineHeight:1.35,marginTop:1}}>{r.name} is <span style={{fontWeight:700}}>{(r.gap/1000).toFixed(2)}s</span> {r.kind==='chase'?"ahead of you":"behind you"} on {r.stageName}</div>
+                    </div>
+                    <Icon.ChevronRight size={16} color={C.mutedL}/>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {todayStageTimes.length>0&&!daySharedToday&&<button className="tap" onClick={shareDayRecap} style={{width:"calc(100% - 32px)",margin:"14px 16px 0",background:C.surface,border:`1px dashed ${C.border}`,borderRadius:10,padding:"12px 14px",color:C.text,fontSize:13,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><Icon.BarChart size={15} color={C.green}/>Share today's ride · {new Set(todayStageTimes.map(t=>t.stage_id)).size} stages</button>}
           {feed.length===0?<div style={{textAlign:"center",padding:"48px 20px",color:C.muted,fontSize:13}}>No activity yet — set a record, finish a course, or add a stage to get things started.</div>:feed.map(item=><FeedCard key={item.id} item={item} stage={stages.find(s=>String(s.id)===String(item.stage_id))} onViewStage={goToStage}/>)}
         </div>
