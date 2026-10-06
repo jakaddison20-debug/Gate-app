@@ -3298,6 +3298,22 @@ if(showBikeSetup)return(
             </div>
           </div>
           <OfflineBanner/>
+          {pushState==='prompt'&&(
+            <div style={{margin:"14px 16px 0",background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:12,padding:14,display:"flex",alignItems:"center",gap:12}}>
+              <div style={{width:36,height:36,borderRadius:10,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.Bell size={18} color={C.blue}/></div>
+              <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700,color:C.text}}>Turn on notifications</div><div style={{fontSize:12,color:C.muted,marginTop:2,lineHeight:1.35}}>Know straight away when someone beats your time or takes your record.</div></div>
+              <button className="tap" onClick={turnOnNotifications} style={{background:C.blue,border:"none",borderRadius:9,padding:"9px 14px",color:"#fff",fontSize:13,fontWeight:700}}>Turn on</button>
+            </div>
+          )}
+          {pushState==='done'&&(
+            <div style={{margin:"14px 16px 0",padding:"11px 14px",background:"#F0FDF4",border:"1px solid #BBF7D0",borderRadius:12,fontSize:13,fontWeight:600,color:C.green}}>✓ Notifications are on</div>
+          )}
+          {pushState==='ios'&&(
+            <div style={{margin:"14px 16px 0",background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:14,display:"flex",alignItems:"center",gap:12}}>
+              <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700,color:C.text}}>Get alerts on your iPhone</div><div style={{fontSize:12,color:C.muted,marginTop:2,lineHeight:1.35}}>Tap Share, then Add to Home Screen, and open GATE from the new icon.</div></div>
+              <button className="tap" onClick={dismissIosHint} style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:9,padding:"8px 12px",color:C.text,fontSize:12,fontWeight:600}}>Got it</button>
+            </div>
+          )}
           {todayStageTimes.length>0&&!daySharedToday&&<button className="tap" onClick={shareDayRecap} style={{width:"calc(100% - 32px)",margin:"14px 16px 0",background:C.surface,border:`1px dashed ${C.border}`,borderRadius:10,padding:"12px 14px",color:C.text,fontSize:13,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><Icon.BarChart size={15} color={C.green}/>Share today's ride · {new Set(todayStageTimes.map(t=>t.stage_id)).size} stages</button>}
           {feed.length===0?<div style={{textAlign:"center",padding:"48px 20px",color:C.muted,fontSize:13}}>No activity yet — set a record, finish a course, or add a stage to get things started.</div>:feed.map(item=><FeedCard key={item.id} item={item} stage={stages.find(s=>String(s.id)===String(item.stage_id))} onViewStage={goToStage}/>)}
         </div>
