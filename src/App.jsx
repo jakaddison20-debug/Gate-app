@@ -3073,6 +3073,26 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
     const [recentStageTimes,setRecentStageTimes]=useState([]);
 const [feed,setFeed]=useState([]);
 useEffect(()=>{if(!user)return;supabase.from('app_events').select('id,event_type,message,created_at,stage_id,profiles(display_name,avatar_url)').in('event_type',['stage_record','personal_best','course_finish','stage_created','course_created','day_recap']).order('created_at',{ascending:false}).limit(50).then(({data})=>{if(data)setFeed(data.map(e=>({id:e.id,event_type:e.event_type,message:e.message,stage_id:e.stage_id,userName:e.profiles?.display_name||'Rider',avatarUrl:e.profiles?.avatar_url||null,ago:timeAgo(e.created_at)})));});},[user,refreshTick]);
+ const [notifications,setNotifications]=useState([]);
+const [showNotifications,setShowNotifications]=useState(false);
+useEffect(()=>{if(!user)return;supabase.from('notifications').select('*').eq('user_id',user.id).order('created_at',{ascending:false}).limit(50).then(({data})=>{if(data)setNotifications(data);});},[user,refreshTick]);
+const unreadCount=notifications.filter(n=>!n.read_at).length;
+const markNotificationRead=(id)=>{
+  const now=new Date().toISOString();
+  setNotifications(prev=>prev.map(n=>n.id===id?{...n,read_at:now}:n));
+  supabase.from('notifications').update({read_at:now}).eq('id',id).then(()=>{});
+};
+const markAllNotificationsRead=()=>{
+  const now=new Date().toISOString();
+  setNotifications(prev=>prev.map(n=>n.read_at?n:{...n,read_at:now}));
+  supabase.from('notifications').update({read_at:now}).eq('user_id',user.id).is('read_at',null).then(()=>{});
+};
+const openNotification=(n)=>{
+  if(!n.read_at)markNotificationRead(n.id);
+  setShowNotifications(false);
+  if(n.kind==='course_record_lost'){setCoursesFilter('courses');setTab('stages');}
+  else if(n.stage_id)goToStage(n.stage_id);
+}; 
 const [todayStageTimes,setTodayStageTimes]=useState([]);
 const [daySharedToday,setDaySharedToday]=useState(false);
 useEffect(()=>{if(!user)return;const startOfDay=new Date();startOfDay.setHours(0,0,0,0);supabase.from('stage_times').select('time_ms,stage_id').eq('user_id',user.id).gte('created_at',startOfDay.toISOString()).then(({data})=>{if(data)setTodayStageTimes(data);});supabase.from('app_events').select('id').eq('user_id',user.id).eq('event_type','day_recap').gte('created_at',startOfDay.toISOString()).then(({data})=>{setDaySharedToday(!!(data&&data.length));});},[user,refreshTick]);
@@ -3085,7 +3105,6 @@ const shareDayRecap=()=>{const stageIds=[...new Set(todayStageTimes.map(t=>t.sta
     return()=>{document.removeEventListener('visibilitychange',check);clearInterval(interval);};
   },[]);
   useEffect(()=>{if(!user)return;const since=new Date();since.setDate(since.getDate()-83);since.setHours(0,0,0,0);supabase.from('stage_times').select('stage_id,time_ms,created_at').eq('user_id',user.id).gte('created_at',since.toISOString()).then(({data})=>{if(data)setRecentStageTimes(data);});},[user,refreshTick]);
-
 
     const weeklyActivity=useMemo(()=>{
     const monday=getMonday(new Date());
