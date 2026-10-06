@@ -297,6 +297,7 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
             {key:"newLeaderboard",label:"Leaderboard changes",sub:"When someone beats your time"},
             {key:"sessionInvite",label:"Session invites",sub:"When a mate creates a session"},
             {key:"courseRecord",label:"Course records",sub:"When you set a new CR"},
+            {key:"ridesOnMine",label:"Rides on your stages",sub:"A daily summary when others ride your stages"},
             {key:"weeklyDigest",label:"Weekly digest",sub:"Summary of your activity",last:true},
           ].map(({key,label,sub,last})=>(
             <Row key={key} label={label} sub={sub} noBorder={last} right={
