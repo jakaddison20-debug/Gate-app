@@ -3287,6 +3287,19 @@ useEffect(()=>{
     setRivals(cards.slice(0,3));
   });
 },[rivalStageKey,user,refreshTick]);
+const [diffFilter,setDiffFilter]=useState({});
+const [sortMode,setSortMode]=useState('popular');
+const [stageRides,setStageRides]=useState({});
+useEffect(()=>{
+  if(!user||!stageIdsKey)return;
+  const since=new Date();since.setDate(since.getDate()-30);
+  supabase.from('stage_times').select('stage_id').in('stage_id',stageIdsKey.split(',')).gte('created_at',since.toISOString()).then(({data})=>{
+    if(!data)return;
+    const counts={};
+    data.forEach(t=>{counts[t.stage_id]=(counts[t.stage_id]||0)+1;});
+    setStageRides(counts);
+  });
+},[stageIdsKey,user,refreshTick]);
 const [notifications,setNotifications]=useState([]);
 const [showNotifications,setShowNotifications]=useState(false);
 useEffect(()=>{if(!user)return;supabase.from('notifications').select('*').eq('user_id',user.id).order('created_at',{ascending:false}).limit(50).then(({data})=>{if(data)setNotifications(data);});},[user,refreshTick]);
@@ -3394,7 +3407,9 @@ const weekStats=useMemo(()=>{
   const onMouseMove=e=>{if(!mouseRef.current)return;const dx=e.clientX-mouseRef.current.x,dy=e.clientY-mouseRef.current.y,scale=Math.pow(2,zoom)*256,mercY=Math.log(Math.tan(Math.PI/4+(mouseRef.current.center.lat*Math.PI)/360)),newMercY=mercY+(dy/scale)*Math.PI*2;setMapCenter({lng:mouseRef.current.center.lng-(dx/scale)*360,lat:((Math.atan(Math.exp(newMercY))*2-Math.PI/2)*180)/Math.PI});};
   const onMouseUp=()=>{mouseRef.current=null;};
   const onWheel=e=>{e.preventDefault();setZoom(z=>Math.max(8,Math.min(18,z-e.deltaY*0.003)));};    const [proximityFilter,setProximityFilter]=useState("nearby");
-  const filteredStages=stages.filter(s=>stagesFilter==="all"||s.privacy===stagesFilter).filter(s=>proximityFilter==="explore"||haversine(userPos,s.start)<=32187);
+  const diffKeys=Object.keys(diffFilter);
+  const filteredStages=stages.filter(s=>stagesFilter==="all"||s.privacy===stagesFilter).filter(s=>proximityFilter==="explore"||haversine(userPos,s.start)<=32187).filter(s=>diffKeys.length===0||diffFilter[s.difficulty||'blue']).sort((a,b)=>sortMode==='popular'?((stageRides[b.id]||0)-(stageRides[a.id]||0)):(haversine(userPos,a.start)-haversine(userPos,b.start)));
+  const popularStages=[...filteredStages].sort((a,b)=>(stageRides[b.id]||0)-(stageRides[a.id]||0)).filter(s=>(stageRides[s.id]||0)>0).slice(0,4);
   const [mapSearchQuery,setMapSearchQuery]=useState("");
   const mapSearchResults=mapSearchQuery.trim()?stages.filter(s=>s.name.toLowerCase().includes(mapSearchQuery.trim().toLowerCase())).slice(0,6):[];
 
@@ -3616,6 +3631,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
                 </button>
               ))}
             </div>}
+            {coursesFilter==="stages"&&<div style={{marginBottom:10}}><DifficultyChips value={diffFilter} onChange={setDiffFilter}/></div>}
             {coursesFilter==="stages"&&<div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:2}}>
               {[{v:"all",l:"All"},{v:"public",l:"Public"},{v:"group",l:"Group"},{v:"private",l:"Private"}].map(f=>(
                 <button key={f.v} className="tap" onClick={()=>setStagesFilter(f.v)} style={{padding:"6px 14px",borderRadius:20,whiteSpace:"nowrap",background:stagesFilter===f.v?"white":C.surface,border:`1px solid ${stagesFilter===f.v?C.blue:C.border}`,color:stagesFilter===f.v?C.blue:C.text,fontSize:13,fontWeight:stagesFilter===f.v?600:400}}>{f.l}</button>
