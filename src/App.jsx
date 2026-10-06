@@ -301,7 +301,7 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
             {key:"weeklyDigest",label:"Weekly digest",sub:"Summary of your activity",last:true},
           ].map(({key,label,sub,last})=>(
             <Row key={key} label={label} sub={sub} noBorder={last} right={
-              <Toggle value={s.notifications[key]} onChange={v=>update(`notifications.${key}`,v)}/>
+              <Toggle value={s.notifications[key]!==false} onChange={v=>update(`notifications.${key}`,v)}/>
             }/>
           ))}
         </Section>
