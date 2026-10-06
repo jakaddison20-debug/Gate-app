@@ -47,6 +47,26 @@ async function syncOfflineTimes(){
   saveOfflineTimesQueue(remaining);
   return{synced,remaining:remaining.length};
 }
+const VAPID_PUBLIC_KEY="BADsQA8MkAdC8BjhzkkUJtTZm50ivtVAN_c1ZRnc33-Y-Kmn7QoskwxjtjS0asRgTOH_OJ5_BjQrLhKYrZVGshY";
+function urlBase64ToUint8Array(b64){const pad="=".repeat((4-b64.length%4)%4);const base=(b64+pad).replace(/-/g,"+").replace(/_/g,"/");const raw=atob(base);const out=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);return out;}
+function pushSupported(){return typeof window!=='undefined'&&'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window;}
+function isStandalone(){return (window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||window.navigator.standalone===true;}
+function isIOS(){return /iphone|ipad|ipod/i.test(navigator.userAgent);}
+async function savePushSubscription(){
+  const reg=await navigator.serviceWorker.register('/sw.js');
+  await navigator.serviceWorker.ready;
+  let sub=await reg.pushManager.getSubscription();
+  if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)});
+  const j=sub.toJSON();
+  const{error}=await supabase.rpc('save_push_subscription',{p_endpoint:j.endpoint,p_p256dh:j.keys.p256dh,p_auth:j.keys.auth,p_ua:navigator.userAgent.slice(0,200)});
+  if(error)throw error;
+}
+async function enablePush(){
+  const perm=await Notification.requestPermission();
+  if(perm!=='granted')return{ok:false,reason:perm};
+  try{await savePushSubscription();return{ok:true};}
+  catch(e){return{ok:false,reason:(e&&e.message)||String(e)};}
+}
 function getMonday(d){const date=new Date(d);const day=date.getDay();const diff=(day===0?-6:1-day);date.setDate(date.getDate()+diff);date.setHours(0,0,0,0);return date;}
 function project(coord,center,zoom,w,h){const scale=Math.pow(2,zoom)*256,mercY=c=>Math.log(Math.tan(Math.PI/4+(c*Math.PI)/360)),cx=(center.lng+180)/360,cy=(1-mercY(center.lat)/Math.PI)/2;return{x:((coord.lng+180)/360-cx)*scale+w/2,y:((1-mercY(coord.lat)/Math.PI)/2-cy)*scale+h/2};}
 function unproject(x,y,center,zoom,w,h){const scale=Math.pow(2,zoom)*256,mercY=c=>Math.log(Math.tan(Math.PI/4+(c*Math.PI)/360)),cx=(center.lng+180)/360,cy=(1-mercY(center.lat)/Math.PI)/2,lng=((x-w/2)/scale+cx)*360-180,lat=((Math.atan(Math.exp(((1-2*((y-h/2)/scale+cy))*Math.PI)))*2-Math.PI/2)*180)/Math.PI;return{lat,lng};}
