@@ -273,7 +273,7 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
 
       <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,position:"sticky",top:0,zIndex:5,display:"flex",alignItems:"center",gap:12}}>
         <button className="tap" onClick={()=>{onSave(s);onBack();}} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
-        <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>Settings <span style={{fontSize:11,color:C.muted}}>(build 4)</span></div>
+        <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>Settings</div>
         <button className="tap" onClick={()=>{onSave(s);onBack();}} style={{background:C.blue,border:"none",borderRadius:8,padding:"6px 14px",color:"white",fontSize:13,fontWeight:600}}>Save</button>
       </div>
 
@@ -337,30 +337,6 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
           <Row label="Share activity to feed" sub="Your rides appear in mates' feeds" noBorder right={
             <Toggle value={s.privacy.shareActivity} onChange={v=>update("privacy.shareActivity",v)}/>
           }/>
-        </Section>
-
-        {/* Connected apps */}
-        <Section title="Connected Apps">
-          <Row label="Strava" sub={s.strava.connected?`Connected as ${s.strava.handle}`:"Sync activities automatically"} right={
-            <button className="tap" onClick={()=>update("strava.connected",!s.strava.connected)} style={{background:s.strava.connected?`${C.orange}15`:"#1A1A1A",border:`1px solid ${s.strava.connected?C.orange:"#333"}`,borderRadius:8,padding:"6px 14px",color:s.strava.connected?C.orange:"white",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
-              <Icon.Strava size={14} color={s.strava.connected?C.orange:"white"}/>{s.strava.connected?"Connected":"Connect"}
-            </button>
-          }/>
-          {s.strava.connected&&(
-            <div style={{padding:"0 16px 12px"}}>
-              <input value={s.strava.handle} onChange={e=>update("strava.handle",e.target.value)} placeholder="@yourhandle" style={{width:"100%",border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:C.text,background:C.surface}}/>
-            </div>
-          )}
-          <Row label="Instagram" sub={s.instagram.connected?`Connected as ${s.instagram.handle}`:"Link your profile"} noBorder right={
-            <button className="tap" onClick={()=>update("instagram.connected",!s.instagram.connected)} style={{background:s.instagram.connected?"#E1306C15":"#1A1A1A",border:`1px solid ${s.instagram.connected?"#E1306C":"#333"}`,borderRadius:8,padding:"6px 14px",color:s.instagram.connected?"#E1306C":"white",fontSize:12,fontWeight:600}}>
-              {s.instagram.connected?"Connected":"Connect"}
-            </button>
-          }/>
-          {s.instagram.connected&&(
-            <div style={{padding:"0 16px 12px"}}>
-              <input value={s.instagram.handle} onChange={e=>update("instagram.handle",e.target.value)} placeholder="@yourhandle" style={{width:"100%",border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:C.text,background:C.surface}}/>
-            </div>
-          )}
         </Section>
 
         {/* Danger zone */}
