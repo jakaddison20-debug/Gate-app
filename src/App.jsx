@@ -670,6 +670,73 @@ function pbSeriesFromRuns(runs){
   return points;
 }
 
+// ── Consistency ───────────────────────────────────────────────────────────────
+// Score = how close your recent runs are to your best. Uses your last 5 runs on a stage (min 3).
+// Average gap to your best, as a % of your best time; 0% off = 100, 15%+ off = 0.
+function consistencyLabel(score){return score>=90?"Locked in":score>=75?"Solid":score>=55?"Variable":"Scattered";}
+function consistencyColor(score){return score>=90?C.green:score>=75?C.blue:score>=55?C.yellow:C.red;}
+function consistencyFromRuns(runs){
+  if(!runs||runs.length<3)return null;
+  const sorted=[...runs].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+  const last=sorted.slice(-5).map(r=>r.time_ms);
+  const best=Math.min(...last);
+  const worst=Math.max(...last);
+  const avg=last.reduce((s,t)=>s+t,0)/last.length;
+  const avgGapMs=avg-best;
+  const score=Math.max(0,Math.min(100,Math.round(100*(1-(avgGapMs/best)/0.15))));
+  return{score,label:consistencyLabel(score),avgGapMs,best,avg,worst,runsUsed:last.length,totalRuns:runs.length};
+}
+const fmtSecs=ms=>(ms/1000).toFixed(1)+"s";
+function ConsistencyRing({score,size=54,stroke=5,fontSize=18,label}){
+  const r=(size-stroke)/2,c=2*Math.PI*r,color=consistencyColor(score);
+  return(
+    <div style={{position:"relative",width:size,height:size,flexShrink:0}}>
+      <svg width={size} height={size} style={{transform:"rotate(-90deg)"}}>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#E6E6E6" strokeWidth={stroke}/>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round" strokeDasharray={`${c*score/100} ${c}`}/>
+      </svg>
+      <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+        <span style={{fontSize,fontWeight:800,color:C.text,lineHeight:1}}>{score}</span>
+        {label&&<span style={{fontSize:10,fontWeight:600,color:C.muted,letterSpacing:1,marginTop:4}}>{label}</span>}
+      </div>
+    </div>
+  );
+}
+function StageConsistencyCard({runs}){
+  const [open,setOpen]=useState(false);
+  if(!runs||runs.length===0)return null;
+  const res=consistencyFromRuns(runs);
+  if(!res)return(
+    <div style={{margin:"16px 16px 0",background:C.surface,borderRadius:14,padding:"14px 16px",border:`1px solid ${C.border}`,fontSize:13,color:C.muted}}>Ride this stage 3 times to get your consistency score</div>
+  );
+  const color=consistencyColor(res.score);
+  return(
+    <div style={{margin:"16px 16px 0",background:C.surface,borderRadius:14,border:`1px solid ${C.border}`,overflow:"hidden"}}>
+      <button className="tap" onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:14,padding:"14px 16px",background:"none",border:"none",textAlign:"left"}}>
+        <ConsistencyRing score={res.score}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:15,fontWeight:700,color:C.text}}>Consistency</div>
+          <div style={{fontSize:12,color:C.muted,marginTop:2}}><span style={{color,fontWeight:600}}>{res.label}</span> · last {res.runsUsed} runs</div>
+        </div>
+        <div style={{transform:open?"rotate(180deg)":"none",transition:"transform 0.15s",display:"flex"}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.mutedL} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+      </button>
+      {open&&(
+        <div style={{padding:"0 16px 14px"}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+            {[{l:"Best",v:formatTime(res.best)},{l:"Average",v:formatTime(Math.round(res.avg))},{l:"Slowest",v:formatTime(res.worst)}].map(x=>(
+              <div key={x.l} style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 6px",textAlign:"center"}}>
+                <div style={{fontSize:13,fontWeight:700,color:C.text}}>{x.v}</div>
+                <div style={{fontSize:10,color:C.muted,marginTop:2}}>{x.l}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{fontSize:12,color:C.muted,marginTop:10,lineHeight:1.45}}>Your last {res.runsUsed} runs are {fmtSecs(res.avgGapMs)} off your best on average. Closer to your best every run means a higher score.</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StageProgressCard({stage,user,lb,myAttempts}){
   const [view,setView]=useState('you');
   const [topSeries,setTopSeries]=useState(null);
@@ -926,6 +993,7 @@ const myEntry=lb.find(e=>user&&e.user_id===user.id);
     
       {stage.note&&<div style={{margin:"12px 16px 0",background:C.surface,borderRadius:10,padding:"11px 14px",border:`1px solid ${C.border}`}}><div style={{fontSize:11,fontWeight:600,color:C.muted,marginBottom:4}}>STAGE NOTES</div><div style={{fontSize:13,color:C.text,lineHeight:1.5}}>📋 {stage.note}</div></div>}
             <StageProgressCard stage={stage} user={user} lb={lb} myAttempts={myAttempts}/>
+<StageConsistencyCard runs={myAttempts}/>
 <div style={{padding:"16px 16px 0"}}>
 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
 <div style={{fontSize:15,fontWeight:700,color:C.text}}>Leaderboard</div>
@@ -1697,7 +1765,30 @@ function GroupMapScreen({group,stages,user,onBack,onAddStages}){
 function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stagesRiddenCount,coursesCompleteCount,courseCRList}){
   const [view,setView]=useState('hub');
   const [expandedCRCourse,setExpandedCRCourse]=useState(null);
-  const titles={hub:"Statistics",stages:"Stages",courses:"Courses",fastest:"Stage records",records:"Course Records",myStages:"Your Stages",myCourses:"Your Courses"};
+  const titles={hub:"Statistics",stages:"Stages",courses:"Courses",fastest:"Stage records",records:"Course Records",myStages:"Your Stages",myCourses:"Your Courses",consistency:"Consistency"};
+  const [myRuns,setMyRuns]=useState(null);
+  const [consistencySort,setConsistencySort]=useState('most');
+  const [showHowScored,setShowHowScored]=useState(false);
+  useEffect(()=>{
+    let cancelled=false;
+    supabase.from('stage_times').select('stage_id,time_ms,created_at').eq('user_id',user.id).order('created_at',{ascending:true}).then(({data})=>{if(!cancelled)setMyRuns(data||[]);});
+    return()=>{cancelled=true;};
+  },[user.id]);
+  const consistency=useMemo(()=>{
+    if(!myRuns)return null;
+    const byStage={};
+    myRuns.forEach(t=>{(byStage[t.stage_id]=byStage[t.stage_id]||[]).push(t);});
+    const rows=[];
+    Object.keys(byStage).forEach(id=>{
+      const stage=stages.find(s=>String(s.id)===String(id));
+      const res=consistencyFromRuns(byStage[id]);
+      if(!stage||!res)return;
+      rows.push({id:stage.id,name:stage.name,difficulty:stage.difficulty||'blue',...res});
+    });
+    if(rows.length===0)return{rows,overall:null};
+    const overall=Math.round(rows.reduce((s,r)=>s+r.score,0)/rows.length);
+    return{rows,overall};
+  },[myRuns,stages]);
   const myStages=useMemo(()=>stages.filter(s=>s.created_by===user.id),[stages,user.id]);
   const myCourses=useMemo(()=>courses.filter(c=>c.created_by===user.id),[courses,user.id]);
   const [creatorStats,setCreatorStats]=useState(null);
@@ -1786,6 +1877,82 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
                 </button>
               ))}
             </div>
+          </div>
+        )}
+        {view==='hub'&&(
+          <div style={{padding:"0 16px 32px"}}>
+            <button className="tap" onClick={()=>setView('consistency')} style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px",display:"flex",alignItems:"center",gap:14,textAlign:"left"}}>
+              {consistency&&consistency.overall!==null?<ConsistencyRing score={consistency.overall} size={54}/>:<div style={{width:54,height:54,borderRadius:"50%",border:"5px solid #E6E6E6",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:800,color:C.mutedL,flexShrink:0}}>{consistency===null?"…":"—"}</div>}
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:16,fontWeight:700,color:C.text}}>Consistency</div>
+                <div style={{fontSize:12,color:C.muted,marginTop:3}}>{consistency&&consistency.overall!==null?<><span style={{color:consistencyColor(consistency.overall),fontWeight:600}}>{consistencyLabel(consistency.overall)}</span> · across {consistency.rows.length} stage{consistency.rows.length===1?"":"s"}</>:consistency===null?"Loading…":"Ride a stage 3 times to get a score"}</div>
+              </div>
+              <Icon.ChevronRight size={16} color={C.mutedL}/>
+            </button>
+          </div>
+        )}
+        {view==='consistency'&&(
+          <div style={{paddingBottom:40}}>
+            {consistency===null?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>:consistency.overall===null?(
+              <div style={{textAlign:"center",padding:"48px 24px",color:C.muted,fontSize:13,lineHeight:1.5}}>No score yet. Ride a stage at least 3 times and your consistency will show up here.</div>
+            ):(()=>{
+              const rows=[...consistency.rows].sort((a,b)=>consistencySort==='most'?b.score-a.score:a.score-b.score);
+              const best=[...consistency.rows].sort((a,b)=>b.score-a.score)[0];
+              const worst=[...consistency.rows].sort((a,b)=>a.score-b.score)[0];
+              const overallColor=consistencyColor(consistency.overall);
+              return(
+                <>
+                  <div style={{padding:"28px 24px 22px",textAlign:"center",borderBottom:`1px solid ${C.border}`}}>
+                    <div style={{display:"flex",justifyContent:"center"}}><ConsistencyRing score={consistency.overall} size={150} stroke={9} fontSize={46} label="OUT OF 100"/></div>
+                    <div style={{fontSize:24,fontWeight:800,color:overallColor,marginTop:14}}>{consistencyLabel(consistency.overall)}</div>
+                    <div style={{fontSize:13,color:C.muted,marginTop:6,lineHeight:1.45}}>Average across {consistency.rows.length} stage{consistency.rows.length===1?"":"s"} with 3+ runs, using your last 5 on each.</div>
+                  </div>
+                  <div style={{padding:"16px 16px 0"}}>
+                    {consistency.rows.length>1&&(
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                        {[{k:"MOST CONSISTENT",r:best,c:C.green},{k:"ROOM TO TIGHTEN",r:worst,c:C.yellow}].map(x=>(
+                          <div key={x.k} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px"}}>
+                            <div style={{fontSize:10,fontWeight:600,color:C.muted,letterSpacing:0.8}}>{x.k}</div>
+                            <div style={{fontSize:15,fontWeight:700,color:C.text,marginTop:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.r.name}</div>
+                            <div style={{fontSize:12,fontWeight:600,color:x.c,marginTop:3}}>{fmtSecs(x.r.avgGapMs)} spread</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"22px 0 6px"}}>
+                      <span style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase"}}>By stage</span>
+                      <button className="tap" onClick={()=>setConsistencySort(m=>m==='most'?'least':'most')} style={{background:"none",border:"none",padding:0,fontSize:12,fontWeight:600,color:C.blue}}>Sort: {consistencySort==='most'?'Most consistent':'Least consistent'} ▾</button>
+                    </div>
+                    {rows.map(r=>{
+                      const dc=(DIFFICULTIES.find(d=>d.val===r.difficulty)||DIFFICULTIES[0]).color;
+                      const col=consistencyColor(r.score);
+                      return(
+                        <div key={r.id} style={{padding:"13px 0",borderBottom:`1px solid ${C.border}`}}>
+                          <div style={{display:"flex",alignItems:"center",gap:10}}>
+                            <DifficultyDiamond color={dc} size={14}/>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{fontSize:14,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</div>
+                              <div style={{fontSize:12,color:C.muted,marginTop:1}}>{r.totalRuns} runs · {fmtSecs(r.avgGapMs)} off your best on average</div>
+                            </div>
+                            <div style={{textAlign:"right"}}><div style={{fontSize:18,fontWeight:800,color:C.text,lineHeight:1}}>{r.score}</div><div style={{fontSize:11,fontWeight:600,color:col,marginTop:2}}>{r.label}</div></div>
+                          </div>
+                          <div style={{height:4,background:"#F0F0F0",borderRadius:2,marginTop:9}}><div style={{width:`${Math.max(r.score,3)}%`,height:4,background:col,borderRadius:2}}/></div>
+                        </div>
+                      );
+                    })}
+                    <button className="tap" onClick={()=>setShowHowScored(v=>!v)} style={{width:"100%",marginTop:18,background:"#fff",border:`1px solid ${C.border}`,borderRadius:12,padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:14,fontWeight:700,color:C.text,textAlign:"left"}}>
+                      How it's scored<span style={{fontSize:13,fontWeight:500,color:C.muted}}>{showHowScored?"Hide":"Show"}</span>
+                    </button>
+                    {showHowScored&&(
+                      <div style={{fontSize:13,color:C.muted,lineHeight:1.55,padding:"12px 4px 0"}}>
+                        For each stage with 3 or more runs, we take your last 5 and measure how far they are from your best of those runs, on average, as a share of your best time. 0% off scores 100 and 15% or more off scores 0. Your overall score is the average across your stages.
+                        <div style={{marginTop:8}}><b style={{color:C.green}}>90+</b> Locked in · <b style={{color:C.blue}}>75+</b> Solid · <b style={{color:C.yellow}}>55+</b> Variable · <b style={{color:C.red}}>under 55</b> Scattered</div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         )}
         {view==='myStages'&&(
