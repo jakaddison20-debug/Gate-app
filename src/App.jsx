@@ -17,7 +17,7 @@ function formatDist(m){return m>=1000?`${(m/1000).toFixed(1)}km`:`${Math.round(m
 function timeAgo(iso){const s=(Date.now()-new Date(iso).getTime())/1000;if(s<60)return'just now';if(s<3600)return`${Math.floor(s/60)}m ago`;if(s<86400)return`${Math.floor(s/3600)}h ago`;if(s<604800)return`${Math.floor(s/86400)}d ago`;return new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short'});}
 function playBeep(freq=880,duration=150){try{const ctx=new(window.AudioContext||window.webkitAudioContext)();const osc=ctx.createOscillator();const gain=ctx.createGain();osc.connect(gain);gain.connect(ctx.destination);osc.frequency.value=freq;osc.type='sine';gain.gain.setValueAtTime(0.3,ctx.currentTime);gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+duration/1000);osc.start();osc.stop(ctx.currentTime+duration/1000);}catch(e){console.log(e);}}
 function logEvent(userId,type,message,stageId=null,context=null){if(!userId)return Promise.resolve();return supabase.from('app_events').insert({user_id:userId,event_type:type,message,stage_id:stageId?String(stageId):null,context}).then(()=>{}).catch(err=>console.log('logEvent failed:',err?.message||err));}
-async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at}){
+async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,trace}){
   const overallRes=await supabase.from('stage_times').select('time_ms').eq('stage_id',stage_id).order('time_ms',{ascending:true}).limit(1);
   const ownRes=await supabase.from('stage_times').select('time_ms').eq('stage_id',stage_id).eq('user_id',user_id).order('time_ms',{ascending:true}).limit(1);
   const prevBest=overallRes.data&&overallRes.data[0]?overallRes.data[0].time_ms:null;
@@ -26,6 +26,13 @@ async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at}){
   if(created_at)payload.created_at=created_at;
   const{error}=await supabase.from('stage_times').insert(payload);
   if(error)throw error;
+  // Keep the GPS path of your best run on this stage (powers the speed/gap charts). Never fails the save.
+  if(trace&&trace.length>=3&&(ownPrevBest===null||time_ms<ownPrevBest)){
+    try{
+      const{error:traceErr}=await supabase.from('run_traces').upsert({user_id,stage_id:String(stage_id),time_ms,points:trace},{onConflict:'user_id,stage_id'});
+      if(traceErr)console.log('trace save failed',traceErr.message);
+    }catch(e){console.log('trace save failed',e);}
+  }
   if(prevBest===null||time_ms<prevBest){
     logEvent(user_id,'stage_record',`set a new record on ${stage_name} · ${formatTime(time_ms)}`,stage_id,{time_ms});
   } else if(ownPrevBest!==null&&time_ms<ownPrevBest){
@@ -273,7 +280,7 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
 
       <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,position:"sticky",top:0,zIndex:5,display:"flex",alignItems:"center",gap:12}}>
         <button className="tap" onClick={()=>{onSave(s);onBack();}} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
-        <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>Settings <span style={{fontSize:11,color:C.muted}}>(build 4)</span></div>
+        <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>Settings</div>
         <button className="tap" onClick={()=>{onSave(s);onBack();}} style={{background:C.blue,border:"none",borderRadius:8,padding:"6px 14px",color:"white",fontSize:13,fontWeight:600}}>Save</button>
       </div>
 
@@ -337,30 +344,6 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
           <Row label="Share activity to feed" sub="Your rides appear in mates' feeds" noBorder right={
             <Toggle value={s.privacy.shareActivity} onChange={v=>update("privacy.shareActivity",v)}/>
           }/>
-        </Section>
-
-        {/* Connected apps */}
-        <Section title="Connected Apps">
-          <Row label="Strava" sub={s.strava.connected?`Connected as ${s.strava.handle}`:"Sync activities automatically"} right={
-            <button className="tap" onClick={()=>update("strava.connected",!s.strava.connected)} style={{background:s.strava.connected?`${C.orange}15`:"#1A1A1A",border:`1px solid ${s.strava.connected?C.orange:"#333"}`,borderRadius:8,padding:"6px 14px",color:s.strava.connected?C.orange:"white",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
-              <Icon.Strava size={14} color={s.strava.connected?C.orange:"white"}/>{s.strava.connected?"Connected":"Connect"}
-            </button>
-          }/>
-          {s.strava.connected&&(
-            <div style={{padding:"0 16px 12px"}}>
-              <input value={s.strava.handle} onChange={e=>update("strava.handle",e.target.value)} placeholder="@yourhandle" style={{width:"100%",border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:C.text,background:C.surface}}/>
-            </div>
-          )}
-          <Row label="Instagram" sub={s.instagram.connected?`Connected as ${s.instagram.handle}`:"Link your profile"} noBorder right={
-            <button className="tap" onClick={()=>update("instagram.connected",!s.instagram.connected)} style={{background:s.instagram.connected?"#E1306C15":"#1A1A1A",border:`1px solid ${s.instagram.connected?"#E1306C":"#333"}`,borderRadius:8,padding:"6px 14px",color:s.instagram.connected?"#E1306C":"white",fontSize:12,fontWeight:600}}>
-              {s.instagram.connected?"Connected":"Connect"}
-            </button>
-          }/>
-          {s.instagram.connected&&(
-            <div style={{padding:"0 16px 12px"}}>
-              <input value={s.instagram.handle} onChange={e=>update("instagram.handle",e.target.value)} placeholder="@yourhandle" style={{width:"100%",border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:C.text,background:C.surface}}/>
-            </div>
-          )}
         </Section>
 
         {/* Danger zone */}
@@ -694,6 +677,275 @@ function pbSeriesFromRuns(runs){
   return points;
 }
 
+// ── Consistency ───────────────────────────────────────────────────────────────
+// Score = how close your recent runs are to your best. Uses your last 5 runs on a stage (min 3).
+// Average gap to your best, as a % of your best time; 0% off = 100, 15%+ off = 0.
+function consistencyLabel(score){return score>=90?"Locked in":score>=75?"Solid":score>=55?"Variable":"Scattered";}
+function consistencyColor(score){return score>=90?C.green:score>=75?C.blue:score>=55?C.yellow:C.red;}
+function consistencyFromRuns(runs){
+  if(!runs||runs.length<3)return null;
+  const sorted=[...runs].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+  const last=sorted.slice(-5).map(r=>r.time_ms);
+  const best=Math.min(...last);
+  const worst=Math.max(...last);
+  const avg=last.reduce((s,t)=>s+t,0)/last.length;
+  const avgGapMs=avg-best;
+  const score=Math.max(0,Math.min(100,Math.round(100*(1-(avgGapMs/best)/0.15))));
+  return{score,label:consistencyLabel(score),avgGapMs,best,avg,worst,runsUsed:last.length,totalRuns:runs.length};
+}
+const fmtSecs=ms=>(ms/1000).toFixed(1)+"s";
+function ConsistencyRing({score,size=54,stroke=5,fontSize=18,label}){
+  const r=(size-stroke)/2,c=2*Math.PI*r,color=consistencyColor(score);
+  return(
+    <div style={{position:"relative",width:size,height:size,flexShrink:0}}>
+      <svg width={size} height={size} style={{transform:"rotate(-90deg)"}}>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#E6E6E6" strokeWidth={stroke}/>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round" strokeDasharray={`${c*score/100} ${c}`}/>
+      </svg>
+      <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+        <span style={{fontSize,fontWeight:800,color:C.text,lineHeight:1}}>{score}</span>
+        {label&&<span style={{fontSize:10,fontWeight:600,color:C.muted,letterSpacing:1,marginTop:4}}>{label}</span>}
+      </div>
+    </div>
+  );
+}
+function StageConsistencyCard({runs}){
+  const [open,setOpen]=useState(false);
+  if(!runs||runs.length===0)return null;
+  const res=consistencyFromRuns(runs);
+  if(!res)return(
+    <div style={{margin:"16px 16px 0",background:C.surface,borderRadius:14,padding:"14px 16px",border:`1px solid ${C.border}`,fontSize:13,color:C.muted}}>Ride this stage 3 times to get your consistency score</div>
+  );
+  const color=consistencyColor(res.score);
+  return(
+    <div style={{margin:"16px 16px 0",background:C.surface,borderRadius:14,border:`1px solid ${C.border}`,overflow:"hidden"}}>
+      <button className="tap" onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:14,padding:"14px 16px",background:"none",border:"none",textAlign:"left"}}>
+        <ConsistencyRing score={res.score}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:15,fontWeight:700,color:C.text}}>Consistency</div>
+          <div style={{fontSize:12,color:C.muted,marginTop:2}}><span style={{color,fontWeight:600}}>{res.label}</span> · last {res.runsUsed} runs</div>
+        </div>
+        <div style={{transform:open?"rotate(180deg)":"none",transition:"transform 0.15s",display:"flex"}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.mutedL} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+      </button>
+      {open&&(
+        <div style={{padding:"0 16px 14px"}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+            {[{l:"Best",v:formatTime(res.best)},{l:"Average",v:formatTime(Math.round(res.avg))},{l:"Slowest",v:formatTime(res.worst)}].map(x=>(
+              <div key={x.l} style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 6px",textAlign:"center"}}>
+                <div style={{fontSize:13,fontWeight:700,color:C.text}}>{x.v}</div>
+                <div style={{fontSize:10,color:C.muted,marginTop:2}}>{x.l}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{fontSize:12,color:C.muted,marginTop:10,lineHeight:1.45}}>Your last {res.runsUsed} runs are {fmtSecs(res.avgGapMs)} off your best on average. Closer to your best every run means a higher score.</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Time delta ────────────────────────────────────────────────────────────────
+// Your best vs the fastest rider (or the rider behind you if you hold P1).
+// Green + when you're ahead, red - when you're behind. Ring is full at 10% of their time.
+function fmtDelta(ms){const s=Math.abs(ms)/1000;if(s<100)return s.toFixed(2);const m=Math.floor(s/60);return`${m}:${String(Math.floor(s%60)).padStart(2,"0")}`;}
+function DeltaRing({fraction,color,text,size=54,stroke=5}){
+  const r=(size-stroke)/2,c=2*Math.PI*r;
+  const f=Math.max(0.04,Math.min(1,fraction));
+  return(
+    <div style={{position:"relative",width:size,height:size,flexShrink:0}}>
+      <svg width={size} height={size} style={{transform:"rotate(-90deg)"}}>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#E6E6E6" strokeWidth={stroke}/>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap={f>=1?"butt":"round"} strokeDasharray={`${c*f} ${c}`}/>
+      </svg>
+      <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:text.length>6?11:text.length>5?12:14,fontWeight:800,color:C.text,letterSpacing:-0.3}}>{text}</div>
+    </div>
+  );
+}
+
+// ── Run traces (GPS path of your best run, saved to the run_traces table) ─────
+const TRACE_MAX_POINTS=600;
+const PROFILE_N=100;
+function compactTrace(samples){
+  let s=(samples||[]).filter((p,i,a)=>i===0||p.t>a[i-1].t);
+  if(s.length>TRACE_MAX_POINTS){const step=s.length/TRACE_MAX_POINTS;const out=[];for(let i=0;i<TRACE_MAX_POINTS-1;i++)out.push(s[Math.floor(i*step)]);out.push(s[s.length-1]);s=out;}
+  return s.map(p=>[Math.round(p.t),+p.lat.toFixed(6),+p.lng.toFixed(6)]);
+}
+// points: [[t_ms,lat,lng],...] -> time and speed sampled evenly along the distance travelled
+function traceProfile(points){
+  if(!points||points.length<3)return null;
+  const cum=[0];
+  for(let i=1;i<points.length;i++)cum.push(cum[i-1]+haversine({lat:points[i-1][1],lng:points[i-1][2]},{lat:points[i][1],lng:points[i][2]}));
+  const total=cum[cum.length-1];
+  if(total<20)return null;
+  const N=PROFILE_N;
+  const times=[];
+  let j=1;
+  for(let k=0;k<=N;k++){
+    const d=total*k/N;
+    while(j<points.length-1&&cum[j]<d)j++;
+    const d0=cum[j-1],d1=cum[j];
+    const f=d1>d0?(d-d0)/(d1-d0):0;
+    times.push(points[j-1][0]+Math.max(0,Math.min(1,f))*(points[j][0]-points[j-1][0]));
+  }
+  const span=Math.max(2,Math.round(N*0.05));
+  const speeds=times.map((_,k)=>{
+    const a=Math.max(0,k-span),b=Math.min(N,k+span);
+    const dt=times[b]-times[a];
+    return dt>0?((b-a)/N*total)/(dt/1000):0;
+  });
+  return{total,times,speeds};
+}
+function niceCeil(v,steps){
+  const raw=(v||1)/steps;const mag=Math.pow(10,Math.floor(Math.log10(raw)));const n=raw/mag;
+  const step=(n<=1?1:n<=2?2:n<=5?5:10)*mag;
+  const max=Math.max(step,Math.ceil(v/step)*step);
+  const ticks=[];for(let x=step;x<=max+1e-9;x+=step)ticks.push(Math.round(x*100)/100);
+  return{max,ticks};
+}
+function RunCompareCharts({mine,theirs,name,units}){
+  const [idx,setIdx]=useState(null);
+  const N=PROFILE_N;
+  const imperial=units==="imperial";
+  const spd=v=>v*(imperial?2.23694:3.6);
+  const spdUnit=imperial?"mph":"km/h",distUnit=imperial?"ft":"m";
+  const L=mine.total*(imperial?3.28084:1);
+  const mySp=mine.speeds.map(spd),thSp=theirs.speeds.map(spd);
+  const gap=mine.times.map((t,k)=>theirs.times[k]-t); // ms, + = you're ahead
+  const W=320,H=112,PL=28,PR=6,PT=8,PB=18;
+  const x=k=>PL+k/N*(W-PL-PR);
+  const spdScale=niceCeil(Math.max(...mySp,...thSp,1),3);
+  const ys=v=>PT+(1-v/spdScale.max)*(H-PT-PB);
+  const gapM=Math.max(1,Math.ceil(Math.max(...gap.map(g=>Math.abs(g)))/1000));
+  const yg=v=>PT+(1-(v+gapM)/(2*gapM))*(H-PT-PB);
+  const yZero=yg(0);
+  const line=(arr,fy)=>arr.map((v,k)=>`${k?"L":"M"}${x(k).toFixed(1)},${fy(v).toFixed(1)}`).join(" ");
+  const gapSecs=gap.map(g=>g/1000);
+  const gapLine=line(gapSecs,yg);
+  const gapArea=`${gapLine} L${x(N).toFixed(1)},${yZero.toFixed(1)} L${x(0).toFixed(1)},${yZero.toFixed(1)} Z`;
+  const finalAhead=gap[N]>=0;
+  const gapColor=finalAhead?C.green:C.red;
+  const xLabels=[0,1/3,2/3,1].map(f=>({f,t:(f===1?Math.round(L):Math.round(L*f/(L>1000?100:50))*(L>1000?100:50)).toLocaleString()+(f===1?" "+distUnit:"")}));
+  const pick=e=>{
+    const r=e.currentTarget.getBoundingClientRect();
+    const px=(e.clientX-r.left)/r.width*W;
+    setIdx(Math.max(0,Math.min(N,Math.round((px-PL)/(W-PL-PR)*N))));
+  };
+  const handlers={onPointerDown:pick,onPointerMove:e=>{if(e.pointerType==="mouse"&&e.buttons===0)return;pick(e);}};
+  const win=Math.round(N*0.15);
+  let bestK=0,bestChange=0;
+  for(let k=0;k+win<=N;k++){const ch=gap[k+win]-gap[k];if(Math.abs(ch)>Math.abs(bestChange)){bestChange=ch;bestK=k;}}
+  const rd=d=>{const step=L>1000?100:50;return Math.round(d/step)*step;};
+  const d1=rd(L*bestK/N),d2=rd(L*(bestK+win)/N);
+  const insight=Math.abs(bestChange)<300
+    ?"Your runs are almost identical, with no single section that stands out."
+    :bestChange<0
+      ?`${name} pulls away by ${(Math.abs(bestChange)/1000).toFixed(1)}s between ${d1.toLocaleString()} and ${d2.toLocaleString()} ${distUnit}. Look there first.`
+      :`You pull away by ${(bestChange/1000).toFixed(1)}s between ${d1.toLocaleString()} and ${d2.toLocaleString()} ${distUnit}. That's where you gain.`;
+  const Cursor=({fy,a,b,ca,cb})=>idx===null?null:(
+    <g>
+      <line x1={x(idx)} x2={x(idx)} y1={PT} y2={H-PB} stroke="#BDBDBD" strokeWidth="1"/>
+      {a!==undefined&&<circle cx={x(idx)} cy={fy(a)} r="3.5" fill={ca} stroke="#fff" strokeWidth="1.2"/>}
+      {b!==undefined&&<circle cx={x(idx)} cy={fy(b)} r="3.5" fill={cb} stroke="#fff" strokeWidth="1.2"/>}
+    </g>
+  );
+  const lbl={fontSize:9,fill:C.mutedL};
+  const hdr={fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8};
+  return(
+    <div>
+      <div style={{display:"flex",gap:16,marginTop:12,fontSize:13,fontWeight:700,color:C.text}}>
+        <span style={{display:"flex",alignItems:"center",gap:6}}><span style={{width:16,height:3,borderRadius:2,background:C.blue}}/>You</span>
+        <span style={{display:"flex",alignItems:"center",gap:6}}><span style={{width:16,height:3,borderRadius:2,background:"#1A1A1A"}}/>{name}</span>
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",marginTop:14}}><span style={hdr}>SPEED ({spdUnit.toUpperCase()})</span><span style={{fontSize:11,color:C.muted}}>tap to read</span></div>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{display:"block",touchAction:"pan-y",marginTop:4}} {...handlers}>
+        {spdScale.ticks.map(t=><g key={t}><line x1={PL} x2={W-PR} y1={ys(t)} y2={ys(t)} stroke="#E6E6E6" strokeDasharray="2 3"/><text x={PL-5} y={ys(t)+3} textAnchor="end" {...lbl}>{t}</text></g>)}
+        <line x1={PL} x2={W-PR} y1={ys(0)} y2={ys(0)} stroke="#CFCFCF"/>
+        {xLabels.map(l=><text key={l.f} x={l.f===0?PL:l.f===1?W-PR:x(l.f*N)} y={H-4} textAnchor={l.f===0?"start":l.f===1?"end":"middle"} {...lbl}>{l.t}</text>)}
+        <path d={line(thSp,ys)} fill="none" stroke="#1A1A1A" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/>
+        <path d={line(mySp,ys)} fill="none" stroke={C.blue} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/>
+        <Cursor fy={ys} a={idx===null?undefined:thSp[idx]} b={idx===null?undefined:mySp[idx]} ca="#1A1A1A" cb={C.blue}/>
+      </svg>
+      <div style={{marginTop:8,padding:"10px 12px",background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,fontSize:13,color:idx===null?C.mutedL:C.text,lineHeight:1.5}}>
+        {idx===null?"Tap or drag a chart to compare at any point":<>{Math.round(L*idx/N).toLocaleString()} {distUnit} · You <b style={{color:C.blue}}>{mySp[idx].toFixed(1)} {spdUnit}</b> · {name} <b>{thSp[idx].toFixed(1)} {spdUnit}</b> · <b style={{color:gap[idx]>=0?C.green:C.red}}>{(Math.abs(gap[idx])/1000).toFixed(2)}s {gap[idx]>=0?"ahead":"behind"}</b></>}
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",marginTop:16}}><span style={hdr}>GAP TO {name.toUpperCase()}</span><span style={{fontSize:11,color:C.muted}}>up = you're ahead</span></div>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{display:"block",touchAction:"pan-y",marginTop:4}} {...handlers}>
+        <defs>
+          <clipPath id="gapAboveClip"><rect x={PL} y={0} width={W-PL-PR} height={yZero}/></clipPath>
+          <clipPath id="gapBelowClip"><rect x={PL} y={yZero} width={W-PL-PR} height={H-yZero}/></clipPath>
+        </defs>
+        {[gapM,0,-gapM].map(t=><g key={t}><line x1={PL} x2={W-PR} y1={yg(t)} y2={yg(t)} stroke={t===0?"#CFCFCF":"#E6E6E6"} strokeDasharray={t===0?undefined:"2 3"}/><text x={PL-5} y={yg(t)+3} textAnchor="end" {...lbl}>{t>0?"+"+t:t}s</text></g>)}
+        {xLabels.map(l=><text key={l.f} x={l.f===0?PL:l.f===1?W-PR:x(l.f*N)} y={H-4} textAnchor={l.f===0?"start":l.f===1?"end":"middle"} {...lbl}>{l.t}</text>)}
+        <path d={gapArea} fill={`${C.green}30`} clipPath="url(#gapAboveClip)"/>
+        <path d={gapArea} fill={`${C.red}30`} clipPath="url(#gapBelowClip)"/>
+        <path d={gapLine} fill="none" stroke={gapColor} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/>
+        <Cursor fy={yg} a={idx===null?undefined:gapSecs[idx]} ca={gapColor}/>
+      </svg>
+      <div style={{marginTop:8,padding:"10px 12px",background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,fontSize:13,color:C.text,lineHeight:1.5}}>{insight}</div>
+    </div>
+  );
+}
+function StageTimeDeltaCard({stage,lb,myAttempts,user,units}){
+  const [open,setOpen]=useState(false);
+  const [traces,setTraces]=useState(undefined); // undefined = loading, null = unavailable
+  const haveRuns=!!(user&&myAttempts&&myAttempts.length>0&&lb&&lb.length>0);
+  const target=haveRuns?(lb[0].user_id===user.id?lb[1]:lb[0]):null;
+  const targetId=target?target.user_id:null;
+  const myId=user?user.id:null;
+  useEffect(()=>{
+    if(!open||!myId||!targetId)return;
+    let cancelled=false;
+    supabase.from('run_traces').select('user_id,time_ms,points').eq('stage_id',String(stage.id)).in('user_id',[myId,targetId]).then(({data,error})=>{
+      if(cancelled)return;
+      if(error||!data){setTraces(null);return;}
+      const by={};data.forEach(r=>{by[r.user_id]=r;});
+      setTraces(by);
+    });
+    return()=>{cancelled=true;};
+  },[open,stage.id,myId,targetId]);
+  if(!haveRuns||!target)return null;
+  const myBest=Math.min(...myAttempts.map(a=>a.time_ms));
+  const delta=target.time-myBest; // + = you're ahead
+  const ahead=delta>0,level=delta===0;
+  const color=level?C.muted:ahead?C.green:C.red;
+  const fraction=Math.abs(delta)/target.time/0.10;
+  const text=level?"0.00":(ahead?"+":"-")+fmtDelta(delta);
+  // only use a trace if it belongs to that rider's current best run
+  const prof=(row,best)=>row&&Math.abs(row.time_ms-best)<=1?traceProfile(row.points):null;
+  const mineProf=traces?prof(traces[myId],myBest):null;
+  const theirProf=traces?prof(traces[targetId],target.time):null;
+  return(
+    <div style={{margin:"16px 16px 0",background:C.surface,borderRadius:14,border:`1px solid ${C.border}`,overflow:"hidden"}}>
+      <button className="tap" onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:14,padding:"14px 16px",background:"none",border:"none",textAlign:"left"}}>
+        <DeltaRing fraction={level?0:fraction} color={color} text={text}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:15,fontWeight:700,color:C.text}}>Time delta</div>
+          <div style={{fontSize:12,color:C.muted,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>vs {target.name} · P{target.pos}</div>
+        </div>
+        <div style={{transform:open?"rotate(180deg)":"none",transition:"transform 0.15s",display:"flex"}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.mutedL} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+      </button>
+      {open&&(
+        <div style={{padding:"0 16px 14px"}}>
+          <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,marginBottom:8}}>COMPARING WITH</div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 14px"}}>
+            <span style={{fontSize:14,fontWeight:700,color:C.text}}>{target.name}</span>
+            <span style={{fontSize:15,fontWeight:800,color:C.text}}>{formatTime(target.time)}</span>
+          </div>
+          <div style={{fontSize:18,fontWeight:800,color,marginTop:14}}>{level?`Level with ${target.name}`:`${fmtDelta(delta)}s ${ahead?"ahead of":"behind"} ${target.name}`}</div>
+          <div style={{fontSize:12,color:C.muted,marginTop:4,lineHeight:1.45}}>Your best run compared with {target.name}'s fastest time on this stage.</div>
+          {traces===undefined?<div style={{fontSize:12,color:C.mutedL,marginTop:14}}>Loading speed data…</div>
+            :mineProf&&theirProf?<RunCompareCharts mine={mineProf} theirs={theirProf} name={target.name} units={units}/>
+            :<div style={{fontSize:12,color:C.muted,marginTop:14,padding:"10px 12px",background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,lineHeight:1.5}}>
+              {!mineProf&&!theirProf?`Speed and gap charts appear once you and ${target.name} have both set a best on this stage with GPS recording. Beat your best to record yours.`
+                :!mineProf?"Beat your best time on this stage to record your speed data and unlock the charts."
+                :`No speed data for ${target.name}'s best run yet. The charts appear once they set a new best.`}
+            </div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StageProgressCard({stage,user,lb,myAttempts}){
   const [view,setView]=useState('you');
   const [topSeries,setTopSeries]=useState(null);
@@ -848,7 +1100,7 @@ function StageProgressCard({stage,user,lb,myAttempts}){
 
 
 // ── Stage Detail Sheet ────────────────────────────────────────────────────────
-    function StageDetailSheet({stage,onClose,onRace,onOpenSections,user,onRename}){
+    function StageDetailSheet({stage,onClose,onRace,onOpenSections,user,onRename,units}){
     const [lb,setLb]=useState([]);
 const [myAttempts,setMyAttempts]=useState([]);
 const [editingName,setEditingName]=useState(false);
@@ -950,6 +1202,8 @@ const myEntry=lb.find(e=>user&&e.user_id===user.id);
     
       {stage.note&&<div style={{margin:"12px 16px 0",background:C.surface,borderRadius:10,padding:"11px 14px",border:`1px solid ${C.border}`}}><div style={{fontSize:11,fontWeight:600,color:C.muted,marginBottom:4}}>STAGE NOTES</div><div style={{fontSize:13,color:C.text,lineHeight:1.5}}>📋 {stage.note}</div></div>}
             <StageProgressCard stage={stage} user={user} lb={lb} myAttempts={myAttempts}/>
+<StageConsistencyCard runs={myAttempts}/>
+<StageTimeDeltaCard stage={stage} lb={lb} myAttempts={myAttempts} user={user} units={units}/>
 <div style={{padding:"16px 16px 0"}}>
 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
 <div style={{fontSize:15,fontWeight:700,color:C.text}}>Leaderboard</div>
@@ -1721,7 +1975,30 @@ function GroupMapScreen({group,stages,user,onBack,onAddStages}){
 function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stagesRiddenCount,coursesCompleteCount,courseCRList}){
   const [view,setView]=useState('hub');
   const [expandedCRCourse,setExpandedCRCourse]=useState(null);
-  const titles={hub:"Statistics",stages:"Stages",courses:"Courses",fastest:"Stage records",records:"Course Records",myStages:"Your Stages",myCourses:"Your Courses"};
+  const titles={hub:"Statistics",stages:"Stages",courses:"Courses",fastest:"Stage records",records:"Course Records",myStages:"Your Stages",myCourses:"Your Courses",consistency:"Consistency"};
+  const [myRuns,setMyRuns]=useState(null);
+  const [consistencySort,setConsistencySort]=useState('most');
+  const [showHowScored,setShowHowScored]=useState(false);
+  useEffect(()=>{
+    let cancelled=false;
+    supabase.from('stage_times').select('stage_id,time_ms,created_at').eq('user_id',user.id).order('created_at',{ascending:true}).then(({data})=>{if(!cancelled)setMyRuns(data||[]);});
+    return()=>{cancelled=true;};
+  },[user.id]);
+  const consistency=useMemo(()=>{
+    if(!myRuns)return null;
+    const byStage={};
+    myRuns.forEach(t=>{(byStage[t.stage_id]=byStage[t.stage_id]||[]).push(t);});
+    const rows=[];
+    Object.keys(byStage).forEach(id=>{
+      const stage=stages.find(s=>String(s.id)===String(id));
+      const res=consistencyFromRuns(byStage[id]);
+      if(!stage||!res)return;
+      rows.push({id:stage.id,name:stage.name,difficulty:stage.difficulty||'blue',...res});
+    });
+    if(rows.length===0)return{rows,overall:null};
+    const overall=Math.round(rows.reduce((s,r)=>s+r.score,0)/rows.length);
+    return{rows,overall};
+  },[myRuns,stages]);
   const myStages=useMemo(()=>stages.filter(s=>s.created_by===user.id),[stages,user.id]);
   const myCourses=useMemo(()=>courses.filter(c=>c.created_by===user.id),[courses,user.id]);
   const [creatorStats,setCreatorStats]=useState(null);
@@ -1810,6 +2087,82 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
                 </button>
               ))}
             </div>
+          </div>
+        )}
+        {view==='hub'&&(
+          <div style={{padding:"0 16px 32px"}}>
+            <button className="tap" onClick={()=>setView('consistency')} style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px",display:"flex",alignItems:"center",gap:14,textAlign:"left"}}>
+              {consistency&&consistency.overall!==null?<ConsistencyRing score={consistency.overall} size={54}/>:<div style={{width:54,height:54,borderRadius:"50%",border:"5px solid #E6E6E6",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:800,color:C.mutedL,flexShrink:0}}>{consistency===null?"…":"—"}</div>}
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:16,fontWeight:700,color:C.text}}>Consistency</div>
+                <div style={{fontSize:12,color:C.muted,marginTop:3}}>{consistency&&consistency.overall!==null?<><span style={{color:consistencyColor(consistency.overall),fontWeight:600}}>{consistencyLabel(consistency.overall)}</span> · across {consistency.rows.length} stage{consistency.rows.length===1?"":"s"}</>:consistency===null?"Loading…":"Ride a stage 3 times to get a score"}</div>
+              </div>
+              <Icon.ChevronRight size={16} color={C.mutedL}/>
+            </button>
+          </div>
+        )}
+        {view==='consistency'&&(
+          <div style={{paddingBottom:40}}>
+            {consistency===null?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>:consistency.overall===null?(
+              <div style={{textAlign:"center",padding:"48px 24px",color:C.muted,fontSize:13,lineHeight:1.5}}>No score yet. Ride a stage at least 3 times and your consistency will show up here.</div>
+            ):(()=>{
+              const rows=[...consistency.rows].sort((a,b)=>consistencySort==='most'?b.score-a.score:a.score-b.score);
+              const best=[...consistency.rows].sort((a,b)=>b.score-a.score)[0];
+              const worst=[...consistency.rows].sort((a,b)=>a.score-b.score)[0];
+              const overallColor=consistencyColor(consistency.overall);
+              return(
+                <>
+                  <div style={{padding:"28px 24px 22px",textAlign:"center",borderBottom:`1px solid ${C.border}`}}>
+                    <div style={{display:"flex",justifyContent:"center"}}><ConsistencyRing score={consistency.overall} size={150} stroke={9} fontSize={46} label="OUT OF 100"/></div>
+                    <div style={{fontSize:24,fontWeight:800,color:overallColor,marginTop:14}}>{consistencyLabel(consistency.overall)}</div>
+                    <div style={{fontSize:13,color:C.muted,marginTop:6,lineHeight:1.45}}>Average across {consistency.rows.length} stage{consistency.rows.length===1?"":"s"} with 3+ runs, using your last 5 on each.</div>
+                  </div>
+                  <div style={{padding:"16px 16px 0"}}>
+                    {consistency.rows.length>1&&(
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                        {[{k:"MOST CONSISTENT",r:best,c:C.green},{k:"ROOM TO TIGHTEN",r:worst,c:C.yellow}].map(x=>(
+                          <div key={x.k} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px"}}>
+                            <div style={{fontSize:10,fontWeight:600,color:C.muted,letterSpacing:0.8}}>{x.k}</div>
+                            <div style={{fontSize:15,fontWeight:700,color:C.text,marginTop:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.r.name}</div>
+                            <div style={{fontSize:12,fontWeight:600,color:x.c,marginTop:3}}>{fmtSecs(x.r.avgGapMs)} spread</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"22px 0 6px"}}>
+                      <span style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase"}}>By stage</span>
+                      <button className="tap" onClick={()=>setConsistencySort(m=>m==='most'?'least':'most')} style={{background:"none",border:"none",padding:0,fontSize:12,fontWeight:600,color:C.blue}}>Sort: {consistencySort==='most'?'Most consistent':'Least consistent'} ▾</button>
+                    </div>
+                    {rows.map(r=>{
+                      const dc=(DIFFICULTIES.find(d=>d.val===r.difficulty)||DIFFICULTIES[0]).color;
+                      const col=consistencyColor(r.score);
+                      return(
+                        <div key={r.id} style={{padding:"13px 0",borderBottom:`1px solid ${C.border}`}}>
+                          <div style={{display:"flex",alignItems:"center",gap:10}}>
+                            <DifficultyDiamond color={dc} size={14}/>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{fontSize:14,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</div>
+                              <div style={{fontSize:12,color:C.muted,marginTop:1}}>{r.totalRuns} runs · {fmtSecs(r.avgGapMs)} off your best on average</div>
+                            </div>
+                            <div style={{textAlign:"right"}}><div style={{fontSize:18,fontWeight:800,color:C.text,lineHeight:1}}>{r.score}</div><div style={{fontSize:11,fontWeight:600,color:col,marginTop:2}}>{r.label}</div></div>
+                          </div>
+                          <div style={{height:4,background:"#F0F0F0",borderRadius:2,marginTop:9}}><div style={{width:`${Math.max(r.score,3)}%`,height:4,background:col,borderRadius:2}}/></div>
+                        </div>
+                      );
+                    })}
+                    <button className="tap" onClick={()=>setShowHowScored(v=>!v)} style={{width:"100%",marginTop:18,background:"#fff",border:`1px solid ${C.border}`,borderRadius:12,padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:14,fontWeight:700,color:C.text,textAlign:"left"}}>
+                      How it's scored<span style={{fontSize:13,fontWeight:500,color:C.muted}}>{showHowScored?"Hide":"Show"}</span>
+                    </button>
+                    {showHowScored&&(
+                      <div style={{fontSize:13,color:C.muted,lineHeight:1.55,padding:"12px 4px 0"}}>
+                        For each stage with 3 or more runs, we take your last 5 and measure how far they are from your best of those runs, on average, as a share of your best time. 0% off scores 100 and 15% or more off scores 0. Your overall score is the average across your stages.
+                        <div style={{marginTop:8}}><b style={{color:C.green}}>90+</b> Locked in · <b style={{color:C.blue}}>75+</b> Solid · <b style={{color:C.yellow}}>55+</b> Variable · <b style={{color:C.red}}>under 55</b> Scattered</div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         )}
         {view==='myStages'&&(
@@ -2570,6 +2923,7 @@ function RaceScreen({course,stages,user,onFinish,onActivity}){
   const gpsRef=useRef(null);
   const startTimeRef=useRef(0);
   const prevGpsRef=useRef(null);
+  const traceRef=useRef([]);
     const [introDist,setIntroDist]=useState(null);
   const [showRaceMap,setShowRaceMap]=useState(false);
 
@@ -2637,7 +2991,7 @@ return{...prev,[currentStage.id]:(!current||finalTime<current)?finalTime:current
 }
 setPhase("split");
 if(saveTime&&!isPractice){
-  const entry={stage_id:currentStage.id,stage_name:currentStage.name,user_id:user.id,time_ms:finalTime,created_at:new Date(crossTs||Date.now()).toISOString()};
+  const entry={stage_id:currentStage.id,stage_name:currentStage.name,user_id:user.id,time_ms:finalTime,created_at:new Date(crossTs||Date.now()).toISOString(),trace:compactTrace(traceRef.current)};
   saveStageTime(entry).then(()=>onActivity&&onActivity()).catch(err=>{console.log('save failed, storing offline',err);queueOfflineTime(entry);onActivity&&onActivity();});
 }
 };
@@ -2647,15 +3001,18 @@ if(saveTime&&!isPractice){
     if(!navigator.geolocation)return;
     const gate=currentStage.finish;
     prevGpsRef.current=null;
+    traceRef.current=[{t:0,lat:currentStage.start.lat,lng:currentStage.start.lng}];
     const id=navigator.geolocation.watchPosition(pos=>{
       const loc={lat:pos.coords.latitude,lng:pos.coords.longitude,ts:pos.timestamp};
       const prev=prevGpsRef.current;
       const crossed=segmentCrossesGate(prev,loc,gate,FINISH_GATE_RADIUS);
       prevGpsRef.current=loc;
+      if(!crossed&&loc.ts>startTimeRef.current)traceRef.current.push({t:loc.ts-startTimeRef.current,lat:loc.lat,lng:loc.lng});
       if(crossed){
 navigator.geolocation.clearWatch(id);
 const t=prev?gateCrossT(prev,loc,gate):0;
 const crossTs=prev?prev.ts+t*(loc.ts-prev.ts):loc.ts;
+traceRef.current.push({t:Math.max(0,crossTs-startTimeRef.current),lat:gate.lat,lng:gate.lng});
 stopStage(true,crossTs);
 }
 },err=>{console.log(err);logEvent(user?.id,"gps_error_racing",err.message||String(err),currentStage?.id,{code:err.code});},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
@@ -3621,7 +3978,7 @@ if(showBikeSetup)return(
             ))}
           </div>
                     {selectedStage&&sheet!=='sections'&&(
-            <><div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.3)",zIndex:39}} onClick={()=>setSelectedStage(null)}/><div className="slide-up" style={{position:"absolute",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:40,maxHeight:"88vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><StageDetailSheet stage={selectedStage} onClose={()=>setSelectedStage(null)}onRace={()=>{setActiveRace({id:Date.now(),name:selectedStage.name,stageIds:[selectedStage.id],mode:'race',times:{},bestPerStage:{}});setSelectedStage(null);}}
+            <><div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.3)",zIndex:39}} onClick={()=>setSelectedStage(null)}/><div className="slide-up" style={{position:"absolute",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:40,maxHeight:"88vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><StageDetailSheet stage={selectedStage} units={settings.units} onClose={()=>setSelectedStage(null)}onRace={()=>{setActiveRace({id:Date.now(),name:selectedStage.name,stageIds:[selectedStage.id],mode:'race',times:{},bestPerStage:{}});setSelectedStage(null);}}
 onOpenSections={()=>setSheet('sections')}
 user={user}
 onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newName}:s));setSelectedStage(prev=>prev&&prev.id===id?{...prev,name:newName}:prev);}}/></div></>
@@ -3703,7 +4060,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
 
       {/* Stage detail (from stages tab) */}
       {selectedStage&&tab!=="map"&&sheet!=='sections'&&(
-      <><div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:45}} onClick={()=>setSelectedStage(null)}/><div className="slide-up" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:46,maxHeight:"88vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><StageDetailSheet stage={selectedStage} onClose={()=>setSelectedStage(null)} onRace={()=>{setActiveRace({id:Date.now(),name:selectedStage.name,stageIds:[selectedStage.id],mode:'race',times:{},bestPerStage:{}});setSelectedStage(null);}} onOpenSections={()=>setSheet('sections')} user={user} onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newName}:s));setSelectedStage(prev=>prev&&prev.id===id?{...prev,name:newName}:prev);}}/></div></>
+      <><div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:45}} onClick={()=>setSelectedStage(null)}/><div className="slide-up" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:46,maxHeight:"88vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><StageDetailSheet stage={selectedStage} units={settings.units} onClose={()=>setSelectedStage(null)} onRace={()=>{setActiveRace({id:Date.now(),name:selectedStage.name,stageIds:[selectedStage.id],mode:'race',times:{},bestPerStage:{}});setSelectedStage(null);}} onOpenSections={()=>setSheet('sections')} user={user} onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newName}:s));setSelectedStage(prev=>prev&&prev.id===id?{...prev,name:newName}:prev);}}/></div></>
       )}    
 
 
