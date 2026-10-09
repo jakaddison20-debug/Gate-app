@@ -737,6 +737,59 @@ function StageConsistencyCard({runs}){
   );
 }
 
+// ── Time delta ────────────────────────────────────────────────────────────────
+// Your best vs the fastest rider (or the rider behind you if you hold P1).
+// Green + when you're ahead, red - when you're behind. Ring is full at 10% of their time.
+function fmtDelta(ms){const s=Math.abs(ms)/1000;if(s<100)return s.toFixed(2);const m=Math.floor(s/60);return`${m}:${String(Math.floor(s%60)).padStart(2,"0")}`;}
+function DeltaRing({fraction,color,text,size=54,stroke=5}){
+  const r=(size-stroke)/2,c=2*Math.PI*r;
+  const f=Math.max(0.04,Math.min(1,fraction));
+  return(
+    <div style={{position:"relative",width:size,height:size,flexShrink:0}}>
+      <svg width={size} height={size} style={{transform:"rotate(-90deg)"}}>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#E6E6E6" strokeWidth={stroke}/>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap={f>=1?"butt":"round"} strokeDasharray={`${c*f} ${c}`}/>
+      </svg>
+      <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:text.length>6?11:text.length>5?12:14,fontWeight:800,color:C.text,letterSpacing:-0.3}}>{text}</div>
+    </div>
+  );
+}
+function StageTimeDeltaCard({lb,myAttempts,user}){
+  const [open,setOpen]=useState(false);
+  if(!user||!myAttempts||myAttempts.length===0||!lb||lb.length===0)return null;
+  const myBest=Math.min(...myAttempts.map(a=>a.time_ms));
+  const target=lb[0].user_id===user.id?lb[1]:lb[0];
+  if(!target)return null;
+  const delta=target.time-myBest; // + = you're ahead
+  const ahead=delta>0,level=delta===0;
+  const color=level?C.muted:ahead?C.green:C.red;
+  const fraction=Math.abs(delta)/target.time/0.10;
+  const text=level?"0.00":(ahead?"+":"-")+fmtDelta(delta);
+  return(
+    <div style={{margin:"16px 16px 0",background:C.surface,borderRadius:14,border:`1px solid ${C.border}`,overflow:"hidden"}}>
+      <button className="tap" onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:14,padding:"14px 16px",background:"none",border:"none",textAlign:"left"}}>
+        <DeltaRing fraction={level?0:fraction} color={color} text={text}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:15,fontWeight:700,color:C.text}}>Time delta</div>
+          <div style={{fontSize:12,color:C.muted,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>vs {target.name} · P{target.pos}</div>
+        </div>
+        <div style={{transform:open?"rotate(180deg)":"none",transition:"transform 0.15s",display:"flex"}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.mutedL} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+      </button>
+      {open&&(
+        <div style={{padding:"0 16px 14px"}}>
+          <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,marginBottom:8}}>COMPARING WITH</div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 14px"}}>
+            <span style={{fontSize:14,fontWeight:700,color:C.text}}>{target.name}</span>
+            <span style={{fontSize:15,fontWeight:800,color:C.text}}>{formatTime(target.time)}</span>
+          </div>
+          <div style={{fontSize:18,fontWeight:800,color,marginTop:14}}>{level?`Level with ${target.name}`:`${fmtDelta(delta)}s ${ahead?"ahead of":"behind"} ${target.name}`}</div>
+          <div style={{fontSize:12,color:C.muted,marginTop:4,lineHeight:1.45}}>Your best run compared with {target.name}'s fastest time on this stage.</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StageProgressCard({stage,user,lb,myAttempts}){
   const [view,setView]=useState('you');
   const [topSeries,setTopSeries]=useState(null);
@@ -994,6 +1047,7 @@ const myEntry=lb.find(e=>user&&e.user_id===user.id);
       {stage.note&&<div style={{margin:"12px 16px 0",background:C.surface,borderRadius:10,padding:"11px 14px",border:`1px solid ${C.border}`}}><div style={{fontSize:11,fontWeight:600,color:C.muted,marginBottom:4}}>STAGE NOTES</div><div style={{fontSize:13,color:C.text,lineHeight:1.5}}>📋 {stage.note}</div></div>}
             <StageProgressCard stage={stage} user={user} lb={lb} myAttempts={myAttempts}/>
 <StageConsistencyCard runs={myAttempts}/>
+<StageTimeDeltaCard lb={lb} myAttempts={myAttempts} user={user}/>
 <div style={{padding:"16px 16px 0"}}>
 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
 <div style={{fontSize:15,fontWeight:700,color:C.text}}>Leaderboard</div>
