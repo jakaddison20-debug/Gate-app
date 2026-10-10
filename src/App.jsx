@@ -1324,8 +1324,60 @@ function ImprovementScreen({rows}){
   );
 }
 
+// ── Leaderboard wedge (stage sheet) ───────────────────────────────────────────
+function StageLeaderboardCard({lb,rank,user}){
+  const [open,setOpen]=useState(false);
+  const r=22,circ=2*Math.PI*r;
+  const frac=rank.myPos&&rank.total?Math.max(0,Math.min(1,(rank.total-rank.myPos+1)/rank.total)):0;
+  const lead=lb[0];
+  const leadMe=!!(lead&&user&&lead.user_id===user.id);
+  const sub=lead?`${leadMe?"You lead":lead.name+" leads"} · ${formatTime(lead.time)}`:"No times yet";
+  const centre=rank.myPos?`P${rank.myPos}`:"–";
+  return(
+    <div style={{margin:"16px 16px 0",background:C.surface,borderRadius:16,border:`1px solid ${C.border}`,overflow:"hidden"}}>
+      <button className="tap" onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:16,padding:"18px 16px",background:C.surface,border:"none",textAlign:"left"}}>
+        <div style={{position:"relative",width:56,height:56,flexShrink:0}}>
+          <svg width="56" height="56" viewBox="0 0 56 56" style={{transform:"rotate(-90deg)"}}>
+            <circle cx="28" cy="28" r={r} fill="none" stroke={C.border} strokeWidth="6"/>
+            <circle cx="28" cy="28" r={r} fill="none" stroke={frac>0?C.orange:"transparent"} strokeWidth="6" strokeLinecap="round" strokeDasharray={`${(frac*circ).toFixed(1)} ${circ.toFixed(1)}`}/>
+          </svg>
+          <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:rank.myPos>=100?12:17,fontWeight:800,letterSpacing:-0.5,color:C.text}}>{centre}</div>
+        </div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:16,fontWeight:700,color:C.text}}>Leaderboard</div>
+          <div style={{fontSize:12,color:C.muted,marginTop:4}}>{sub}</div>
+        </div>
+        {open?<Icon.ChevronUp size={16} color={C.mutedL}/>:<Icon.ChevronDown size={16} color={C.mutedL}/>}
+      </button>
+      {open&&(
+        <div style={{padding:"14px 14px 8px",borderTop:`1px solid ${C.border}`,background:"#fff"}}>
+          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:10}}>
+            <div style={{fontSize:11,color:C.muted,background:C.surface,borderRadius:6,padding:"3px 8px",border:`1px solid ${C.border}`}}>Free · Top 10</div>
+          </div>
+          {lb.length===0?<div style={{textAlign:"center",padding:"20px",color:C.muted,fontSize:13}}>No times yet — be the first!</div>:lb.map((entry,i)=>{
+            const isMe=!!(user&&entry.user_id===user.id);
+            const gap=i===0?0:entry.time-lb[0].time;
+            return(
+              <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"11px 12px",background:isMe?C.orangeL:"white",borderRadius:10,marginBottom:6,border:`1px solid ${isMe?C.orange:C.border}`}}>
+                <div style={{width:34}}><PositionBadge pos={entry.pos} size={30}/></div>
+                <Avatar size={32} url={entry.avatarUrl}/>
+                <div style={{flex:1}}><div style={{fontSize:13,fontWeight:isMe?700:500,color:C.text}}>{isMe?"You":entry.name}</div><div style={{fontSize:11,color:C.muted}}>{entry.date}</div></div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:15,fontWeight:700,color:isMe?C.orange:C.text}}>{formatTime(entry.time)}</div>
+                  {gap>0&&<div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:3,marginTop:2}}><svg width="7" height="7" viewBox="0 0 10 10"><path d="M1 1 L9 1 L5 9 Z" fill={C.muted}/></svg><span style={{fontSize:10,fontWeight:700,color:C.muted}}>{formatTime(gap)}</span></div>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
     function StageDetailSheet({stage,onClose,onRace,onOpenSections,user,onRename,units}){
     const [lb,setLb]=useState([]);
+const [rank,setRank]=useState({total:0,myPos:0});
 const [myAttempts,setMyAttempts]=useState([]);
 const [editingName,setEditingName]=useState(false);
 const [nameVal,setNameVal]=useState(stage.name);
@@ -1348,14 +1400,14 @@ const saveDifficulty=async(val)=>{
   if(error)alert(error.message);
 };
  
-    useEffect(()=>{supabase.from('stage_times').select('time_ms,user_id,created_at,profiles(display_name,avatar_url)').eq('stage_id',stage.id).order('time_ms',{ascending:true}).then(({data})=>{if(data){const seen={};const best=data.filter(t=>{const id=t.user_id;if(seen[id])return false;seen[id]=true;return true;});setLb(best.slice(0,10).map((t,i)=>({pos:i+1,name:t.profiles?.display_name||'Rider',avatarUrl:t.profiles?.avatar_url||null,time:t.time_ms,date:new Date(t.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}),user_id:t.user_id})))}});},[stage.id]);
+    useEffect(()=>{supabase.from('stage_times').select('time_ms,user_id,created_at,profiles(display_name,avatar_url)').eq('stage_id',stage.id).order('time_ms',{ascending:true}).then(({data})=>{if(data){const seen={};const best=data.filter(t=>{const id=t.user_id;if(seen[id])return false;seen[id]=true;return true;});setLb(best.slice(0,10).map((t,i)=>({pos:i+1,name:t.profiles?.display_name||'Rider',avatarUrl:t.profiles?.avatar_url||null,time:t.time_ms,date:new Date(t.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}),user_id:t.user_id})));setRank({total:best.length,myPos:user?(best.findIndex(t=>t.user_id===user.id)+1):0});}});},[stage.id,user]);
 
  useEffect(()=>{if(!user)return;supabase.from('stage_times').select('time_ms,created_at').eq('stage_id',stage.id).eq('user_id',user.id).order('created_at',{ascending:true}).then(({data})=>{if(data)setMyAttempts(data);});},[stage.id,user]);
 const isCreator=!!(user&&stage.created_by&&stage.created_by===user.id);
 const saveName=async()=>{const trimmed=nameVal.trim();if(!trimmed||trimmed===stage.name){setEditingName(false);setNameVal(stage.name);return;}setSavingName(true);const{error}=await supabase.from('stages').update({name:trimmed}).eq('id',stage.id);setSavingName(false);if(error){alert(error.message);return;}onRename&&onRename(stage.id,trimmed);setEditingName(false);};
 const dist=haversine(stage.start,stage.finish);
 const myEntry=lb.find(e=>user&&e.user_id===user.id);
-  const myPos=myEntry?myEntry.pos:null;
+  const myPos=rank.myPos||null;
   const medalColor=pos=>pos===1?"#FFD700":pos===2?"#C0C0C0":pos===3?"#CD7F32":null;
   return(
     <div style={{padding:"0 0 40px"}}>
@@ -1417,7 +1469,7 @@ const myEntry=lb.find(e=>user&&e.user_id===user.id);
 <div style={{fontSize:10,color:C.muted,marginTop:2}}>Position</div>
 </div>
 <div style={{background:C.surface,borderRadius:10,padding:"10px 8px",textAlign:"center",border:`1px solid ${C.border}`}}>
-<div style={{fontSize:14,fontWeight:700,color:C.text}}>{lb.length}+</div>
+<div style={{fontSize:14,fontWeight:700,color:C.text}}>{rank.total||lb.length}</div>
 <div style={{fontSize:10,color:C.muted,marginTop:2}}>Riders</div>
 </div>
 </div>
@@ -1425,30 +1477,12 @@ const myEntry=lb.find(e=>user&&e.user_id===user.id);
 
     
       {stage.note&&<div style={{margin:"12px 16px 0",background:C.surface,borderRadius:10,padding:"11px 14px",border:`1px solid ${C.border}`}}><div style={{fontSize:11,fontWeight:600,color:C.muted,marginBottom:4}}>STAGE NOTES</div><div style={{fontSize:13,color:C.text,lineHeight:1.5}}>📋 {stage.note}</div></div>}
+            <StageLeaderboardCard lb={lb} rank={rank} user={user}/>
             <StageProgressCard stage={stage} user={user} lb={lb} myAttempts={myAttempts}/>
 <StageConsistencyCard runs={myAttempts}/>
 <StageTimeDeltaCard stage={stage} lb={lb} myAttempts={myAttempts} user={user} units={units}/>
 <StageImprovementCard myAttempts={myAttempts}/>
 <div style={{padding:"16px 16px 0"}}>
-<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-<div style={{fontSize:15,fontWeight:700,color:C.text}}>Leaderboard</div>
-          <div style={{fontSize:11,color:C.muted,background:C.surface,borderRadius:6,padding:"3px 8px",border:`1px solid ${C.border}`}}>Free · Top 10</div>
-        </div>
-                {lb.length===0?<div style={{textAlign:"center",padding:"20px",color:C.muted,fontSize:13}}>No times yet — be the first!</div>:lb.map((entry,i)=>{
-          const isMe=!!(user&&entry.user_id===user.id),mc=medalColor(entry.pos);
-          const gap=i===0?0:entry.time-lb[0].time;
-          return(
-            <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"11px 12px",background:isMe?C.orangeL:"white",borderRadius:10,marginBottom:6,border:`1px solid ${isMe?C.orange:C.border}`}}>
-              <div style={{width:34}}><PositionBadge pos={entry.pos} size={30}/></div>
-                            <Avatar size={32} url={entry.avatarUrl}/>
-              <div style={{flex:1}}><div style={{fontSize:13,fontWeight:isMe?700:500,color:C.text}}>{isMe?"You":entry.name}</div><div style={{fontSize:11,color:C.muted}}>{entry.date}</div></div>
-              <div style={{textAlign:"right"}}>
-                <div style={{fontSize:15,fontWeight:700,color:isMe?C.orange:C.text}}>{formatTime(entry.time)}</div>
-                {gap>0&&<div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:3,marginTop:2}}><svg width="7" height="7" viewBox="0 0 10 10"><path d="M1 1 L9 1 L5 9 Z" fill={C.muted}/></svg><span style={{fontSize:10,fontWeight:700,color:C.muted}}>{formatTime(gap)}</span></div>}
-              </div>
-            </div>
-          );
-        })}
         
                 <button className="tap" onClick={onRace} style={{width:"100%",background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"12px 16px",color:C.blue,fontSize:14,fontWeight:700,marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><Icon.Flag size={16} color={C.blue}/>Race Stage</button>
         <button className="tap" onClick={onOpenSections} style={{width:"100%",background:"none",border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 16px",color:C.text,fontSize:13,fontWeight:600,marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><Icon.Lightning size={15} color={C.muted}/>Sections</button>
