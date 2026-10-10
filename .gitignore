@@ -1,2 +1,7 @@
 node_modules/
 dist/
+
+# Local environment files (API keys and tokens)
+.env
+.env.local
+.env.*.local
