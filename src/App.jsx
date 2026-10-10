@@ -1476,7 +1476,6 @@ const myEntry=lb.find(e=>user&&e.user_id===user.id);
 </div>
 
     
-      {stage.note&&<div style={{margin:"12px 16px 0",background:C.surface,borderRadius:10,padding:"11px 14px",border:`1px solid ${C.border}`}}><div style={{fontSize:11,fontWeight:600,color:C.muted,marginBottom:4}}>STAGE NOTES</div><div style={{fontSize:13,color:C.text,lineHeight:1.5}}>📋 {stage.note}</div></div>}
             <StageLeaderboardCard lb={lb} rank={rank} user={user}/>
             <StageProgressCard stage={stage} user={user} lb={lb} myAttempts={myAttempts}/>
 <StageConsistencyCard runs={myAttempts}/>
@@ -3025,7 +3024,6 @@ function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,cou
   const [privacy,setPrivacy]=useState("private");
   const [start,setStart]=useState(null);
   const [finish,setFinish]=useState(null);
-  const [note,setNote]=useState("");
   const [recording,setRecording]=useState(false);
   const [lineCoords,setLineCoords]=useState([]);
   const trackRef=useRef(null);
@@ -3064,8 +3062,7 @@ function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,cou
       <div style={{marginBottom:16}}><DifficultyPicker value={difficulty} onChange={setDifficulty}/></div>
       <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase",marginBottom:10}}>Trail built by <span style={{textTransform:"none",letterSpacing:0,fontWeight:400}}>(optional)</span></div>
       <input value={builtBy} onChange={e=>setBuiltBy(e.target.value)} maxLength={60} placeholder="Give the builders credit" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"12px 14px",fontSize:14,color:C.text,background:C.surface,marginBottom:16}}/>
-      <textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Notes — hazards, line choice…" rows={2} style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"12px 14px",fontSize:13,color:C.text,background:C.surface,marginBottom:20}}/>
-       <button className="tap" onClick={()=>canSave&&onSave({id:Date.now(),name:name.trim(),start,finish,privacy,difficulty,builtBy:builtBy.trim(),note,time:null,cr:false,crHolder:null,crDate:null,lineCoords})}
+       <button className="tap" onClick={()=>canSave&&onSave({id:Date.now(),name:name.trim(),start,finish,privacy,difficulty,builtBy:builtBy.trim(),time:null,cr:false,crHolder:null,crDate:null,lineCoords})}
         style={{width:"100%",background:canSave?C.orange:C.surface,border:"none",borderRadius:12,padding:15,color:canSave?"#fff":C.muted,fontSize:15,fontWeight:700,transition:"all 0.2s"}}>
         {canSave?"Create Stage":"Complete all fields"}
       </button>
@@ -3672,7 +3669,6 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
 <div style={{fontSize:20,fontWeight:700,color:C.text,marginBottom:8}}>{stageIndex===0?`Head to Stage 1`:`Transfer to Stage ${stageIndex+1}`}</div>
 <div style={{fontSize:24,fontWeight:800,color:gateColors[gateStatus],marginBottom:8,transition:"all 0.3s"}}>{gateMsg[gateStatus]}</div>
 <div style={{fontSize:13,color:C.muted,marginBottom:16}}>{isPractice?"Timer won't start — just ride it for feel":"Timer starts automatically when you enter the gate"}</div>
-{currentStage.note&&<div style={{background:C.surface,borderRadius:12,padding:"12px 16px",border:`1px solid ${C.border}`,fontSize:13,color:C.muted,maxWidth:280}}>📋 {currentStage.note}</div>}
 <button className="tap" onClick={()=>{setArmed(false);setGateStatus("waiting");setDistToGate(null);}} style={{marginTop:16,background:"none",border:"none",color:C.muted,fontSize:12,textDecoration:"underline"}}>Disarm</button>
 </>
 )}
