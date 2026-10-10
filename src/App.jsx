@@ -1100,6 +1100,219 @@ function StageProgressCard({stage,user,lb,myAttempts}){
 
 
 // ── Stage Detail Sheet ────────────────────────────────────────────────────────
+// ── Improvement ───────────────────────────────────────────────────────────────
+// Small shared pieces used by the Improvement tile and screen
+function InsightRing({pct,color,size=54,r,stroke=5,children}){
+  const rr=r||(size-stroke)/2,c=2*Math.PI*rr,f=pct>0?Math.max(0.03,Math.min(1,pct)):0;
+  return(
+    <div style={{position:"relative",width:size,height:size,flexShrink:0}}>
+      <svg width={size} height={size} style={{transform:"rotate(-90deg)"}}>
+        <circle cx={size/2} cy={size/2} r={rr} fill="none" stroke="#E6E6E6" strokeWidth={stroke}/>
+        {f>0&&<circle cx={size/2} cy={size/2} r={rr} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round" strokeDasharray={`${c*f} ${c}`}/>}
+      </svg>
+      <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center"}}>{children}</div>
+    </div>
+  );
+}
+function InsightTile({open,onToggle,title,sub,ring,children}){
+  return(
+    <div style={{margin:"16px 16px 0",background:C.surface,borderRadius:14,border:`1px solid ${C.border}`,overflow:"hidden"}}>
+      <button className="tap" onClick={onToggle} style={{width:"100%",display:"flex",alignItems:"center",gap:14,padding:"14px 16px",background:"none",border:"none",textAlign:"left"}}>
+        {ring}
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:15,fontWeight:700,color:C.text}}>{title}</div>
+          <div style={{fontSize:12,color:C.muted,marginTop:2}}>{sub}</div>
+        </div>
+        <div style={{transform:open?"rotate(180deg)":"none",transition:"transform 0.15s",display:"flex"}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.mutedL} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+      </button>
+      {open&&<div style={{padding:"0 16px 14px"}}>{children}</div>}
+    </div>
+  );
+}
+const MiniLabel=({children})=><div style={{fontSize:10,fontWeight:600,color:C.muted,letterSpacing:0.8}}>{children}</div>;
+const TipBox=({children})=><div style={{marginTop:12,padding:"10px 12px",background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,fontSize:13,color:C.text,lineHeight:1.5}}>{children}</div>;
+
+// --- Improvement maths ---
+const fmtPct=v=>(v>=0?'+':'-')+Math.abs(v).toFixed(1)+'%';
+const fmtShort=ms=>Math.floor(ms/60000)+':'+String(Math.round((ms%60000)/1000)).padStart(2,'0');
+const monthIndex=d=>{const x=new Date(d);return x.getFullYear()*12+x.getMonth();};
+const monthName=(idx,style='long')=>{const n=new Date(Math.floor(idx/12),idx%12,1).toLocaleDateString('en-GB',{month:'long'});return style==='short'?n.slice(0,3):n;};
+
+// This calendar month vs last calendar month (average run time). Needs 2+ runs in each month.
+function calcImprovement(runs,now=new Date()){
+  if(!runs)return null;
+  const cur=monthIndex(now),prev=cur-1;
+  const a=runs.filter(r=>monthIndex(r.created_at)===prev);
+  const b=runs.filter(r=>monthIndex(r.created_at)===cur);
+  if(a.length<2||b.length<2)return null;
+  const avg=arr=>arr.reduce((s,r)=>s+r.time_ms,0)/arr.length;
+  const bestOf=arr=>Math.min(...arr.map(r=>r.time_ms));
+  const pa=avg(a),ca=avg(b);
+  return{prevAvg:pa,curAvg:ca,prevBest:bestOf(a),curBest:bestOf(b),prevRuns:a,curRuns:b,prevCount:a.length,curCount:b.length,
+    diffMs:pa-ca,pct:((pa-ca)/pa)*100,
+    prevLong:monthName(prev),curLong:monthName(cur),prevShort:monthName(prev,'short'),curShort:monthName(cur,'short')};
+}
+
+// --- Improvement stage-sheet card ---
+function StageImprovementCard({myAttempts,defaultOpen=false}){
+  const [open,setOpen]=useState(defaultOpen);
+  const im=calcImprovement(myAttempts);
+  if(!im)return null;
+  const up=im.diffMs>=0,color=up?C.green:C.red;
+  const ringPct=Math.min(1,Math.abs(im.pct)/3);
+  const all=[...im.prevRuns,...im.curRuns].map(r=>r.time_ms);
+  const mn=Math.min(...all),mx=Math.max(...all),pad=Math.max(1000,(mx-mn)*0.15);
+  const lo=mn-pad,hi=mx+pad,XL=34,XR=312;
+  const xs=t=>XL+((t-lo)/(hi-lo))*(XR-XL);
+  const ticks=[lo,(lo+hi)/2,hi];
+  const xa=xs(im.prevAvg),xb=xs(im.curAvg);
+  const bestDrop=(Math.min(...im.prevRuns.map(r=>r.time_ms))-Math.min(...im.curRuns.map(r=>r.time_ms)))/1000;
+  const tip=`You rode ${im.curCount} times in ${im.curLong} against ${im.prevCount} in ${im.prevLong}, and your best ${bestDrop>=0?'dropped by ':'is '}${Math.abs(bestDrop).toFixed(1)}s${bestDrop>=0?'.':' slower.'}`;
+  const card=(name,avg,best,count)=>(
+    <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:12}}>
+      <MiniLabel>{name.toUpperCase()}</MiniLabel>
+      <div style={{fontSize:18,fontWeight:800,marginTop:6,color:C.text}}>{formatTime(Math.round(avg))}</div>
+      <div style={{fontSize:11,color:C.muted,marginTop:2}}>average run</div>
+      <div style={{fontSize:11,color:C.muted,marginTop:6}}>Best {formatTime(best)} &middot; {count} runs</div>
+    </div>
+  );
+  return(
+    <InsightTile
+      open={open} onToggle={()=>setOpen(o=>!o)} title="Improvement" sub={`${im.curLong} vs ${im.prevLong}`}
+      ring={<InsightRing pct={ringPct} color={color}><span style={{fontSize:11,letterSpacing:-0.4,fontWeight:800,color:C.text}}>{fmtPct(im.pct)}</span></InsightRing>}>
+      <div style={{fontSize:17,fontWeight:800,color}}>{Math.abs(im.diffMs/1000).toFixed(1)}s {up?'faster':'slower'} than {im.prevLong}</div>
+      <div style={{fontSize:12,color:C.muted,lineHeight:1.45,marginTop:6}}>Your average run in {im.curLong} against your average run in {im.prevLong}.</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginTop:12}}>
+        {card(im.prevLong,im.prevAvg,im.prevBest,im.prevCount)}
+        {card(im.curLong,im.curAvg,im.curBest,im.curCount)}
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",marginTop:16,marginBottom:4}}>
+        <MiniLabel>EVERY RUN, BY MONTH</MiniLabel><div style={{fontSize:10,color:C.muted}}>left = faster</div>
+      </div>
+      <svg viewBox="0 0 320 112" width="100%" height="112" style={{display:"block"}}>
+        <line x1={XL} y1="32" x2={XR} y2="32" stroke="#EDEDED" strokeWidth="1"/>
+        <line x1={XL} y1="82" x2={XR} y2="82" stroke="#EDEDED" strokeWidth="1"/>
+        <text x="28" y="35" fill={C.muted} fontSize="9" textAnchor="end">{im.prevShort}</text>
+        <text x="28" y="85" fill={C.muted} fontSize="9" textAnchor="end">{im.curShort}</text>
+        <line x1={xa} y1="57" x2={xb} y2="57" stroke={color} strokeWidth="2" strokeLinecap="round"/>
+        <text x={(xa+xb)/2} y="49" fill={color} fontSize="10" fontWeight="700" textAnchor="middle">{(up?'-':'+')+Math.abs(im.diffMs/1000).toFixed(1)+'s'}</text>
+        {im.prevRuns.map((r,i)=><circle key={'p'+i} cx={xs(r.time_ms)} cy="32" r="4.5" fill="#9CA3AF" stroke="#fff" strokeWidth="1.5"/>)}
+        {im.curRuns.map((r,i)=><circle key={'c'+i} cx={xs(r.time_ms)} cy="82" r="4.5" fill={C.blue} stroke="#fff" strokeWidth="1.5"/>)}
+        <rect x={xa-1} y="22" width="2" height="20" rx="1" fill={C.text}/>
+        <rect x={xb-1} y="72" width="2" height="20" rx="1" fill={C.text}/>
+        {ticks.map((t,i)=><text key={i} x={xs(t)} y="108" fill="#C4C4C4" fontSize="9" textAnchor={i===0?"start":i===2?"end":"middle"}>{fmtShort(t)}</text>)}
+      </svg>
+      <div style={{fontSize:10,color:C.mutedL,marginTop:4,textAlign:"center"}}>dots = your runs &middot; bar = month average</div>
+      <TipBox>{tip}</TipBox>
+    </InsightTile>
+  );
+}
+
+// --- Improvement Statistics pieces ---
+function improvementRows(grouped,stages){
+  if(!grouped)return null;
+  const cur=monthIndex(new Date());
+  return Object.keys(grouped).map(id=>{
+    const stage=stages.find(s=>String(s.id)===String(id));
+    if(!stage)return null;
+    const im=calcImprovement(grouped[id]);
+    const runsThisMonth=grouped[id].filter(r=>monthIndex(r.created_at)===cur).length;
+    if(!im&&runsThisMonth===0)return null;
+    return{stage,im,runsThisMonth};
+  }).filter(Boolean);
+}
+
+function InsightHubTile({ring,title,sub,onClick}){
+  return(
+    <button className="tap" onClick={onClick} style={{display:"flex",alignItems:"center",gap:16,background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:"18px 16px",marginTop:12,width:"100%",textAlign:"left"}}>
+      {ring}
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:16,fontWeight:700,color:C.text}}>{title}</div>
+        <div style={{fontSize:12,color:C.muted,marginTop:4}}>{sub}</div>
+      </div>
+      <Icon.ChevronRight size={16} color={C.mutedL}/>
+    </button>
+  );
+}
+
+function ImprovementHubTile({rows,onClick}){
+  const scored=rows?rows.filter(r=>r.im):[];
+  if(rows===null||scored.length===0)return <InsightHubTile onClick={onClick} title="Improvement" sub={rows===null?"Loading…":"Needs 2+ runs in both months"} ring={<InsightRing pct={0} color={C.green}><span style={{fontSize:11,fontWeight:800,color:C.text}}>–</span></InsightRing>}/>;
+  const overall=scored.reduce((a,r)=>a+r.im.pct,0)/scored.length;
+  const up=overall>=0;
+  const ex=scored[0].im;
+  return <InsightHubTile onClick={onClick} title="Improvement" sub={`${up?'Faster':'Slower'} · ${ex.curShort} vs ${ex.prevShort}`} ring={<InsightRing pct={Math.min(1,Math.abs(overall)/3)} color={up?C.green:C.red}><span style={{fontSize:11,letterSpacing:-0.4,fontWeight:800,color:C.text}}>{fmtPct(overall)}</span></InsightRing>}/>;
+}
+
+const EmptyNote=({children})=><div style={{textAlign:"center",padding:"40px 20px",color:C.muted,fontSize:13}}>{children}</div>;
+const StageDiamond=({stage})=><DifficultyDiamond color={(DIFFICULTIES.find(d=>d.val===(stage.difficulty||'blue'))||DIFFICULTIES[0]).color} size={16}/>;
+
+function ImprovementScreen({rows}){
+  const [sort,setSort]=useState('best');
+  const [explain,setExplain]=useState(false);
+  if(rows===null)return <EmptyNote>Loading…</EmptyNote>;
+  const scored=rows.filter(r=>r.im);
+  if(scored.length===0)return <EmptyNote>Ride the same stage at least twice this month and twice last month to see your improvement here.</EmptyNote>;
+  const overall=scored.reduce((a,r)=>a+r.im.pct,0)/scored.length;
+  const up=overall>=0,oColor=up?C.green:C.red;
+  const byPct=scored.slice().sort((a,b)=>b.im.pct-a.im.pct);
+  const top=byPct[0],low=byPct[byPct.length-1];
+  const ordered=scored.slice().sort((a,b)=>sort==='best'?b.im.pct-a.im.pct:a.im.pct-b.im.pct).concat(rows.filter(r=>!r.im));
+  const ex=scored[0].im;
+  return(
+    <div>
+      <div style={{padding:"24px 16px 20px",textAlign:"center",borderBottom:`1px solid ${C.border}`}}>
+        <div style={{margin:"0 auto",width:132}}>
+          <InsightRing size={132} r={56} stroke={10} pct={Math.min(1,Math.abs(overall)/3)} color={oColor}>
+            <div><div style={{fontSize:28,fontWeight:800,lineHeight:1,color:C.text}}>{fmtPct(overall)}</div><div style={{fontSize:10,fontWeight:600,color:C.muted,marginTop:6,letterSpacing:0.6}}>{ex.curShort.toUpperCase()} VS {ex.prevShort.toUpperCase()}</div></div>
+          </InsightRing>
+        </div>
+        <div style={{fontSize:20,fontWeight:800,color:oColor,marginTop:14}}>{up?'Getting faster':'Slowing down'}</div>
+        <div style={{fontSize:13,color:C.muted,marginTop:4,lineHeight:1.45}}>Your average run this month against last month, across {scored.length} stage{scored.length===1?'':'s'} you rode in both.</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,padding:"16px 16px 0"}}>
+        <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:12}}><MiniLabel>MOST IMPROVED</MiniLabel><div style={{fontSize:14,fontWeight:700,marginTop:6,color:C.text}}>{top.stage.name}</div><div style={{fontSize:12,color:top.im.pct>=0?C.green:C.red,fontWeight:600,marginTop:2}}>{fmtPct(top.im.pct)}</div></div>
+        <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:12}}><MiniLabel>{low.im.pct<0?'SLIPPING':'LEAST IMPROVED'}</MiniLabel><div style={{fontSize:14,fontWeight:700,marginTop:6,color:C.text}}>{low.stage.name}</div><div style={{fontSize:12,color:low.im.pct<0?C.red:C.yellow,fontWeight:600,marginTop:2}}>{fmtPct(low.im.pct)}</div></div>
+      </div>
+      <div style={{padding:"20px 16px 0"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase"}}>By stage</div>
+          <button onClick={()=>setSort(s=>s==='best'?'worst':'best')} style={{background:"none",border:"none",padding:0,fontSize:12,fontWeight:600,color:C.blue}}>Sort: {sort==='best'?'Most improved':'Least improved'} ▾</button>
+        </div>
+        {ordered.map(({stage,im,runsThisMonth})=>{
+          const steady=im&&Math.abs(im.pct)<0.5,upS=im&&im.pct>=0;
+          const col=!im?C.mutedL:steady?C.muted:upS?C.green:C.red;
+          const w=im?Math.min(50,(Math.abs(im.pct)/4)*50):0;
+          return(
+            <div key={stage.id} style={{padding:"12px 0",borderBottom:`1px solid ${C.border}`}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <StageDiamond stage={stage}/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:14,fontWeight:600,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{stage.name}</div>
+                  <div style={{fontSize:12,color:C.muted,marginTop:1}}>{im?`${im.curCount} runs this month · avg ${Math.abs(im.diffMs/1000).toFixed(1)}s ${upS?'faster':'slower'}`:'Needs 2+ runs in both months'}</div>
+                </div>
+                <div style={{textAlign:"right"}}><div style={{fontSize:18,fontWeight:800,color:col}}>{im?fmtPct(im.pct):'-'}</div><div style={{fontSize:10,fontWeight:600,color:col}}>{!im?'Not enough runs':steady?'Steady':upS?'Faster':'Slower'}</div></div>
+              </div>
+              <div style={{position:"relative",height:4,background:"#F0F0F0",borderRadius:2,marginTop:9}}>
+                <div style={{position:"absolute",top:0,left:`${im&&!upS?50-w:50}%`,width:`${w}%`,height:4,background:col,borderRadius:2}}/>
+                <div style={{position:"absolute",top:-2,left:"50%",width:1,height:8,background:C.mutedL}}/>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{margin:"20px 16px 24px",border:`1px solid ${C.border}`,borderRadius:12,overflow:"hidden"}}>
+        <button onClick={()=>setExplain(e=>!e)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 14px",background:"#fff",border:"none",textAlign:"left",fontSize:14,fontWeight:600,color:C.text}}>How it's measured<span style={{color:C.muted,fontSize:12}}>{explain?'Hide':'Show'}</span></button>
+        {explain&&<div style={{padding:"0 14px 14px",background:C.surface,fontSize:12,lineHeight:1.55,color:C.text}}>
+          <div style={{paddingTop:12}}>We take your average run time on a stage this calendar month and compare it with your average last month.</div>
+          <div style={{marginTop:8}}>The percentage is how much quicker (or slower) that average is. Using percentages lets short and long stages be compared fairly.</div>
+          <div style={{marginTop:10,color:C.muted}}>Needs at least 2 runs on the stage in each month to count.</div>
+        </div>}
+      </div>
+    </div>
+  );
+}
+
     function StageDetailSheet({stage,onClose,onRace,onOpenSections,user,onRename,units}){
     const [lb,setLb]=useState([]);
 const [myAttempts,setMyAttempts]=useState([]);
@@ -1204,6 +1417,7 @@ const myEntry=lb.find(e=>user&&e.user_id===user.id);
             <StageProgressCard stage={stage} user={user} lb={lb} myAttempts={myAttempts}/>
 <StageConsistencyCard runs={myAttempts}/>
 <StageTimeDeltaCard stage={stage} lb={lb} myAttempts={myAttempts} user={user} units={units}/>
+<StageImprovementCard myAttempts={myAttempts}/>
 <div style={{padding:"16px 16px 0"}}>
 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
 <div style={{fontSize:15,fontWeight:700,color:C.text}}>Leaderboard</div>
@@ -1975,7 +2189,7 @@ function GroupMapScreen({group,stages,user,onBack,onAddStages}){
 function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stagesRiddenCount,coursesCompleteCount,courseCRList}){
   const [view,setView]=useState('hub');
   const [expandedCRCourse,setExpandedCRCourse]=useState(null);
-  const titles={hub:"Statistics",stages:"Stages",courses:"Courses",fastest:"Stage records",records:"Course Records",myStages:"Your Stages",myCourses:"Your Courses",consistency:"Consistency"};
+  const titles={hub:"Statistics",stages:"Stages",courses:"Courses",fastest:"Stage records",records:"Course Records",myStages:"Your Stages",myCourses:"Your Courses",consistency:"Consistency",improvement:"Improvement"};
   const [myRuns,setMyRuns]=useState(null);
   const [consistencySort,setConsistencySort]=useState('most');
   const [showHowScored,setShowHowScored]=useState(false);
@@ -1984,6 +2198,12 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
     supabase.from('stage_times').select('stage_id,time_ms,created_at').eq('user_id',user.id).order('created_at',{ascending:true}).then(({data})=>{if(!cancelled)setMyRuns(data||[]);});
     return()=>{cancelled=true;};
   },[user.id]);
+  const impRows=useMemo(()=>{
+    if(!myRuns)return null;
+    const by={};
+    myRuns.forEach(t=>{(by[t.stage_id]=by[t.stage_id]||[]).push(t);});
+    return improvementRows(by,stages);
+  },[myRuns,stages]);
   const consistency=useMemo(()=>{
     if(!myRuns)return null;
     const byStage={};
@@ -2099,6 +2319,7 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
               </div>
               <Icon.ChevronRight size={16} color={C.mutedL}/>
             </button>
+            <ImprovementHubTile rows={impRows} onClick={()=>setView('improvement')}/>
           </div>
         )}
         {view==='consistency'&&(
@@ -2165,6 +2386,7 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
             })()}
           </div>
         )}
+        {view==='improvement'&&<ImprovementScreen rows={impRows}/>}
         {view==='myStages'&&(
           <div style={{padding:"16px 16px 40px"}}>
             {creatorStats===null?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>:creatorStats.stageRows.length===0?(
