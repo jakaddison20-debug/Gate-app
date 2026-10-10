@@ -2197,10 +2197,241 @@ function GroupMapScreen({group,stages,user,onBack,onAddStages}){
   );
 }
 
+// ── Fatigue ───────────────────────────────────────────────────────────────────
+const FADE_MIN_DAYS=4;
+const FADE_SLOW_PCT=1;
+const DEM_ZOOM=14;
+const M_TO_FT=3.28084;
+
+const fatCommas=v=>String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+const fatSigned=v=>(v>=0?'+':'-')+Math.abs(v).toFixed(1)+'%';
+
+const demHeight=(r,g,b)=>-10000+((r*65536+g*256+b)*0.1);
+
+function lngLatToTile(lng,lat,z){
+  const n=2**z,s=Math.sin(lat*Math.PI/180);
+  return{x:(lng+180)/360*n,y:(0.5-Math.log((1+s)/(1-s))/(4*Math.PI))*n};
+}
+
+function descentFromProfile(elev,win=3){
+  if(!elev||elev.length<3)return 0;
+  const sm=elev.map((_,i)=>{const w=Math.min(win,i,elev.length-1-i);let s=0,c=0;for(let k=i-w;k<=i+w;k++){s+=elev[k];c++;}return s/c;});
+  let down=0;
+  for(let i=1;i<sm.length;i++){const d=sm[i]-sm[i-1];if(d<0)down-=d;}
+  return down;
+}
+
+const demTiles={};
+function demTile(z,x,y){
+  const key=`${z}/${x}/${y}`;
+  if(!demTiles[key]){
+    demTiles[key]=new Promise(res=>{
+      const img=new Image();img.crossOrigin='anonymous';
+      img.onload=()=>{try{const cv=document.createElement('canvas');cv.width=img.width;cv.height=img.height;const cx=cv.getContext('2d',{willReadFrequently:true});cx.drawImage(img,0,0);res(cx.getImageData(0,0,img.width,img.height));}catch(e){res(null);}};
+      img.onerror=()=>res(null);
+      img.src=`https://api.mapbox.com/v4/mapbox.mapbox-terrain-dem-v1/${key}.pngraw?access_token=${import.meta.env.VITE_MAPBOX_TOKEN}`;
+    });
+  }
+  return demTiles[key];
+}
+
+async function elevationAt(lat,lng){
+  const t=lngLatToTile(lng,lat,DEM_ZOOM),tx=Math.floor(t.x),ty=Math.floor(t.y);
+  const img=await demTile(DEM_ZOOM,tx,ty);
+  if(!img)return null;
+  const sz=img.width,px=(t.x-tx)*sz-0.5,py=(t.y-ty)*sz-0.5;
+  const x0=Math.max(0,Math.min(sz-2,Math.floor(px))),y0=Math.max(0,Math.min(sz-2,Math.floor(py)));
+  const ax=Math.max(0,Math.min(1,px-x0)),ay=Math.max(0,Math.min(1,py-y0));
+  const h=(xx,yy)=>{const i=(yy*sz+xx)*4;return demHeight(img.data[i],img.data[i+1],img.data[i+2]);};
+  return h(x0,y0)*(1-ax)*(1-ay)+h(x0+1,y0)*ax*(1-ay)+h(x0,y0+1)*(1-ax)*ay+h(x0+1,y0+1)*ax*ay;
+}
+
+const DESC_KEY='gate_descent_ft_v1';
+const readDescCache=()=>{try{return JSON.parse(localStorage.getItem(DESC_KEY)||'{}');}catch(e){return {};}};
+const writeDescCache=o=>{try{localStorage.setItem(DESC_KEY,JSON.stringify(o));}catch(e){}};
+
+async function stageDescentFt(stage){
+  const line=stage.line_coords&&stage.line_coords.length>1?stage.line_coords:[stage.start,stage.finish];
+  if(!line||line.length<2||!line[0]||!line[line.length-1])return null;
+  const cum=[0];for(let i=1;i<line.length;i++)cum.push(cum[i-1]+haversine(line[i-1],line[i]));
+  const total=cum[cum.length-1];
+  if(total<20)return null;
+  const sig=`${line.length}:${Math.round(total)}`;
+  const cache=readDescCache(),hit=cache[stage.id];
+  if(hit&&hit.sig===sig)return hit.ft;
+  const step=Math.max(12,total/400),pts=[];
+  for(let d=0,seg=0;d<=total;d+=step){
+    while(seg<line.length-2&&cum[seg+1]<d)seg++;
+    const span=cum[seg+1]-cum[seg],u=span>0?(d-cum[seg])/span:0;
+    pts.push({lat:line[seg].lat+(line[seg+1].lat-line[seg].lat)*u,lng:line[seg].lng+(line[seg+1].lng-line[seg].lng)*u});
+  }
+  const elev=[];
+  for(const p of pts){const e=await elevationAt(p.lat,p.lng);if(e===null)return null;elev.push(e);}
+  const ft=Math.round(descentFromProfile(elev)*M_TO_FT/10)*10;
+  cache[stage.id]={ft,sig};writeDescCache(cache);
+  return ft;
+}
+
+function useStageDescents(grouped,stages){
+  const [map,setMap]=useState(null);
+  const ids=grouped?Object.keys(grouped).sort().join(','):'';
+  useEffect(()=>{
+    if(!grouped)return;
+    let off=false;
+    (async()=>{
+      const out={};
+      for(const id of Object.keys(grouped)){
+        const s=stages.find(x=>String(x.id)===String(id));
+        if(!s)continue;
+        let ft=null;try{ft=await stageDescentFt(s);}catch(e){}
+        if(off)return;
+        if(ft)out[id]=ft;
+      }
+      setMap(out);
+    })();
+    return()=>{off=true;};
+  },[ids,stages.length]);
+  return map;
+}
+
+const dayStart=d=>{const x=new Date(d);return new Date(x.getFullYear(),x.getMonth(),x.getDate()).getTime();};
+const weekStart=d=>{const x=new Date(d),dow=(x.getDay()+6)%7;return new Date(x.getFullYear(),x.getMonth(),x.getDate()-dow).getTime();};
+
+function fatigueModel(grouped,descents,mode='day'){
+  if(!grouped||!descents)return null;
+  const keyOf=mode==='week'?weekStart:dayStart,buckets={};
+  Object.keys(grouped).forEach(id=>{
+    const ft=descents[id];if(!ft)return;
+    const runs=grouped[id],avg=runs.length>=3?runs.reduce((s,r)=>s+r.time_ms,0)/runs.length:null;
+    runs.forEach(r=>{
+      const k=keyOf(r.created_at),b=buckets[k]||(buckets[k]={t:k,ft:0,offs:[]});
+      b.ft+=ft;if(avg)b.offs.push((r.time_ms-avg)/avg*100);
+    });
+  });
+  const all=Object.values(buckets).sort((a,b)=>a.t-b.t).map(b=>({t:b.t,ft:Math.round(b.ft),off:b.offs.length?b.offs.reduce((s,v)=>s+v,0)/b.offs.length:null}));
+  const scored=all.filter(b=>b.off!==null);
+  if(scored.length<FADE_MIN_DAYS)return{ready:false,count:scored.length,mode};
+  const byFt=scored.slice().sort((a,b)=>a.ft-b.ft),half=byFt.slice(0,Math.ceil(byFt.length/2));
+  const base=half.reduce((s,b)=>s+b.off,0)/half.length;
+  const bad=byFt.filter(b=>b.off-base>FADE_SLOW_PCT);
+  let line;
+  if(bad.length===0)line=byFt[byFt.length-1].ft;
+  else{
+    const lowestBad=Math.min(...bad.map(b=>b.ft)),ok=byFt.filter(b=>b.ft<lowestBad&&!bad.includes(b));
+    line=ok.length?ok[ok.length-1].ft:lowestBad*0.8;
+  }
+  line=Math.max(500,Math.round(line/100)*100);
+  const items=all.slice(-6),cur=all[all.length-1];
+  const prev=scored.filter(b=>b!==cur).slice(-5);
+  const usual=prev.length?prev.reduce((s,b)=>s+b.off,0)/prev.length:0;
+  const load=cur.ft/line,slower=cur.off!==null&&cur.off-usual>FADE_SLOW_PCT;
+  const status=load<0.7?{label:'Room to ride more',color:C.blue}:load<=1.1?{label:'On target',color:C.green}:slower?{label:'Over-riding',color:C.red}:{label:'Pushing it',color:C.yellow};
+  return{ready:true,mode,items,line,cur,load,status,count:scored.length};
+}
+
+const barColour=(ft,off,line)=>ft/line<=1.1?C.green:(off!==null&&off>FADE_SLOW_PCT?C.red:C.yellow);
+const dateLabel=t=>new Date(t).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+
+function FatigueRing({size=56,r=22,stroke=6,load,children}){
+  const circ=2*Math.PI*r,over=load>1;
+  const dash=f=>`${(Math.max(0,Math.min(1,f))*circ).toFixed(1)} ${circ.toFixed(1)}`;
+  const cx=size/2;
+  return(
+    <div style={{position:"relative",width:size,height:size,flexShrink:0}}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{transform:"rotate(-90deg)"}}>
+        <circle cx={cx} cy={cx} r={r} fill="none" stroke={size>100?"#F0F0F0":C.border} strokeWidth={stroke}/>
+        <circle cx={cx} cy={cx} r={r} fill="none" stroke={over||load<=0?"transparent":C.green} strokeWidth={stroke} strokeLinecap="round" strokeDasharray={dash(over?0:load)}/>
+        <circle cx={cx} cy={cx} r={r} fill="none" stroke={over?C.red:"transparent"} strokeWidth={stroke} strokeLinecap="round" strokeDasharray={dash(over?load-1:0)}/>
+      </svg>
+      <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}>{children}</div>
+    </div>
+  );
+}
+
+function FatigueHubTile({model,loading,onClick}){
+  const body=(ring,sub)=><InsightHubTile onClick={onClick} title="Fatigue" ring={ring} sub={sub}/>;
+  if(loading||!model)return body(<FatigueRing load={0}><span style={{fontSize:12,fontWeight:800,color:C.text}}>–</span></FatigueRing>,"Loading…");
+  if(!model.ready)return body(<FatigueRing load={0}><span style={{fontSize:12,fontWeight:800,color:C.text}}>–</span></FatigueRing>,`Needs ${FADE_MIN_DAYS}+ days of riding · ${model.count} so far`);
+  return body(
+    <FatigueRing load={model.load}><span style={{fontSize:12,letterSpacing:-0.3,fontWeight:800,color:C.text}}>{Math.round(model.load*100)}%</span></FatigueRing>,
+    `${model.status.label} · ${fatCommas(model.cur.ft)} ft last ${model.mode}`
+  );
+}
+
+function FatigueScreen({grouped,descents}){
+  const [mode,setMode]=useState('day');
+  const [explain,setExplain]=useState(false);
+  const model=useMemo(()=>fatigueModel(grouped,descents,mode),[grouped,descents,mode]);
+  const dayModel=useMemo(()=>fatigueModel(grouped,descents,'day'),[grouped,descents]);
+  if(!grouped||!descents)return <EmptyNote>Working out your descent…</EmptyNote>;
+  if(!dayModel||!dayModel.ready)return <EmptyNote>Ride on {FADE_MIN_DAYS} different days to see your fade line. So far: {dayModel?dayModel.count:0}.</EmptyNote>;
+  if(!model.ready)return(
+    <div>
+      <div style={{display:"flex",justifyContent:"flex-end",padding:"16px 16px 0"}}><SegControl options={[{val:'day',label:'Day'},{val:'week',label:'Week'}]} value={mode} onChange={setMode}/></div>
+      <EmptyNote>Ride in {FADE_MIN_DAYS} different weeks to see your weekly fade line. So far: {model.count}.</EmptyNote>
+    </div>
+  );
+  const {items,line,cur,load,status}=model,unit=mode;
+  const maxFt=Math.max(line,...items.map(i=>i.ft))*1.02;
+  const barH=ft=>Math.round(ft/maxFt*84),lineBottom=Math.round(line/maxFt*84);
+  return(
+    <div>
+      <div style={{padding:"24px 16px 20px",textAlign:"center",borderBottom:`1px solid ${C.border}`}}>
+        <div style={{margin:"0 auto",width:132}}>
+          <FatigueRing size={132} r={56} stroke={10} load={load}>
+            <div><div style={{fontSize:26,fontWeight:800,lineHeight:1,letterSpacing:-0.5,color:C.text}}>{fatCommas(cur.ft)}</div><div style={{fontSize:10,fontWeight:600,color:C.muted,marginTop:6,letterSpacing:0.6}}>FT, LAST {unit.toUpperCase()}</div></div>
+          </FatigueRing>
+        </div>
+        <div style={{fontSize:20,fontWeight:800,color:status.color,marginTop:14}}>{status.label}</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,padding:"16px 16px 0"}}>
+        <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:12}}><div style={{fontSize:10,fontWeight:600,color:C.muted,letterSpacing:0.8}}>FADE STARTS AFTER</div><div style={{fontSize:14,fontWeight:700,marginTop:6,color:C.text}}>{fatCommas(line)} ft</div><div style={{fontSize:12,color:C.muted,fontWeight:600,marginTop:2}}>of descent in a {unit}</div></div>
+        <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:12}}><div style={{fontSize:10,fontWeight:600,color:C.muted,letterSpacing:0.8}}>BUILT FROM</div><div style={{fontSize:14,fontWeight:700,marginTop:6,color:C.text}}>{model.count} {unit}{model.count===1?'':'s'}</div><div style={{fontSize:12,color:C.muted,fontWeight:600,marginTop:2}}>needs {FADE_MIN_DAYS} to start</div></div>
+      </div>
+      <div style={{padding:"22px 16px 0"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,fontSize:12,fontWeight:600,color:C.text}}><div style={{width:22,height:0,borderTop:`2px dashed ${C.muted}`}}/><span>Fade line: {fatCommas(line)} ft</span></div>
+          <SegControl options={[{val:'day',label:'Day'},{val:'week',label:'Week'}]} value={mode} onChange={setMode}/>
+        </div>
+        <div style={{position:"relative"}}>
+          <div style={{display:"flex",alignItems:"flex-end",gap:10,height:86}}>
+            {items.map((b,i)=>(
+              <div key={i} style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"flex-end",alignItems:"center",height:"100%"}}>
+                <div style={{width:"100%",height:barH(b.ft),background:barColour(b.ft,b.off,line),borderRadius:"3px 3px 0 0"}}/>
+              </div>
+            ))}
+          </div>
+          <div style={{position:"absolute",left:0,right:0,bottom:lineBottom,borderTop:`1px dashed ${C.muted}`,height:0}}/>
+        </div>
+        <div style={{height:1,background:C.border}}/>
+        <div style={{display:"flex",gap:10,marginTop:5}}>{items.map((b,i)=><div key={i} style={{flex:1,textAlign:"center",fontSize:10,fontWeight:600,color:C.muted}}>{dateLabel(b.t)}</div>)}</div>
+        <div style={{display:"flex",gap:10,marginTop:3}}>{items.map((b,i)=><div key={i} style={{flex:1,textAlign:"center",fontSize:12,fontWeight:800,color:C.text}}>{fatCommas(b.ft)}</div>)}</div>
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:14,marginBottom:4}}>
+          <div style={{fontSize:10,fontWeight:600,color:C.muted,letterSpacing:0.8}}>OFF YOUR AVERAGE TIME</div><div style={{fontSize:10,color:C.muted}}>minus = faster, plus = slower</div>
+        </div>
+        <div style={{display:"flex",gap:10}}>{items.map((b,i)=><div key={i} style={{flex:1,textAlign:"center",fontSize:12,fontWeight:800,color:b.off===null?C.mutedL:b.off>FADE_SLOW_PCT?C.red:b.off<-0.2?C.green:C.muted}}>{b.off===null?'–':fatSigned(b.off)}</div>)}</div>
+      </div>
+      <div style={{margin:"20px 16px 24px",border:`1px solid ${C.border}`,borderRadius:12,overflow:"hidden"}}>
+        <button onClick={()=>setExplain(e=>!e)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 14px",background:"#fff",border:"none",textAlign:"left",fontSize:14,fontWeight:600,color:C.text}}>How it's worked out<span style={{color:C.muted,fontSize:12}}>{explain?'Hide':'Show'}</span></button>
+        {explain&&<div style={{padding:"0 14px 14px",background:C.surface,fontSize:12,lineHeight:1.55,color:C.text}}>
+          <div style={{paddingTop:12}}><b>Descent</b> is the height you drop on the stages you record, added up for each day or week. Climbs and transfers aren't recorded, so it counts the stage work only.</div>
+          <div style={{marginTop:8}}><b>Off your average time:</b> each run is compared with your average time on that stage, then averaged for the day or week. Your average is steadier than your best, so one lucky run doesn't skew it.</div>
+          <div style={{marginTop:8}}><b>The fade line:</b> the amount of descent after which your times start running more than 1% slower than normal, worked out from your own history. It improves the more you ride.</div>
+          <div style={{marginTop:10,display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:"6px 12px",color:C.muted}}>
+            <div><span style={{fontWeight:700,color:C.blue}}>Under 70%</span> of the line: Room to ride more</div><div><span style={{fontWeight:700,color:C.green}}>70-110%</span> On target</div>
+            <div><span style={{fontWeight:700,color:C.yellow}}>Over 110%</span> Pushing it</div><div><span style={{fontWeight:700,color:C.red}}>Over 110%</span> and slower than usual: Over-riding</div>
+          </div>
+          <div style={{marginTop:10,color:C.muted}}>Needs {FADE_MIN_DAYS}+ days (or weeks) of riding to start. Track conditions and weather change times too, so treat it as a guide.</div>
+        </div>}
+      </div>
+    </div>
+  );
+}
+
 function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stagesRiddenCount,coursesCompleteCount,courseCRList}){
   const [view,setView]=useState('hub');
   const [expandedCRCourse,setExpandedCRCourse]=useState(null);
-  const titles={hub:"Statistics",stages:"Stages",courses:"Courses",fastest:"Stage records",records:"Course Records",myStages:"Your Stages",myCourses:"Your Courses",consistency:"Consistency",improvement:"Improvement"};
+  const titles={hub:"Statistics",stages:"Stages",courses:"Courses",fastest:"Stage records",records:"Course Records",myStages:"Your Stages",myCourses:"Your Courses",consistency:"Consistency",improvement:"Improvement",fatigue:"Fatigue"};
   const [myRuns,setMyRuns]=useState(null);
   const [consistencySort,setConsistencySort]=useState('most');
   const [showHowScored,setShowHowScored]=useState(false);
@@ -2209,12 +2440,15 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
     supabase.from('stage_times').select('stage_id,time_ms,created_at').eq('user_id',user.id).order('created_at',{ascending:true}).then(({data})=>{if(!cancelled)setMyRuns(data||[]);});
     return()=>{cancelled=true;};
   },[user.id]);
-  const impRows=useMemo(()=>{
+  const runsByStage=useMemo(()=>{
     if(!myRuns)return null;
     const by={};
     myRuns.forEach(t=>{(by[t.stage_id]=by[t.stage_id]||[]).push(t);});
-    return improvementRows(by,stages);
-  },[myRuns,stages]);
+    return by;
+  },[myRuns]);
+  const impRows=useMemo(()=>improvementRows(runsByStage,stages),[runsByStage,stages]);
+  const descents=useStageDescents(runsByStage,stages);
+  const fatModel=useMemo(()=>fatigueModel(runsByStage,descents,'day'),[runsByStage,descents]);
   const consistency=useMemo(()=>{
     if(!myRuns)return null;
     const byStage={};
@@ -2331,6 +2565,7 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
               <Icon.ChevronRight size={16} color={C.mutedL}/>
             </button>
             <ImprovementHubTile rows={impRows} onClick={()=>setView('improvement')}/>
+            <FatigueHubTile model={fatModel} loading={!descents} onClick={()=>setView('fatigue')}/>
           </div>
         )}
         {view==='consistency'&&(
@@ -2398,6 +2633,7 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
           </div>
         )}
         {view==='improvement'&&<ImprovementScreen rows={impRows}/>}
+        {view==='fatigue'&&<FatigueScreen grouped={runsByStage} descents={descents}/>}
         {view==='myStages'&&(
           <div style={{padding:"16px 16px 40px"}}>
             {creatorStats===null?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>:creatorStats.stageRows.length===0?(
