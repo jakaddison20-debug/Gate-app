@@ -1550,6 +1550,10 @@ function ShareStageSheet({stage,onShare,onDismiss}){
 
 // ── Activity Card ─────────────────────────────────────────────────────────────
     function FeedCard({item,stage,onViewStage}){
+if(item.event_type==='day_recap'&&item.context&&item.context.stages){
+  const n=item.context.stages.length;
+  return(<div style={{padding:"14px 16px",borderBottom:`1px solid ${C.border}`}}><DayRecapCard recap={item.context} head={{name:item.userName,avatarUrl:item.avatarUrl,ago:item.ago,text:`rode ${n} stage${n===1?"":"s"} today`}}/></div>);
+}
 const icons={stage_record:{Ic:Icon.Crown,color:"#92400E",bg:"#FFFBEB"},personal_best:{kind:"up",color:C.blue,bg:"#EFF6FF"},course_finish:{Ic:Icon.Flag,color:C.orange,bg:C.orangeL},stage_created:{Ic:Icon.Lightning,color:C.blue,bg:`${C.blue}15`},course_created:{Ic:Icon.Flag,color:C.blue,bg:`${C.blue}15`},day_recap:{Ic:Icon.BarChart,color:C.green,bg:`${C.green}15`}};
 const cfg=icons[item.event_type]||{Ic:Icon.Lightning,color:C.muted,bg:C.surface};
 const showViewStage=item.stage_id&&['stage_record','personal_best','stage_created'].includes(item.event_type);
@@ -3989,6 +3993,205 @@ function AuthScreen({onAuth}){
 
 // ── Main App ──────────────────────────────────────────────────────────────────
 
+// ── Day recap posts ───────────────────────────────────────────────────────────
+// ── Map screenshot (Mapbox Static Images, same style as the app map) ─────────
+function encodePolyline(pts){
+  let out='',pLa=0,pLn=0;
+  for(const p of pts){
+    const la=Math.round(p.lat*1e5),ln=Math.round(p.lng*1e5);
+    for(const v of [la-pLa,ln-pLn]){
+      let n=v<0?~(v<<1):(v<<1);
+      while(n>=0x20){out+=String.fromCharCode((0x20|(n&0x1f))+63);n>>=5;}
+      out+=String.fromCharCode(n+63);
+    }
+    pLa=la;pLn=ln;
+  }
+  return out;
+}
+// list: [{n, line:[{lat,lng}]}] -> [{n, p:encodedPolyline, s:[lng,lat] (start)}]  (small enough to store in app_events.context)
+function recapMapPaths(list){
+  const per=Math.max(6,Math.floor(120/Math.max(1,list.length)));
+  return list.filter(x=>x.line&&x.line.length>1).map(x=>{
+    const L=x.line,step=Math.max(1,Math.ceil(L.length/per)),pts=[];
+    for(let i=0;i<L.length;i+=step)pts.push(L[i]);
+    if(pts[pts.length-1]!==L[L.length-1])pts.push(L[L.length-1]);
+    return{n:x.n,p:encodePolyline(pts),s:[+L[0].lng.toFixed(5),+L[0].lat.toFixed(5)]};
+  });
+}
+function recapMapUrl(paths,w=480,h=270){
+  if(!paths||!paths.length)return null;
+  const e=encodeURIComponent;
+  const overlay=[
+    ...paths.map(p=>`path-7+ffffff(${e(p.p)})`),
+    ...paths.map(p=>`path-4+f59e0b(${e(p.p)})`),
+    ...paths.map(p=>`pin-s-${p.n}+f59e0b(${p.s[0]},${p.s[1]})`)
+  ].join(',');
+  return `https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/static/${overlay}/auto/${w}x${h}@2x?padding=36&access_token=${import.meta.env.VITE_MAPBOX_TOKEN}`;
+}
+
+// ── Build today's recap ──────────────────────────────────────────────────────
+const recapTotal=ms=>{const s=Math.round(ms/1000),h=Math.floor(s/3600),m=Math.floor((s%3600)/60),r=s%60;return h?`${h}:${String(m).padStart(2,'0')}:${String(r).padStart(2,'0')}`:`${m}:${String(r).padStart(2,'0')}`;};
+
+// Reads today's runs for this rider, finds each stage's best today and whether it beat their earlier best.
+async function computeDayRecap(user,stages){
+  const start=new Date();start.setHours(0,0,0,0);
+  const {data:todays}=await supabase.from('stage_times').select('stage_id,time_ms,created_at').eq('user_id',user.id).gte('created_at',start.toISOString());
+  if(!todays||!todays.length)return null;
+  const ids=[...new Set(todays.map(t=>String(t.stage_id)))];
+  const {data:before}=await supabase.from('stage_times').select('stage_id,time_ms').eq('user_id',user.id).lt('created_at',start.toISOString()).in('stage_id',ids);
+  const prevBest={};(before||[]).forEach(t=>{const k=String(t.stage_id);if(prevBest[k]===undefined||t.time_ms<prevBest[k])prevBest[k]=t.time_ms;});
+  const rows=[];
+  for(const id of ids){
+    const st=stages.find(s=>String(s.id)===id);if(!st)continue;
+    const mine=todays.filter(t=>String(t.stage_id)===id),best=Math.min(...mine.map(t=>t.time_ms));
+    rows.push({id,name:st.name,diff:st.difficulty||'blue',runs:mine.length,best,pb:prevBest[id]!==undefined&&best<prevBest[id],first:Math.min(...mine.map(t=>new Date(t.created_at).getTime())),st});
+  }
+  rows.sort((a,b)=>a.first-b.first);  // in the order ridden
+  if(!rows.length)return null;
+  let descent=0,haveDescent=false;
+  if(typeof stageDescentFt==='function'){   // from the Fatigue code; skipped if it isn't in the app
+    for(const r of rows){let ft=null;try{ft=await stageDescentFt(r.st);}catch(e){}if(ft){descent+=ft*r.runs;haveDescent=true;}}
+  }
+  const list=rows.map((r,i)=>({n:i+1,line:r.st.line_coords&&r.st.line_coords.length>1?r.st.line_coords:[r.st.start,r.st.finish]}));
+  return{
+    date:new Date().toISOString(),
+    run_count:todays.length,
+    total_time_ms:todays.reduce((a,t)=>a+t.time_ms,0),
+    descent_ft:haveDescent?Math.round(descent/10)*10:null,
+    stages:rows.map(r=>({id:r.id,name:r.name,diff:r.diff,runs:r.runs,best:r.best,pb:r.pb})),
+    map:recapMapPaths(list)
+  };
+}
+
+// ── The recap wedge (used in the feed and in the preview) ────────────────────
+// recap = the object above (or an app_events.context). head = {name,avatarUrl,ago,text} to show the poster row (feed only).
+function DayRecapCard({recap,head}){
+  const [open,setOpen]=useState(false);
+  const url=recapMapUrl(recap.map);
+  const n=recap.stages.length,names=recap.stages.slice(0,2).map(s=>s.name).join(", ")+(n>2?` +${n-2}`:"");
+  const box=(v,l)=><div style={{background:"#fff",borderRadius:10,padding:"10px 8px",textAlign:"center",border:`1px solid ${C.border}`}}><div style={{fontSize:14,fontWeight:700,color:C.text}}>{v}</div><div style={{fontSize:10,color:C.muted,marginTop:2}}>{l}</div></div>;
+  return(
+    <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,overflow:"hidden"}}>
+      {head&&<div style={{display:"flex",alignItems:"flex-start",gap:12,padding:"14px 14px 12px"}}>
+        <Avatar size={38} url={head.avatarUrl}/>
+        <div style={{flex:1}}><div style={{fontSize:13,color:C.text,lineHeight:1.4}}><span style={{fontWeight:700}}>{head.name}</span> {head.text}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>{head.ago}</div></div>
+        <div style={{width:30,height:30,borderRadius:8,background:`${C.green}15`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.BarChart size={15} color={C.green}/></div>
+      </div>}
+      <div style={{margin:head?"0 12px":"12px 12px 0",borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`,background:C.mapPark,aspectRatio:"16 / 9"}}>
+        {url&&<img src={url} alt="" style={{width:"100%",height:"100%",display:"block",objectFit:"cover"}} onError={e=>{e.currentTarget.style.display="none";}}/>}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,padding:"12px 12px 0"}}>
+        {box(recap.run_count,"Runs")}{box(recapTotal(recap.total_time_ms),"Total time")}{box(recap.descent_ft?`${fatCommas(recap.descent_ft)} ft`:"–","Descent")}
+      </div>
+      <div style={{margin:12,background:"#fff",border:`1px solid ${C.border}`,borderRadius:12,overflow:"hidden"}}>
+        <button className="tap" onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"13px 14px",background:"#fff",border:"none",textAlign:"left"}}>
+          <div style={{width:40,height:40,borderRadius:"50%",border:`5px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,color:C.text,flexShrink:0,boxSizing:"border-box"}}>{n}</div>
+          <div style={{flex:1,minWidth:0}}><div style={{fontSize:15,fontWeight:700,color:C.text}}>Stages</div><div style={{fontSize:12,color:C.muted,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{names}</div></div>
+          {open?<Icon.ChevronUp size={16} color={C.mutedL}/>:<Icon.ChevronDown size={16} color={C.mutedL}/>}
+        </button>
+        {open&&recap.stages.map((s,i)=>(
+          <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",borderTop:`1px solid ${C.border}`}}>
+            <DifficultyDiamond color={(DIFFICULTIES.find(d=>d.val===s.diff)||DIFFICULTIES[0]).color} size={12}/>
+            <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:600,color:C.text}}>{s.name}</div><div style={{fontSize:11,color:C.muted}}>{s.runs} run{s.runs===1?"":"s"}</div></div>
+            {s.pb&&<span style={{fontSize:10,fontWeight:800,color:C.blue,background:"#EFF6FF",borderRadius:4,padding:"2px 5px"}}>PB</span>}
+            <div style={{fontSize:14,fontWeight:700,color:C.text}}>{formatTime(s.best)}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Share as an image (canvas, 1080 wide) ────────────────────────────────────
+function rrect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+async function drawRecapImage(recap,name){
+  const W=1080,P=60,F='Inter, -apple-system, "Helvetica Neue", Arial, sans-serif';
+  const url=recapMapUrl(recap.map,480,270);
+  let mapImg=null;
+  if(url){try{mapImg=await new Promise((res,rej)=>{const i=new Image();i.crossOrigin='anonymous';i.onload=()=>res(i);i.onerror=rej;i.src=url;});}catch(e){}}
+  const rows=recap.stages.slice(0,6),more=recap.stages.length-rows.length,rowH=118,mapW=W-P*2,mapH=Math.round(mapW*9/16);
+  const H=P+70+40+80+30+mapH+30+170+30+rows.length*rowH+(more>0?86:0)+30+60+P/2;
+  const cv=document.createElement('canvas');cv.width=W;cv.height=H;
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  let y=P;
+  // header: bolt + GATE, date
+  ctx.save();ctx.translate(P,y);ctx.scale(2.4,2.4);ctx.beginPath();[[13,2],[3,14],[12,14],[11,22],[21,10],[12,10]].forEach(([a,b],i)=>i?ctx.lineTo(a,b):ctx.moveTo(a,b));ctx.closePath();ctx.fillStyle=C.blue;ctx.fill();ctx.restore();
+  ctx.textBaseline='alphabetic';ctx.fillStyle=C.text;ctx.font=`800 46px ${F}`;if('letterSpacing' in ctx)ctx.letterSpacing='4px';ctx.fillText('GATE',P+72,y+46);if('letterSpacing' in ctx)ctx.letterSpacing='0px';
+  ctx.textAlign='right';ctx.fillStyle=C.muted;ctx.font=`600 32px ${F}`;ctx.fillText(new Date(recap.date).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}),W-P,y+44);ctx.textAlign='left';
+  y+=70+40;
+  ctx.fillStyle=C.text;ctx.font=`800 68px ${F}`;ctx.fillText(`${name}'s ride`,P,y+54);y+=80+30;
+  // map
+  ctx.save();rrect(ctx,P,y,mapW,mapH,28);ctx.clip();ctx.fillStyle=C.mapPark;ctx.fillRect(P,y,mapW,mapH);if(mapImg)ctx.drawImage(mapImg,P,y,mapW,mapH);ctx.restore();
+  rrect(ctx,P,y,mapW,mapH,28);ctx.strokeStyle=C.border;ctx.lineWidth=2;ctx.stroke();y+=mapH+30;
+  // stats
+  const bw=(mapW-48)/3,vals=[[String(recap.run_count),'Runs'],[recapTotal(recap.total_time_ms),'Total time'],[recap.descent_ft?`${fatCommas(recap.descent_ft)} ft`:'–','Descent']];
+  vals.forEach(([v,l],i)=>{const x=P+i*(bw+24);rrect(ctx,x,y,bw,170,24);ctx.fillStyle=C.surface;ctx.fill();ctx.strokeStyle=C.border;ctx.stroke();ctx.textAlign='center';ctx.fillStyle=C.text;ctx.font=`700 52px ${F}`;ctx.fillText(v,x+bw/2,y+84);ctx.fillStyle=C.muted;ctx.font=`400 30px ${F}`;ctx.fillText(l,x+bw/2,y+130);});
+  ctx.textAlign='left';y+=170+30;
+  // stage rows
+  const listH=rows.length*rowH+(more>0?86:0);
+  rrect(ctx,P,y,mapW,listH,28);ctx.fillStyle='#fff';ctx.fill();ctx.strokeStyle=C.border;ctx.stroke();
+  rows.forEach((s,i)=>{
+    const ry=y+i*rowH;
+    if(i){ctx.beginPath();ctx.moveTo(P,ry);ctx.lineTo(P+mapW,ry);ctx.strokeStyle=C.border;ctx.stroke();}
+    const col=(DIFFICULTIES.find(d=>d.val===s.diff)||DIFFICULTIES[0]).color;
+    ctx.save();ctx.translate(P+44,ry+rowH/2);ctx.rotate(Math.PI/4);ctx.fillStyle=col;ctx.fillRect(-12,-12,24,24);ctx.restore();
+    ctx.fillStyle=C.text;ctx.font=`600 38px ${F}`;ctx.fillText(s.name,P+86,ry+54);
+    ctx.fillStyle=C.muted;ctx.font=`400 28px ${F}`;ctx.fillText(`${s.runs} run${s.runs===1?'':'s'}`,P+86,ry+90);
+    ctx.textAlign='right';ctx.fillStyle=C.text;ctx.font=`700 42px ${F}`;const t=formatTime(s.best);ctx.fillText(t,P+mapW-36,ry+rowH/2+15);
+    if(s.pb){const tw=ctx.measureText(t).width;rrect(ctx,P+mapW-36-tw-24-62,ry+rowH/2-20,62,40,8);ctx.fillStyle='#EFF6FF';ctx.fill();ctx.fillStyle=C.blue;ctx.font=`800 24px ${F}`;ctx.textAlign='center';ctx.fillText('PB',P+mapW-36-tw-24-31,ry+rowH/2+8);}
+    ctx.textAlign='left';
+  });
+  if(more>0){const ry=y+rows.length*rowH;ctx.beginPath();ctx.moveTo(P,ry);ctx.lineTo(P+mapW,ry);ctx.strokeStyle=C.border;ctx.stroke();ctx.textAlign='center';ctx.fillStyle=C.muted;ctx.font=`400 30px ${F}`;ctx.fillText(`+${more} more stage${more===1?'':'s'}`,W/2,ry+54);ctx.textAlign='left';}
+  y+=listH+30;
+  ctx.textAlign='center';ctx.fillStyle=C.mutedL;ctx.font=`600 28px ${F}`;ctx.fillText(window.location.host||'gate',W/2,y+40);
+  return cv;
+}
+async function shareRecapImage(recap,name){
+  const cv=await drawRecapImage(recap,name);
+  const blob=await new Promise(r=>cv.toBlob(r,'image/png'));
+  if(!blob)return;
+  const file=new File([blob],'gate-ride.png',{type:'image/png'});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){
+    try{await navigator.share({files:[file],title:'My GATE ride'});return;}catch(e){if(e&&e.name==='AbortError')return;}
+  }
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='gate-ride.png';a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+
+// ── Sheets ───────────────────────────────────────────────────────────────────
+// The "+" sheet. For now it has one choice. todayInfo = {stages,runs} or null when there are no rides today.
+function NewPostSheet({todayInfo,alreadyShared,busy,onDayRecap}){
+  const ready=!!todayInfo&&!alreadyShared&&!busy;
+  const sub=busy?"Building your recap…":alreadyShared?"Already shared today":todayInfo?`Today · ${todayInfo.stages} stage${todayInfo.stages===1?"":"s"} · ${todayInfo.runs} run${todayInfo.runs===1?"":"s"}`:"No rides today yet";
+  return(
+    <div style={{padding:"0 20px 28px"}}>
+      <div style={{fontSize:17,fontWeight:700,color:C.text,marginBottom:14}}>New post</div>
+      <button className="tap" disabled={!ready} onClick={onDayRecap} style={{width:"100%",display:"flex",alignItems:"center",gap:14,padding:14,background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,textAlign:"left",opacity:ready?1:0.55}}>
+        <div style={{width:44,height:44,borderRadius:12,background:`${C.green}15`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.BarChart size={20} color={C.green}/></div>
+        <div style={{flex:1}}><div style={{fontSize:15,fontWeight:700,color:C.text}}>Day recap</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>{sub}</div></div>
+        <Icon.ChevronRight size={16} color={C.mutedL}/>
+      </button>
+    </div>
+  );
+}
+
+function DayRecapPreviewSheet({recap,name,posting,onPost,onDismiss}){
+  const [sharing,setSharing]=useState(false);
+  return(
+    <div style={{padding:"0 16px 22px"}}>
+      <div style={{fontSize:17,fontWeight:700,color:C.text,marginBottom:4,padding:"0 4px"}}>Share today's ride?</div>
+      <div style={{fontSize:13,color:C.muted,marginBottom:12,padding:"0 4px"}}>Other riders on GATE will see this in their feed.</div>
+      <div style={{marginBottom:14}}><DayRecapCard recap={recap}/></div>
+      <div style={{display:"flex",gap:10}}>
+        <button className="tap" onClick={onDismiss} style={{flex:"0 0 auto",whiteSpace:"nowrap",background:"#fff",border:`1px solid ${C.border}`,borderRadius:12,padding:"13px 16px",color:C.muted,fontSize:14,fontWeight:600}}>Not now</button>
+        <button className="tap" disabled={sharing} onClick={async()=>{setSharing(true);try{await shareRecapImage(recap,name);}catch(e){}setSharing(false);}} style={{flex:1.5,whiteSpace:"nowrap",background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:12,padding:"13px 8px",color:C.blue,fontSize:14,fontWeight:700}}>{sharing?"Making image…":"Share image"}</button>
+        <button className="tap" disabled={posting} onClick={onPost} style={{flex:2,whiteSpace:"nowrap",background:C.blue,border:"none",borderRadius:12,padding:"13px 8px",color:"#fff",fontSize:14,fontWeight:700,opacity:posting?0.7:1}}>{posting?"Posting…":"Post to Feed"}</button>
+      </div>
+    </div>
+  );
+}
+
 export default function App(){
   const [tab,setTab]=useState("home");
   const [mapCenter,setMapCenter]=useState(DEFAULT_CENTER);
@@ -4030,6 +4233,10 @@ export default function App(){
   };
   const [showAuth,setShowAuth]=useState(false);
   const [pendingShareStage,setPendingShareStage]=useState(null);
+  const [showNewPost,setShowNewPost]=useState(false);
+  const [recapDraft,setRecapDraft]=useState(null);
+  const [recapBusy,setRecapBusy]=useState(false);
+  const [recapPosting,setRecapPosting]=useState(false);
   const [refreshTick,setRefreshTick]=useState(0);
     useEffect(()=>{
   const onVisible=()=>{if(document.visibilityState==="visible"){syncOfflineTimes().then(()=>setRefreshTick(t=>t+1));}};
@@ -4103,7 +4310,7 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
 
     const [recentStageTimes,setRecentStageTimes]=useState([]);
 const [feed,setFeed]=useState([]);
-useEffect(()=>{if(!user)return;supabase.from('app_events').select('id,event_type,message,created_at,stage_id,profiles(display_name,avatar_url)').in('event_type',['stage_record','personal_best','course_finish','stage_created','course_created','day_recap']).order('created_at',{ascending:false}).limit(50).then(({data})=>{if(data)setFeed(data.map(e=>({id:e.id,event_type:e.event_type,message:e.message,stage_id:e.stage_id,userName:e.profiles?.display_name||'Rider',avatarUrl:e.profiles?.avatar_url||null,ago:timeAgo(e.created_at)})));});},[user,refreshTick]);
+useEffect(()=>{if(!user)return;supabase.from('app_events').select('id,event_type,message,created_at,stage_id,context,profiles(display_name,avatar_url)').in('event_type',['stage_record','personal_best','course_finish','stage_created','course_created','day_recap']).order('created_at',{ascending:false}).limit(50).then(({data})=>{if(data)setFeed(data.map(e=>({id:e.id,event_type:e.event_type,message:e.message,stage_id:e.stage_id,userName:e.profiles?.display_name||'Rider',avatarUrl:e.profiles?.avatar_url||null,context:e.context,ago:timeAgo(e.created_at)})));});},[user,refreshTick]);
   const [pushState,setPushState]=useState('hidden');
 useEffect(()=>{
   if(!user)return;
@@ -4192,7 +4399,19 @@ const openNotification=(n)=>{
 const [todayStageTimes,setTodayStageTimes]=useState([]);
 const [daySharedToday,setDaySharedToday]=useState(false);
 useEffect(()=>{if(!user)return;const startOfDay=new Date();startOfDay.setHours(0,0,0,0);supabase.from('stage_times').select('time_ms,stage_id').eq('user_id',user.id).gte('created_at',startOfDay.toISOString()).then(({data})=>{if(data)setTodayStageTimes(data);});supabase.from('app_events').select('id').eq('user_id',user.id).eq('event_type','day_recap').gte('created_at',startOfDay.toISOString()).then(({data})=>{setDaySharedToday(!!(data&&data.length));});},[user,refreshTick]);
-const shareDayRecap=()=>{const stageIds=[...new Set(todayStageTimes.map(t=>t.stage_id))];const totalMs=todayStageTimes.reduce((a,t)=>a+t.time_ms,0);if(!window.confirm(`Share today's ride?\n${stageIds.length} stage${stageIds.length>1?'s':''} · ${todayStageTimes.length} run${todayStageTimes.length>1?'s':''} · ${formatTime(totalMs)} total`))return;logEvent(user.id,'day_recap',`rode ${stageIds.length} stage${stageIds.length>1?'s':''} today · ${formatTime(totalMs)}`,null,{stage_count:stageIds.length,run_count:todayStageTimes.length,total_time_ms:totalMs}).then(()=>setRefreshTick(t=>t+1));};
+const openDayRecap=async()=>{
+  if(recapBusy)return;setRecapBusy(true);
+  const r=await computeDayRecap(user,stages).catch(()=>null);
+  setRecapBusy(false);
+  if(!r){alert("No rides found for today yet.");return;}
+  setShowNewPost(false);setRecapDraft(r);
+};
+const postDayRecap=async()=>{
+  if(!recapDraft||recapPosting)return;setRecapPosting(true);
+  const n=recapDraft.stages.length;
+  await logEvent(user.id,'day_recap',`rode ${n} stage${n===1?'':'s'} today · ${formatTime(recapDraft.total_time_ms)}`,null,recapDraft);
+  setRecapPosting(false);setRecapDraft(null);setDaySharedToday(true);setRefreshTick(t=>t+1);
+};
   const [todayKey,setTodayKey]=useState(new Date().toDateString());
   useEffect(()=>{
     const check=()=>{const now=new Date().toDateString();setTodayKey(prev=>prev!==now?now:prev);};
@@ -4379,7 +4598,7 @@ if(showBikeSetup)return(
             <div style={{fontSize:22,fontWeight:800,color:C.text,marginBottom:12}}>Feed</div>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
               <button className="tap" onClick={()=>setShowGroups(true)} style={{width:38,height:38,borderRadius:11,background:"#fff",border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}><Icon.Users size={17} color={C.text}/></button>
-              <button className="tap" style={{width:38,height:38,borderRadius:11,background:"#fff",border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}><Icon.Plus size={19} color={C.text}/></button>
+              <button className="tap" onClick={()=>setShowNewPost(true)} style={{width:38,height:38,borderRadius:11,background:"#fff",border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}><Icon.Plus size={19} color={C.text}/></button>
               <button className="tap" style={{flex:1,height:38,display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:"#fff",border:`1px solid ${C.border}`,borderRadius:11,padding:"0 12px",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}><svg width="13" height="13" viewBox="0 0 24 24"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10" fill={C.blue}/></svg><span style={{color:C.text,fontSize:14,fontWeight:700}}>Upgrade</span></button>
                <button className="tap" onClick={()=>setShowNotifications(true)} style={{position:"relative",width:38,height:38,borderRadius:11,background:"#fff",border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}><Icon.Bell size={17} color={C.text}/>{unreadCount>0&&<div style={{position:"absolute",top:-5,right:-5,minWidth:17,height:17,padding:"0 4px",borderRadius:9,background:C.blue,color:"#fff",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid #fff",boxSizing:"content-box"}}>{unreadCount>9?"9+":unreadCount}</div>}</button>
             </div>
@@ -4420,7 +4639,6 @@ if(showBikeSetup)return(
               </div>
             </div>
           )}
-          {todayStageTimes.length>0&&!daySharedToday&&<button className="tap" onClick={shareDayRecap} style={{width:"calc(100% - 32px)",margin:"14px 16px 0",background:C.surface,border:`1px dashed ${C.border}`,borderRadius:10,padding:"12px 14px",color:C.text,fontSize:13,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><Icon.BarChart size={15} color={C.green}/>Share today's ride · {new Set(todayStageTimes.map(t=>t.stage_id)).size} stages</button>}
           {feed.length===0?<div style={{textAlign:"center",padding:"48px 20px",color:C.muted,fontSize:13}}>No activity yet — set a record, finish a course, or add a stage to get things started.</div>:feed.map(item=><FeedCard key={item.id} item={item} stage={stages.find(s=>String(s.id)===String(item.stage_id))} onViewStage={goToStage}/>)}
         </div>
       )}
@@ -4567,6 +4785,10 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
       {sheet==="lobby"&&(
         <><div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:45}} onClick={()=>setSheet(null)}/><div className="slide-up" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:46,maxHeight:"82vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><LobbySheet onClose={()=>setSheet(null)}/></div></>
       )}
+
+          {showNewPost&&(<><div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:45}} onClick={()=>setShowNewPost(false)}/><div className="slide-up" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:46,maxHeight:"88vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 14px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><NewPostSheet todayInfo={todayStageTimes.length?{stages:new Set(todayStageTimes.map(t=>t.stage_id)).size,runs:todayStageTimes.length}:null} alreadyShared={daySharedToday} busy={recapBusy} onDayRecap={openDayRecap}/></div></>)}
+
+          {recapDraft&&(<><div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:45}} onClick={()=>setRecapDraft(null)}/><div className="slide-up" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:46,maxHeight:"88vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 12px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><DayRecapPreviewSheet recap={recapDraft} name={settings.displayName||"My"} posting={recapPosting} onPost={postDayRecap} onDismiss={()=>setRecapDraft(null)}/></div></>)}
 
           {/* Share stage to feed */}
           {pendingShareStage&&(
