@@ -1157,7 +1157,18 @@ function calcImprovement(runs,now=new Date()){
 function StageImprovementCard({myAttempts,defaultOpen=false}){
   const [open,setOpen]=useState(defaultOpen);
   const im=calcImprovement(myAttempts);
-  if(!im)return null;
+  if(!im){
+    if(!myAttempts||myAttempts.length===0)return null;
+    const cur=monthIndex(new Date()),prev=cur-1;
+    const nCur=myAttempts.filter(r=>monthIndex(r.created_at)===cur).length,nPrev=myAttempts.filter(r=>monthIndex(r.created_at)===prev).length;
+    return(
+      <InsightTile
+        open={open} onToggle={()=>setOpen(o=>!o)} title="Improvement" sub="Needs 2+ runs in both months"
+        ring={<InsightRing pct={0} color={C.green}><span style={{fontSize:11,fontWeight:800,color:C.text}}>–</span></InsightRing>}>
+        <div style={{fontSize:12,color:C.muted,lineHeight:1.5}}>You've ridden this stage {nCur} time{nCur===1?'':'s'} in {monthName(cur)} and {nPrev} in {monthName(prev)}. Ride it at least twice in each month to see how your average run is changing.</div>
+      </InsightTile>
+    );
+  }
   const up=im.diffMs>=0,color=up?C.green:C.red;
   const ringPct=Math.min(1,Math.abs(im.pct)/3);
   const all=[...im.prevRuns,...im.curRuns].map(r=>r.time_ms);
