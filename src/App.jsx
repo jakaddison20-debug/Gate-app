@@ -1325,7 +1325,7 @@ function ImprovementScreen({rows}){
 }
 
 // ── Leaderboard wedge (stage sheet) ───────────────────────────────────────────
-function StageLeaderboardCard({lb,rank,user}){
+function StageLeaderboardCard({lb,rank,user,stage}){
   const [open,setOpen]=useState(false);
   const r=22,circ=2*Math.PI*r;
   const frac=rank.myPos&&rank.total?Math.max(0,Math.min(1,(rank.total-rank.myPos+1)/rank.total)):0;
@@ -1357,11 +1357,12 @@ function StageLeaderboardCard({lb,rank,user}){
           {lb.length===0?<div style={{textAlign:"center",padding:"20px",color:C.muted,fontSize:13}}>No times yet — be the first!</div>:lb.map((entry,i)=>{
             const isMe=!!(user&&entry.user_id===user.id);
             const gap=i===0?0:entry.time-lb[0].time;
+            const mph=avgMph(stage,entry.time);
             return(
               <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"11px 12px",background:isMe?C.orangeL:"white",borderRadius:10,marginBottom:6,border:`1px solid ${isMe?C.orange:C.border}`}}>
                 <div style={{width:34}}><PositionBadge pos={entry.pos} size={30}/></div>
                 <Avatar size={32} url={entry.avatarUrl}/>
-                <div style={{flex:1}}><div style={{fontSize:13,fontWeight:isMe?700:500,color:C.text}}>{isMe?"You":entry.name}</div><div style={{fontSize:11,color:C.muted}}>{entry.date}</div></div>
+                <div style={{flex:1}}><div style={{fontSize:13,fontWeight:isMe?700:500,color:C.text}}>{isMe?"You":entry.name}</div><div style={{fontSize:11,color:C.muted}}>{entry.date}{mph!==null?` · ${mph.toFixed(1)} mph`:""}</div></div>
                 <div style={{textAlign:"right"}}>
                   <div style={{fontSize:15,fontWeight:700,color:isMe?C.orange:C.text}}>{formatTime(entry.time)}</div>
                   {gap>0&&<div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:3,marginTop:2}}><svg width="7" height="7" viewBox="0 0 10 10"><path d="M1 1 L9 1 L5 9 Z" fill={C.muted}/></svg><span style={{fontSize:10,fontWeight:700,color:C.muted}}>{formatTime(gap)}</span></div>}
@@ -1372,6 +1373,132 @@ function StageLeaderboardCard({lb,rank,user}){
         </div>
       )}
     </div>
+  );
+}
+
+// ── Speed ─────────────────────────────────────────────────────────────────────
+const MPS_TO_MPH=2.23694;
+
+// Length of a stage in metres (along its line if it has one)
+function stageLengthM(stage){
+  const line=stage&&stage.line_coords&&stage.line_coords.length>1?stage.line_coords:(stage&&stage.start&&stage.finish?[stage.start,stage.finish]:null);
+  if(!line)return 0;
+  let t=0;for(let i=1;i<line.length;i++)t+=haversine(line[i-1],line[i]);
+  return t;
+}
+// Average speed in mph for a run: stage length over time. null if it can't be worked out.
+function avgMph(stage,ms){
+  const len=stageLengthM(stage);
+  return len>0&&ms>0?len/(ms/1000)*MPS_TO_MPH:null;
+}
+// Top speed in mph from a saved GPS trace ([[t_ms,lat,lng],...]): the fastest ~150 ft (46 m) stretch. null if there is no usable trace.
+function topMphFromTrace(points){
+  if(!Array.isArray(points)||points.length<8)return null;
+  const cum=[0];
+  for(let i=1;i<points.length;i++)cum.push(cum[i-1]+haversine({lat:points[i-1][1],lng:points[i-1][2]},{lat:points[i][1],lng:points[i][2]}));
+  if(cum[cum.length-1]<100)return null;
+  let top=0,j=0;
+  for(let i=0;i<points.length-1;i++){
+    if(j<=i)j=i+1;
+    while(j<points.length-1&&cum[j]-cum[i]<46)j++;
+    const d=cum[j]-cum[i],dt=(points[j][0]-points[i][0])/1000;
+    if(d>=46&&dt>0){const v=d/dt*MPS_TO_MPH;if(v>top)top=v;}
+  }
+  return top>0&&top<80?top:null;
+}
+
+// Speed wedge on the stage sheet
+function StageSpeedCard({stage,user,defaultOpen=false}){
+  const [open,setOpen]=useState(defaultOpen);
+  const [runs,setRuns]=useState(null);      // [{time_ms,created_at,top}] oldest → newest
+  const [sel,setSel]=useState(null);
+  const [descent,setDescent]=useState(null);
+  const uid=user?user.id:null;
+  useEffect(()=>{
+    if(!uid)return;
+    let off=false;
+    (async()=>{
+      const {data,error}=await supabase.from('stage_times').select('time_ms,created_at').eq('stage_id',stage.id).eq('user_id',uid).order('created_at',{ascending:true});
+      let top=null;   // only the run that set your best has a saved GPS trace
+      try{
+        const {data:tr}=await supabase.from('run_traces').select('time_ms,points').eq('stage_id',String(stage.id)).eq('user_id',uid).maybeSingle();
+        if(tr)top={ms:tr.time_ms,v:topMphFromTrace(tr.points)};
+      }catch(e){}
+      if(off)return;
+      setRuns(error||!data?[]:data.map(r=>({time_ms:r.time_ms,created_at:r.created_at,top:top&&top.ms===r.time_ms?top.v:null})));
+    })();
+    return()=>{off=true;};
+  },[stage.id,uid]);
+  useEffect(()=>{
+    if(typeof stageDescentFt!=='function')return;
+    let off=false;
+    stageDescentFt(stage).then(ft=>{if(!off)setDescent(ft);}).catch(()=>{});
+    return()=>{off=true;};
+  },[stage.id]);
+  const scrollRef=useRef(null);
+  useEffect(()=>{const el=scrollRef.current;if(el)el.scrollLeft=el.scrollWidth;},[open,runs&&runs.length]);
+  const len=stageLengthM(stage);
+  if(!runs||runs.length===0||!(len>0))return null;
+  const n=runs.length,lastI=n-1;
+  const mphOf=r=>len/(r.time_ms/1000)*MPS_TO_MPH;
+  let bestI=0;runs.forEach((r,i)=>{if(r.time_ms<runs[bestI].time_ms)bestI=i;});
+  const si=sel!==null&&sel<n?sel:lastI,cur=runs[si],last=runs[lastI];
+  const off0=0,shown=runs,scroll=n>8,col=scroll?{flex:"0 0 40px"}:{flex:1};
+  const avgs=shown.map(mphOf);
+  const lo=Math.min(...avgs)-1,hi=Math.max(...avgs)+0.1;
+  const bars=shown.map((r,k)=>{const i=off0+k;return{i,h:Math.round(8+((avgs[k]-lo)/(hi-lo))*48),color:i===si?'#1E3A8A':(i===bestI?C.green:C.blue),avg:avgs[k].toFixed(1),avgFg:i===si?C.text:C.muted,top:r.top===null?'–':r.top.toFixed(1),topFg:r.top===null?C.mutedL:C.text};});
+  const dShort=d=>new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+  const segVal=si===lastI?'latest':(si===bestI?'best':'');
+  const blurb=si===bestI?'Your best run on this stage.':(si===lastI?'Your latest run on this stage.':'A past run on this stage.');
+  const tip=cur.top===null?"Top speed isn't available for this run. It comes from the GPS trace saved with your best run on a stage, so other runs don't have one.":'Average speed is the stage length over your time. Top speed is the fastest point your phone recorded.';
+  const sbox=(label,value,sub,color)=>(
+    <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 10px"}}>
+      <MiniLabel>{label}</MiniLabel>
+      <div style={{fontSize:18,fontWeight:800,marginTop:6,color:color||C.text}}>{value}</div>
+      <div style={{fontSize:11,color:C.muted,marginTop:2}}>{sub}</div>
+    </div>
+  );
+  return(
+    <InsightTile
+      open={open} onToggle={()=>setOpen(o=>!o)} title="Speed"
+      sub={last.top===null?'mph average · latest run':`Top ${last.top.toFixed(1)} mph · latest run`}
+      ring={<InsightRing pct={Math.min(1,mphOf(last)/mphOf(runs[bestI]))} color={C.blue}><span style={{fontSize:16,fontWeight:800,color:C.text,letterSpacing:-0.3}}>{mphOf(last).toFixed(1)}</span></InsightRing>}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div style={{fontSize:17,fontWeight:800,color:C.text}}>{dShort(cur.created_at)} · {formatTime(cur.time_ms)}</div>
+        <SegControl options={[{val:'latest',label:'Latest'},{val:'best',label:'Best'}]} value={segVal} onChange={v=>setSel(v==='best'?bestI:lastI)}/>
+      </div>
+      <div style={{fontSize:12,color:C.muted,lineHeight:1.45,marginTop:6}}>{blurb}</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8,marginTop:12}}>
+        {sbox('AVERAGE',mphOf(cur).toFixed(1),'mph')}
+        {sbox('TOP',cur.top===null?'–':cur.top.toFixed(1),cur.top===null?'not recorded':'mph',cur.top===null?C.mutedL:C.text)}
+        {sbox('DESCENT',descent?fatCommas(descent):'–','ft')}
+      </div>
+      <div style={{marginTop:16}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+          <MiniLabel>AVERAGE SPEED, PER RUN</MiniLabel><div style={{fontSize:10,color:C.muted}}>{scroll?'tap a run · swipe for older':'tap a run'}</div>
+        </div>
+        <div ref={scrollRef} style={{overflowX:"auto",paddingBottom:2}}>
+          <div style={{width:scroll?"max-content":"100%"}}>
+            <div style={{display:"flex",alignItems:"flex-end",gap:6,height:64}}>
+              {bars.map(b=>(
+                <div key={b.i} onClick={()=>setSel(b.i)} style={{...col,display:"flex",flexDirection:"column",justifyContent:"flex-end",alignItems:"center",height:"100%",cursor:"pointer"}}>
+                  <div style={{width:"100%",height:b.h,background:b.color,borderRadius:"3px 3px 0 0",minHeight:3}}/>
+                </div>
+              ))}
+            </div>
+            <div style={{height:1,background:C.border}}/>
+            <div style={{display:"flex",gap:6,marginTop:5}}>
+              {bars.map(b=><div key={b.i} style={{...col,textAlign:"center",fontSize:10,fontWeight:700,color:b.avgFg}}>{b.avg}</div>)}
+            </div>
+            <div style={{position:"sticky",left:0,display:"inline-block",marginTop:14,marginBottom:4}}><MiniLabel>TOP SPEED, PER RUN (MPH)</MiniLabel></div>
+            <div style={{display:"flex",gap:6}}>
+              {bars.map(b=><div key={b.i} style={{...col,textAlign:"center",fontSize:10,fontWeight:700,color:b.topFg}}>{b.top}</div>)}
+            </div>
+          </div>
+        </div>
+      </div>
+      <TipBox>{tip}</TipBox>
+    </InsightTile>
   );
 }
 
@@ -1476,10 +1603,11 @@ const myEntry=lb.find(e=>user&&e.user_id===user.id);
 </div>
 
     
-            <StageLeaderboardCard lb={lb} rank={rank} user={user}/>
+            <StageLeaderboardCard lb={lb} rank={rank} user={user} stage={stage}/>
             <StageProgressCard stage={stage} user={user} lb={lb} myAttempts={myAttempts}/>
 <StageConsistencyCard runs={myAttempts}/>
 <StageTimeDeltaCard stage={stage} lb={lb} myAttempts={myAttempts} user={user} units={units}/>
+<StageSpeedCard stage={stage} user={user}/>
 <StageImprovementCard myAttempts={myAttempts}/>
 <div style={{padding:"16px 16px 0"}}>
         
@@ -4054,13 +4182,22 @@ async function computeDayRecap(user,stages){
   if(typeof stageDescentFt==='function'){   // from the Fatigue code; skipped if it isn't in the app
     for(const r of rows){let ft=null;try{ft=await stageDescentFt(r.st);}catch(e){}if(ft){descent+=ft*r.runs;haveDescent=true;}}
   }
+  const round1=v=>v===null||v===undefined||isNaN(v)?null:Math.round(v*10)/10;
+  let spdDist=0,spdMs=0,spdTop=0;
+  todays.forEach(t=>{const st=stages.find(s=>String(s.id)===String(t.stage_id));if(!st)return;spdDist+=stageLengthM(st);spdMs+=t.time_ms;});
+  try{   // top speed comes from the GPS trace saved with a stage's best run, so it only covers today's runs that set a best
+    const {data:trs}=await supabase.from('run_traces').select('stage_id,time_ms,points').eq('user_id',user.id).in('stage_id',ids);
+    (trs||[]).forEach(tr=>{if(!todays.some(t=>String(t.stage_id)===String(tr.stage_id)&&t.time_ms===tr.time_ms))return;const v=topMphFromTrace(tr.points);if(v&&v>spdTop)spdTop=v;});
+  }catch(e){}
   const list=rows.map((r,i)=>({n:i+1,line:r.st.line_coords&&r.st.line_coords.length>1?r.st.line_coords:[r.st.start,r.st.finish]}));
   return{
     date:new Date().toISOString(),
     run_count:todays.length,
     total_time_ms:todays.reduce((a,t)=>a+t.time_ms,0),
     descent_ft:haveDescent?Math.round(descent/10)*10:null,
-    stages:rows.map(r=>({id:r.id,name:r.name,diff:r.diff,runs:r.runs,best:r.best,pb:r.pb})),
+    avg_mph:spdMs>0&&spdDist>0?round1(spdDist/(spdMs/1000)*MPS_TO_MPH):null,
+    top_mph:spdTop>0?round1(spdTop):null,
+    stages:rows.map(r=>({id:r.id,name:r.name,diff:r.diff,runs:r.runs,best:r.best,pb:r.pb,mph:round1(avgMph(r.st,r.best))})),
     map:recapMapPaths(list)
   };
 }
@@ -4085,6 +4222,7 @@ function DayRecapCard({recap,head}){
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,padding:"12px 12px 0"}}>
         {box(recap.run_count,"Runs")}{box(recapTotal(recap.total_time_ms),"Total time")}{box(recap.descent_ft?`${fatCommas(recap.descent_ft)} ft`:"–","Descent")}
       </div>
+      {(recap.avg_mph||recap.top_mph)&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,padding:"8px 12px 0"}}>{box(recap.avg_mph?`${recap.avg_mph.toFixed(1)} mph`:"–","Average speed")}{box(recap.top_mph?`${recap.top_mph.toFixed(1)} mph`:"–","Top speed")}</div>}
       <div style={{margin:12,background:"#fff",border:`1px solid ${C.border}`,borderRadius:12,overflow:"hidden"}}>
         <button className="tap" onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"13px 14px",background:"#fff",border:"none",textAlign:"left"}}>
           <div style={{width:40,height:40,borderRadius:"50%",border:`5px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,color:C.text,flexShrink:0,boxSizing:"border-box"}}>{n}</div>
@@ -4094,7 +4232,7 @@ function DayRecapCard({recap,head}){
         {open&&recap.stages.map((s,i)=>(
           <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",borderTop:`1px solid ${C.border}`}}>
             <DifficultyDiamond color={(DIFFICULTIES.find(d=>d.val===s.diff)||DIFFICULTIES[0]).color} size={12}/>
-            <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:600,color:C.text}}>{s.name}</div><div style={{fontSize:11,color:C.muted}}>{s.runs} run{s.runs===1?"":"s"}</div></div>
+            <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:600,color:C.text}}>{s.name}</div><div style={{fontSize:11,color:C.muted}}>{s.runs} run{s.runs===1?"":"s"}{s.mph?` · ${s.mph.toFixed(1)} mph`:""}</div></div>
             {s.pb&&<span style={{fontSize:10,fontWeight:800,color:C.blue,background:"#EFF6FF",borderRadius:4,padding:"2px 5px"}}>PB</span>}
             <div style={{fontSize:14,fontWeight:700,color:C.text}}>{formatTime(s.best)}</div>
           </div>
@@ -4112,7 +4250,8 @@ async function drawRecapImage(recap,name){
   let mapImg=null;
   if(url){try{mapImg=await new Promise((res,rej)=>{const i=new Image();i.crossOrigin='anonymous';i.onload=()=>res(i);i.onerror=rej;i.src=url;});}catch(e){}}
   const rows=recap.stages.slice(0,6),more=recap.stages.length-rows.length,rowH=118,mapW=W-P*2,mapH=Math.round(mapW*9/16);
-  const H=P+70+40+80+30+mapH+30+170+30+rows.length*rowH+(more>0?86:0)+30+60+P/2;
+  const hasSpd=!!(recap.avg_mph||recap.top_mph);
+  const H=P+70+40+80+30+mapH+30+170+30+(hasSpd?170+24:0)+rows.length*rowH+(more>0?86:0)+30+60+P/2;
   const cv=document.createElement('canvas');cv.width=W;cv.height=H;
   const ctx=cv.getContext('2d');
   ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
@@ -4129,7 +4268,14 @@ async function drawRecapImage(recap,name){
   // stats
   const bw=(mapW-48)/3,vals=[[String(recap.run_count),'Runs'],[recapTotal(recap.total_time_ms),'Total time'],[recap.descent_ft?`${fatCommas(recap.descent_ft)} ft`:'–','Descent']];
   vals.forEach(([v,l],i)=>{const x=P+i*(bw+24);rrect(ctx,x,y,bw,170,24);ctx.fillStyle=C.surface;ctx.fill();ctx.strokeStyle=C.border;ctx.stroke();ctx.textAlign='center';ctx.fillStyle=C.text;ctx.font=`700 52px ${F}`;ctx.fillText(v,x+bw/2,y+84);ctx.fillStyle=C.muted;ctx.font=`400 30px ${F}`;ctx.fillText(l,x+bw/2,y+130);});
-  ctx.textAlign='left';y+=170+30;
+  ctx.textAlign='left';
+  if(hasSpd){
+    y+=170+24;
+    const sw=(mapW-24)/2,sv=[[recap.avg_mph?`${recap.avg_mph.toFixed(1)} mph`:'–','Average speed'],[recap.top_mph?`${recap.top_mph.toFixed(1)} mph`:'–','Top speed']];
+    sv.forEach(([v,l],i)=>{const x=P+i*(sw+24);rrect(ctx,x,y,sw,170,24);ctx.fillStyle=C.surface;ctx.fill();ctx.strokeStyle=C.border;ctx.stroke();ctx.textAlign='center';ctx.fillStyle=C.text;ctx.font=`700 52px ${F}`;ctx.fillText(v,x+sw/2,y+84);ctx.fillStyle=C.muted;ctx.font=`400 30px ${F}`;ctx.fillText(l,x+sw/2,y+130);});
+    ctx.textAlign='left';
+  }
+  y+=170+30;
   // stage rows
   const listH=rows.length*rowH+(more>0?86:0);
   rrect(ctx,P,y,mapW,listH,28);ctx.fillStyle='#fff';ctx.fill();ctx.strokeStyle=C.border;ctx.stroke();
@@ -4139,7 +4285,7 @@ async function drawRecapImage(recap,name){
     const col=(DIFFICULTIES.find(d=>d.val===s.diff)||DIFFICULTIES[0]).color;
     ctx.save();ctx.translate(P+44,ry+rowH/2);ctx.rotate(Math.PI/4);ctx.fillStyle=col;ctx.fillRect(-12,-12,24,24);ctx.restore();
     ctx.fillStyle=C.text;ctx.font=`600 38px ${F}`;ctx.fillText(s.name,P+86,ry+54);
-    ctx.fillStyle=C.muted;ctx.font=`400 28px ${F}`;ctx.fillText(`${s.runs} run${s.runs===1?'':'s'}`,P+86,ry+90);
+    ctx.fillStyle=C.muted;ctx.font=`400 28px ${F}`;ctx.fillText(`${s.runs} run${s.runs===1?'':'s'}${s.mph?` · ${s.mph.toFixed(1)} mph`:''}`,P+86,ry+90);
     ctx.textAlign='right';ctx.fillStyle=C.text;ctx.font=`700 42px ${F}`;const t=formatTime(s.best);ctx.fillText(t,P+mapW-36,ry+rowH/2+15);
     if(s.pb){const tw=ctx.measureText(t).width;rrect(ctx,P+mapW-36-tw-24-62,ry+rowH/2-20,62,40,8);ctx.fillStyle='#EFF6FF';ctx.fill();ctx.fillStyle=C.blue;ctx.font=`800 24px ${F}`;ctx.textAlign='center';ctx.fillText('PB',P+mapW-36-tw-24-31,ry+rowH/2+8);}
     ctx.textAlign='left';
