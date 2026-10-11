@@ -1435,13 +1435,15 @@ function StageSpeedCard({stage,user,defaultOpen=false}){
     stageDescentFt(stage).then(ft=>{if(!off)setDescent(ft);}).catch(()=>{});
     return()=>{off=true;};
   },[stage.id]);
+  const scrollRef=useRef(null);
+  useEffect(()=>{const el=scrollRef.current;if(el)el.scrollLeft=el.scrollWidth;},[open,runs&&runs.length]);
   const len=stageLengthM(stage);
   if(!runs||runs.length===0||!(len>0))return null;
   const n=runs.length,lastI=n-1;
   const mphOf=r=>len/(r.time_ms/1000)*MPS_TO_MPH;
   let bestI=0;runs.forEach((r,i)=>{if(r.time_ms<runs[bestI].time_ms)bestI=i;});
   const si=sel!==null&&sel<n?sel:lastI,cur=runs[si],last=runs[lastI];
-  const off0=Math.max(0,n-9),shown=runs.slice(off0);
+  const off0=0,shown=runs,scroll=n>8,col=scroll?{flex:"0 0 40px"}:{flex:1};
   const avgs=shown.map(mphOf);
   const lo=Math.min(...avgs)-1,hi=Math.max(...avgs)+0.1;
   const bars=shown.map((r,k)=>{const i=off0+k;return{i,h:Math.round(8+((avgs[k]-lo)/(hi-lo))*48),color:i===si?'#1E3A8A':(i===bestI?C.green:C.blue),avg:avgs[k].toFixed(1),avgFg:i===si?C.text:C.muted,top:r.top===null?'–':r.top.toFixed(1),topFg:r.top===null?C.mutedL:C.text};});
@@ -1473,24 +1475,26 @@ function StageSpeedCard({stage,user,defaultOpen=false}){
       </div>
       <div style={{marginTop:16}}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-          <MiniLabel>AVERAGE SPEED, PER RUN</MiniLabel><div style={{fontSize:10,color:C.muted}}>tap a run</div>
+          <MiniLabel>AVERAGE SPEED, PER RUN</MiniLabel><div style={{fontSize:10,color:C.muted}}>{scroll?'tap a run · swipe for older':'tap a run'}</div>
         </div>
-        <div style={{display:"flex",alignItems:"flex-end",gap:6,height:64}}>
-          {bars.map(b=>(
-            <div key={b.i} onClick={()=>setSel(b.i)} style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"flex-end",alignItems:"center",height:"100%",cursor:"pointer"}}>
-              <div style={{width:"100%",height:b.h,background:b.color,borderRadius:"3px 3px 0 0",minHeight:3}}/>
+        <div ref={scrollRef} style={{overflowX:"auto",paddingBottom:2}}>
+          <div style={{width:scroll?"max-content":"100%"}}>
+            <div style={{display:"flex",alignItems:"flex-end",gap:6,height:64}}>
+              {bars.map(b=>(
+                <div key={b.i} onClick={()=>setSel(b.i)} style={{...col,display:"flex",flexDirection:"column",justifyContent:"flex-end",alignItems:"center",height:"100%",cursor:"pointer"}}>
+                  <div style={{width:"100%",height:b.h,background:b.color,borderRadius:"3px 3px 0 0",minHeight:3}}/>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-        <div style={{height:1,background:C.border}}/>
-        <div style={{display:"flex",gap:6,marginTop:5}}>
-          {bars.map(b=><div key={b.i} style={{flex:1,textAlign:"center",fontSize:10,fontWeight:700,color:b.avgFg}}>{b.avg}</div>)}
-        </div>
-        <div style={{display:"flex",justifyContent:"space-between",marginTop:14,marginBottom:4}}>
-          <MiniLabel>TOP SPEED, PER RUN</MiniLabel><div style={{fontSize:10,color:C.muted}}>mph</div>
-        </div>
-        <div style={{display:"flex",gap:6}}>
-          {bars.map(b=><div key={b.i} style={{flex:1,textAlign:"center",fontSize:10,fontWeight:700,color:b.topFg}}>{b.top}</div>)}
+            <div style={{height:1,background:C.border}}/>
+            <div style={{display:"flex",gap:6,marginTop:5}}>
+              {bars.map(b=><div key={b.i} style={{...col,textAlign:"center",fontSize:10,fontWeight:700,color:b.avgFg}}>{b.avg}</div>)}
+            </div>
+            <div style={{position:"sticky",left:0,display:"inline-block",marginTop:14,marginBottom:4}}><MiniLabel>TOP SPEED, PER RUN (MPH)</MiniLabel></div>
+            <div style={{display:"flex",gap:6}}>
+              {bars.map(b=><div key={b.i} style={{...col,textAlign:"center",fontSize:10,fontWeight:700,color:b.topFg}}>{b.top}</div>)}
+            </div>
+          </div>
         </div>
       </div>
       <TipBox>{tip}</TipBox>
