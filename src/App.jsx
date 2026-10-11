@@ -3464,7 +3464,7 @@ const loc={lat:pos.coords.latitude,lng:pos.coords.longitude,ts:pos.timestamp};
 const dist=haversine(loc,gate);
 setDistToGate(Math.round(dist));
 const prev=prevGpsRef.current;
-const crossed=segmentCrossesGate(prev,loc,gate,FAT_GATE_RADIUS);
+const crossed=segmentCrossesGate(prev,loc,gate,FAT_GATE_RADIUS)&&gateCrossT(prev,loc,gate)<0.999;
 prevGpsRef.current=loc;
 if(crossed){
 navigator.geolocation.clearWatch(id);
@@ -3483,7 +3483,7 @@ const startCountdown=(crossTs=null)=>{playBeep(880,150);setGateStatus("waiting")
   const stopStage=(saveTime=false,crossTs=null)=>{
 playBeep(440,250);
 clearInterval(timerRef.current);
-const finalTime=crossTs?Math.max(0,crossTs-startTimeRef.current):timerMsRef.current;  
+const finalTime=Math.round(crossTs?Math.max(0,crossTs-startTimeRef.current):timerMsRef.current);  
 const newSplit={stageId:currentStage.id,name:currentStage.name,time:finalTime};
 setSplits(prev=>[...prev,newSplit]);
 // Mashup: update best per stage
@@ -3509,7 +3509,7 @@ if(saveTime&&!isPractice){
     const id=navigator.geolocation.watchPosition(pos=>{
       const loc={lat:pos.coords.latitude,lng:pos.coords.longitude,ts:pos.timestamp};
       const prev=prevGpsRef.current;
-      const crossed=segmentCrossesGate(prev,loc,gate,FINISH_GATE_RADIUS);
+      const crossed=segmentCrossesGate(prev,loc,gate,FINISH_GATE_RADIUS)&&gateCrossT(prev,loc,gate)<0.999;
       prevGpsRef.current=loc;
       if(!crossed&&loc.ts>startTimeRef.current)traceRef.current.push({t:loc.ts-startTimeRef.current,lat:loc.lat,lng:loc.lng});
       if(crossed){
