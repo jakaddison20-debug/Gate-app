@@ -2350,11 +2350,13 @@ function fatigueModel(grouped,descents,mode='day'){
   if(scored.length<FADE_MIN_DAYS)return{ready:false,count:scored.length,mode};
   const byFt=scored.slice().sort((a,b)=>a.ft-b.ft),half=byFt.slice(0,Math.ceil(byFt.length/2));
   const base=half.reduce((s,b)=>s+b.off,0)/half.length;
-  const bad=byFt.filter(b=>b.off-base>FADE_SLOW_PCT);
+  const slowDays=byFt.filter(b=>b.off-base>FADE_SLOW_PCT);
+  // a slow day only counts as fatigue if you never held up on a day with as much or more descent
+  const bad=slowDays.filter(b=>!byFt.some(o=>o!==b&&o.ft>=b.ft&&!slowDays.includes(o)));
   let line;
   if(bad.length===0)line=byFt[byFt.length-1].ft;
   else{
-    const lowestBad=Math.min(...bad.map(b=>b.ft)),ok=byFt.filter(b=>b.ft<lowestBad&&!bad.includes(b));
+    const lowestBad=Math.min(...bad.map(b=>b.ft)),ok=byFt.filter(b=>b.ft<lowestBad&&!slowDays.includes(b));
     line=ok.length?ok[ok.length-1].ft:lowestBad*0.8;
   }
   line=Math.max(500,Math.round(line/100)*100);
