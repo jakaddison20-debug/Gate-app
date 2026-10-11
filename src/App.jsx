@@ -3464,7 +3464,7 @@ const loc={lat:pos.coords.latitude,lng:pos.coords.longitude,ts:pos.timestamp};
 const dist=haversine(loc,gate);
 setDistToGate(Math.round(dist));
 const prev=prevGpsRef.current;
-const crossed=segmentCrossesGate(prev,loc,gate,FAT_GATE_RADIUS);
+const crossed=segmentCrossesGate(prev,loc,gate,FAT_GATE_RADIUS)&&gateCrossT(prev,loc,gate)<0.999;
 prevGpsRef.current=loc;
 if(crossed){
 navigator.geolocation.clearWatch(id);
@@ -3483,7 +3483,7 @@ const startCountdown=(crossTs=null)=>{playBeep(880,150);setGateStatus("waiting")
   const stopStage=(saveTime=false,crossTs=null)=>{
 playBeep(440,250);
 clearInterval(timerRef.current);
-const finalTime=crossTs?Math.max(0,crossTs-startTimeRef.current):timerMsRef.current;  
+const finalTime=Math.round(crossTs?Math.max(0,crossTs-startTimeRef.current):timerMsRef.current);  
 const newSplit={stageId:currentStage.id,name:currentStage.name,time:finalTime};
 setSplits(prev=>[...prev,newSplit]);
 // Mashup: update best per stage
@@ -3509,7 +3509,7 @@ if(saveTime&&!isPractice){
     const id=navigator.geolocation.watchPosition(pos=>{
       const loc={lat:pos.coords.latitude,lng:pos.coords.longitude,ts:pos.timestamp};
       const prev=prevGpsRef.current;
-      const crossed=segmentCrossesGate(prev,loc,gate,FINISH_GATE_RADIUS);
+      const crossed=segmentCrossesGate(prev,loc,gate,FINISH_GATE_RADIUS)&&gateCrossT(prev,loc,gate)<0.999;
       prevGpsRef.current=loc;
       if(!crossed&&loc.ts>startTimeRef.current)traceRef.current.push({t:loc.ts-startTimeRef.current,lat:loc.lat,lng:loc.lng});
       if(crossed){
@@ -4310,7 +4310,7 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
 
     const [recentStageTimes,setRecentStageTimes]=useState([]);
 const [feed,setFeed]=useState([]);
-useEffect(()=>{if(!user)return;supabase.from('app_events').select('id,event_type,message,created_at,stage_id,context,profiles(display_name,avatar_url)').in('event_type',['stage_record','personal_best','course_finish','stage_created','course_created','day_recap']).order('created_at',{ascending:false}).limit(50).then(({data})=>{if(data)setFeed(data.map(e=>({id:e.id,event_type:e.event_type,message:e.message,stage_id:e.stage_id,userName:e.profiles?.display_name||'Rider',avatarUrl:e.profiles?.avatar_url||null,context:e.context,ago:timeAgo(e.created_at)})));});},[user,refreshTick]);
+useEffect(()=>{if(!user)return;const loadFeed=cols=>supabase.from('app_events').select(cols).in('event_type',['stage_record','personal_best','course_finish','stage_created','course_created','day_recap']).order('created_at',{ascending:false}).limit(50);loadFeed('id,event_type,message,created_at,stage_id,context,profiles(display_name,avatar_url)').then(async({data,error})=>{if(error){console.log('feed query failed, retrying without context',error);({data}=await loadFeed('id,event_type,message,created_at,stage_id,profiles(display_name,avatar_url)'));}if(data)setFeed(data.map(e=>({id:e.id,event_type:e.event_type,message:e.message,stage_id:e.stage_id,userName:e.profiles?.display_name||'Rider',avatarUrl:e.profiles?.avatar_url||null,context:e.context,ago:timeAgo(e.created_at)})));});},[user,refreshTick]);
   const [pushState,setPushState]=useState('hidden');
 useEffect(()=>{
   if(!user)return;
@@ -4409,8 +4409,10 @@ const openDayRecap=async()=>{
 const postDayRecap=async()=>{
   if(!recapDraft||recapPosting)return;setRecapPosting(true);
   const n=recapDraft.stages.length;
-  await logEvent(user.id,'day_recap',`rode ${n} stage${n===1?'':'s'} today · ${formatTime(recapDraft.total_time_ms)}`,null,recapDraft);
-  setRecapPosting(false);setRecapDraft(null);setDaySharedToday(true);setRefreshTick(t=>t+1);
+  const{error}=await supabase.from('app_events').insert({user_id:user.id,event_type:'day_recap',message:`rode ${n} stage${n===1?'':'s'} today · ${formatTime(recapDraft.total_time_ms)}`,stage_id:null,context:recapDraft});
+  setRecapPosting(false);
+  if(error){console.log('day recap post failed',error);alert("Couldn't post your recap: "+error.message);return;}
+  setRecapDraft(null);setDaySharedToday(true);setRefreshTick(t=>t+1);
 };
   const [todayKey,setTodayKey]=useState(new Date().toDateString());
   useEffect(()=>{
