@@ -2481,7 +2481,8 @@ function fatigueModel(grouped,descents,mode='day'){
   if(scored.length<FADE_MIN_DAYS)return{ready:false,count:scored.length,mode};
   const byFt=scored.slice().sort((a,b)=>a.ft-b.ft),half=byFt.slice(0,Math.ceil(byFt.length/2));
   const base=half.reduce((s,b)=>s+b.off,0)/half.length;
-  const slowDays=byFt.filter(b=>b.off-base>FADE_SLOW_PCT);
+  // fade = slower than your own average by more than 1%; a fast "fresh" baseline never lowers that bar
+  const slowDays=byFt.filter(b=>b.off>Math.max(FADE_SLOW_PCT,base+FADE_SLOW_PCT));
   // a slow day only counts as fatigue if you never held up on a day with as much or more descent
   const bad=slowDays.filter(b=>!byFt.some(o=>o!==b&&o.ft>=b.ft&&!slowDays.includes(o)));
   let line;
