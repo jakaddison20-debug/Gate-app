@@ -3534,6 +3534,130 @@ function RaceMapOverlay({courseStages,onClose}){
 }
 
 // ── Race / Practice / Mashup Screen ──────────────────────────────────────────
+// ── Race screens (Race mode): Stage complete + Race complete ─────────────────
+const RACE_GOLD='#C9A227';
+const RaceCrown=({size=16,color=RACE_GOLD})=><svg width={size} height={Math.round(size*20/24)} viewBox="0 0 24 20" aria-hidden="true"><path d="M3 19l-1.5-10L7 13l5-9 5 9 5.5-4L20 19H3z" fill={color} stroke={color} strokeLinejoin="round" strokeWidth="1"/></svg>;
+const raceDelta=d=>(d<0?'-':'+')+(Math.abs(d)/1000).toFixed(2)+'s';
+
+// base = bests as they were BEFORE this run started (see raceBase in RaceScreen), so saving a time can't change the comparison.
+function stageOutcome(base,stageId,timeMs){
+  const prev=base.stageBest[stageId]??null,rec=base.stageRecord[stageId];
+  return{
+    prev,
+    delta:prev===null?null:timeMs-prev,
+    pb:prev!==null&&timeMs<prev,
+    record:rec!==undefined&&(rec===null||timeMs<rec)      // rec undefined = lookup not back yet, so no crown
+  };
+}
+
+function RaceBadge({kind}){
+  if(!kind)return null;
+  const rec=kind==='record';
+  return(
+    <>
+      <div style={{width:76,height:76,borderRadius:"50%",background:rec?"#FFFBEB":"#EFF6FF",border:`1px solid ${rec?"#F3E3B0":"#BFD3F8"}`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 10px"}}>
+        {rec?<RaceCrown size={40}/>:<span style={{fontSize:26,fontWeight:800,color:C.blue,letterSpacing:-0.5}}>PB</span>}
+      </div>
+      <div style={{fontSize:12,fontWeight:800,letterSpacing:1,color:rec?"#92400E":C.blue,marginBottom:8}}>{rec?"NEW RECORD":"PERSONAL BEST"}</div>
+    </>
+  );
+}
+
+// delta === null means first run (no comparison)
+function RaceDeltaPill({delta,vs}){
+  if(delta===null)return <div style={{fontSize:12,color:C.muted,marginTop:10}}>{vs}</div>;
+  const col=delta<0?C.green:C.red;
+  return(
+    <>
+      <div style={{display:"flex",justifyContent:"center",marginTop:10}}>
+        <div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:999,background:`${col}26`,color:col,fontSize:15,fontWeight:800}}>
+          <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true"><polygon points={delta<0?"1,3 11,3 6,10":"1,9 11,9 6,2"} fill={col}/></svg>{raceDelta(delta)}
+        </div>
+      </div>
+      <div style={{fontSize:12,color:C.muted,marginTop:8}}>{vs}</div>
+    </>
+  );
+}
+
+function RaceRow({i,name,time,out}){
+  const first=out.prev===null,col=first?C.text:(out.delta<0?C.green:C.red);
+  const sub=first?'First run':(out.delta<0?'Previous best ':'Best ')+formatTime(out.prev);
+  return(
+    <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:C.surface,borderRadius:12,marginBottom:8,border:`1px solid ${C.border}`}}>
+      <div style={{width:32,height:32,borderRadius:"50%",background:"#fff",border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:C.text,flexShrink:0}}>{i+1}</div>
+      <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:600,color:C.text}}>{name}</div><div style={{fontSize:11,color:C.muted,marginTop:1}}>{sub}</div></div>
+      {out.record?<div style={{display:"flex",alignItems:"center",marginRight:2}}><RaceCrown/></div>:(out.pb&&<span style={{fontSize:10,fontWeight:800,color:C.blue,background:"#EFF6FF",borderRadius:4,padding:"2px 5px"}}>PB</span>)}
+      <div style={{textAlign:"right"}}><div style={{fontSize:16,fontWeight:700,color:col}}>{formatTime(time)}</div>{!first&&<div style={{fontSize:11,fontWeight:700,color:col,marginTop:1}}>{raceDelta(out.delta)}</div>}</div>
+    </div>
+  );
+}
+
+const RaceNextBtn=({onClick,children})=>(
+  <div style={{padding:"16px 20px 36px"}}>
+    <button className="tap" onClick={onClick} style={{width:"100%",background:"rgba(37,99,235,0.10)",border:`1.5px solid ${C.blue}`,borderRadius:12,padding:14,color:C.text,fontSize:14,fontWeight:700}}>{children}</button>
+  </div>
+);
+
+// Between stages (Race mode)
+function RaceStageComplete({base,splits,courseStages,stageIndex,totalStages,isLast,onNext}){
+  const last=splits[splits.length-1];
+  const out=stageOutcome(base,last.stageId,last.time);
+  const kind=out.record?'record':out.pb?'pb':null;
+  const col=out.prev===null?C.text:(out.delta<0?C.green:C.red);
+  const nextName=!isLast&&courseStages[stageIndex+1]?courseStages[stageIndex+1].name:null;
+  return(
+    <div style={{position:"fixed",inset:0,background:"#fff",zIndex:100,display:"flex",flexDirection:"column"}}>
+      <div style={{padding:`${kind?56:92}px 20px 24px`,textAlign:"center"}}>
+        <RaceBadge kind={kind}/>
+        <div style={{fontSize:28,fontWeight:800,color:C.text,marginBottom:4}}>{last.name}</div>
+        <div style={{fontSize:14,color:C.muted}}>Stage {stageIndex+1} of {totalStages} complete</div>
+      </div>
+      <div style={{padding:"24px 20px 22px",textAlign:"center",borderTop:`1px solid ${C.border}`,borderBottom:`1px solid ${C.border}`}}>
+        <div style={{fontSize:12,color:C.muted,fontWeight:600,letterSpacing:1,marginBottom:6}}>STAGE TIME</div>
+        <div style={{fontSize:52,fontWeight:800,color:col,fontVariantNumeric:"tabular-nums",lineHeight:1.1}}>{formatTime(last.time)}</div>
+        <RaceDeltaPill delta={out.delta} vs={out.prev===null?"First run on this stage":`vs your best ${formatTime(out.prev)}`}/>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
+        <div style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:12}}>Splits so far</div>
+        {splits.map((s,i)=><RaceRow key={i} i={i} name={s.name} time={s.time} out={stageOutcome(base,s.stageId,s.time)}/>)}
+        {nextName&&<div style={{textAlign:"center",padding:"10px 0 0",fontSize:13,color:C.muted}}>Next: <span style={{fontWeight:600,color:C.text}}>{nextName}</span></div>}
+      </div>
+      <RaceNextBtn onClick={onNext}>{isLast?"See Results →":"Next Stage →"}</RaceNextBtn>
+    </div>
+  );
+}
+
+// Race complete (Race mode)
+function RaceComplete({base,course,splits,courseStages,totalStages,onSave}){
+  const total=splits.reduce((a,s)=>a+s.time,0);
+  const prevTotal=totalStages>1?(base.courseBest===undefined?null:base.courseBest):(base.stageBest[splits[0].stageId]??null);
+  const delta=prevTotal===null?null:total-prevTotal;
+  const anyRecord=splits.some(s=>stageOutcome(base,s.stageId,s.time).record);
+  const kind=anyRecord?'record':(delta!==null&&delta<0?'pb':null);
+  const col=delta===null?C.text:(delta<0?C.green:C.red);
+  const dist=formatDist(courseStages.reduce((a,s)=>a+haversine(s.start,s.finish),0));
+  return(
+    <div style={{position:"fixed",inset:0,background:"#fff",zIndex:100,display:"flex",flexDirection:"column"}}>
+      <div style={{padding:`${kind?56:92}px 20px 24px`,textAlign:"center"}}>
+        <RaceBadge kind={kind}/>
+        <div style={{fontSize:28,fontWeight:800,color:C.text,marginBottom:4}}>{course.name}</div>
+        <div style={{fontSize:14,color:C.muted}}>Race complete · {totalStages} stage{totalStages===1?"":"s"}</div>
+      </div>
+      <div style={{padding:"24px 20px 0",textAlign:"center",borderTop:`1px solid ${C.border}`,borderBottom:`1px solid ${C.border}`}}>
+        <div style={{fontSize:12,color:C.muted,fontWeight:600,letterSpacing:1,marginBottom:6}}>TOTAL TIME</div>
+        <div style={{fontSize:52,fontWeight:800,color:col,fontVariantNumeric:"tabular-nums",lineHeight:1.1}}>{formatTime(total)}</div>
+        <RaceDeltaPill delta={delta} vs={prevTotal===null?"First run on this course":`vs your best ${formatTime(prevTotal)}`}/>
+        <div style={{fontSize:13,color:C.muted,margin:"14px 0 20px"}}>{dist} timed</div>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
+        <div style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:12}}>Stage Breakdown</div>
+        {splits.map((s,i)=><RaceRow key={i} i={i} name={s.name} time={s.time} out={stageOutcome(base,s.stageId,s.time)}/>)}
+      </div>
+      <RaceNextBtn onClick={onSave}>Save Results</RaceNextBtn>
+    </div>
+  );
+}
+
 function RaceScreen({course,stages,user,onFinish,onActivity}){
 
   const courseStages=course.stageIds.map(id=>stages.find(s=>s.id===id)).filter(Boolean);
@@ -3672,6 +3796,26 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
   useEffect(()=>()=>{clearInterval(timerRef.current);clearInterval(countRef.current);clearInterval(gpsRef.current);},[]);
 
   const mashupTotal=Object.values(bestPerStage).reduce((a,b)=>a+b,0);
+
+  // Bests as they were when the race started (so saving a time can't change the comparison). The record lookups arrive a moment later.
+  const raceBase=useRef(null);
+  if(raceBase.current===null){
+    raceBase.current={stageBest:Object.fromEntries(courseStages.map(s=>[s.id,s.time||null])),stageRecord:{},courseBest:undefined};
+  }
+  useEffect(()=>{
+    let off=false;
+    courseStages.forEach(s=>{
+      supabase.from('stage_times').select('time_ms').eq('stage_id',s.id).order('time_ms',{ascending:true}).limit(1).then(({data})=>{
+        if(!off&&data)raceBase.current.stageRecord[s.id]=data[0]?data[0].time_ms:null;
+      });
+    });
+    if(totalStages>1&&user){
+      supabase.from('course_results').select('total_time_ms').eq('course_id',course.id).eq('user_id',user.id).order('total_time_ms',{ascending:true}).limit(1).then(({data})=>{
+        if(!off&&data)raceBase.current.courseBest=data[0]?data[0].total_time_ms:null;
+      });
+    }
+    return()=>{off=true;};
+  },[]);
 
   // ── Mode intro screen ──
   if(phase==="modeIntro"){
@@ -3886,9 +4030,9 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
           ))}
         </div>
         <div style={{padding:"0 20px 44px"}}>
-                    <button className="tap" onClick={()=>stopStage(false)} style={{width:"100%",background:isPractice?"rgba(255,255,255,0.2)":C.red,border:isPractice?"1px solid rgba(255,255,255,0.3)":"none",borderRadius:14,padding:18,color:"#fff",fontSize:16,fontWeight:700,boxShadow:isPractice?"none":"0 4px 20px rgba(220,38,38,0.4)"}}>
-            {isPractice?"✓  Finish Gate — Next Stage":"■   Stop — Finish Gate"}
-          </button>
+          {isPractice
+            ?<button className="tap" onClick={()=>stopStage(false)} style={{width:"100%",background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:14,padding:18,color:"#fff",fontSize:16,fontWeight:700}}>✓  Finish Gate — Next Stage</button>
+            :<div style={{textAlign:"center",fontSize:13,color:"rgba(255,255,255,0.4)",paddingBottom:8}}>Timer stops automatically at the finish gate</div>}
         </div>
       </div>
     );
@@ -3896,6 +4040,7 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
 
   // ── Split result ──
   if(phase==="split"){
+    if(!isPractice&&!isMashup)return <RaceStageComplete base={raceBase.current} splits={splits} courseStages={courseStages} stageIndex={stageIndex} totalStages={totalStages} isLast={isLastStage} onNext={nextStage}/>;
     const lastSplit=splits[splits.length-1];
     const prevBest=stages.find(s=>s.id===lastSplit.stageId)?.time;
     const mashupBest=bestPerStage[lastSplit.stageId];
@@ -3947,6 +4092,8 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
   // ── Done ──
   if(phase==="done"){
     const finalTotal=isPractice?null:isMashup?mashupTotal:splits.reduce((a,s)=>a+s.time,0);
+    const saveRaceResults=async()=>{if(totalStages>1){const{error}=await supabase.from('course_results').insert({course_id:course.id,user_id:user.id,total_time_ms:finalTotal,mode:course.mode});if(error){alert("Couldn't save course result: "+error.message);}else{logEvent(user.id,'course_finish',`finished ${course.name} · ${formatTime(finalTotal)}`,null,{course_id:course.id,total_time_ms:finalTotal,stage_count:totalStages}).then(()=>onActivity&&onActivity());}}try{localStorage.removeItem(progressKey);}catch(e){}onFinish();};
+    if(!isPractice&&!isMashup)return <RaceComplete base={raceBase.current} course={course} splits={splits} courseStages={courseStages} totalStages={totalStages} onSave={saveRaceResults}/>;
     const headerBg=isPractice?"#15803D":isMashup?C.blue:C.orange;
     return(
       <div style={{position:"fixed",inset:0,background:"#fff",zIndex:100,display:"flex",flexDirection:"column"}}>
@@ -3995,7 +4142,7 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
           <button className="tap" onClick={quitRace} style={{flex:1,background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:14,color:C.text,fontSize:14,fontWeight:600}}>Back</button>
             {isPractice
             ?<button className="tap" onClick={quitRace} style={{flex:2,background:C.green,border:"none",borderRadius:12,padding:14,color:"#fff",fontSize:14,fontWeight:700}}>Ready to Race!</button>
-           :<button className="tap" onClick={async()=>{if(totalStages>1){const{error}=await supabase.from('course_results').insert({course_id:course.id,user_id:user.id,total_time_ms:finalTotal,mode:course.mode});if(error){alert("Couldn't save course result: "+error.message);}else{logEvent(user.id,'course_finish',`finished ${course.name} · ${formatTime(finalTotal)}`,null,{course_id:course.id,total_time_ms:finalTotal,stage_count:totalStages}).then(()=>onActivity&&onActivity());}}try{localStorage.removeItem(progressKey);}catch(e){}onFinish();}} style={{flex:2,background:isMashup?C.blue:C.orange,border:"none",borderRadius:12,padding:14,color:"#fff",fontSize:14,fontWeight:700}}>Save Results</button>
+           :<button className="tap" onClick={saveRaceResults} style={{flex:2,background:isMashup?C.blue:C.orange,border:"none",borderRadius:12,padding:14,color:"#fff",fontSize:14,fontWeight:700}}>Save Results</button>
         }
         </div>
       </div>
