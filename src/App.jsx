@@ -175,6 +175,9 @@ const COURSE_MODES=[
 const STYLES=`
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
   *{box-sizing:border-box;margin:0;padding:0;}
+  :root{--app-h:100vh;}
+  @supports (height:100dvh){:root{--app-h:100dvh;}}
+  html,body{overflow:hidden;overscroll-behavior:none;}
   body{background:#fff;font-family:'Inter',sans-serif;}
   ::-webkit-scrollbar{display:none;}
   @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
@@ -274,7 +277,7 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
 
   
   return(
-    <div style={{height:"calc(100vh - 44px)",overflowY:"auto",background:C.surface}}>
+    <div style={{height:"calc(var(--app-h) - 44px)",overflowY:"auto",background:C.surface}}>
       
       {/* Header */}
 
@@ -2688,7 +2691,7 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
   ];
   const crStages=stages.filter(s=>s.cr);
   return(
-    <div style={{width:"100%",height:"100vh",display:"flex",flexDirection:"column",background:"#fff"}}>
+    <div style={{width:"100%",height:"var(--app-h)",display:"flex",flexDirection:"column",background:"#fff"}}>
       <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
         <button className="tap" onClick={()=>view==='hub'?onBack():setView('hub')} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
         <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>{titles[view]}</div>
@@ -4800,7 +4803,7 @@ const weekStats=useMemo(()=>{
 
     const TABS=[{id:"home",label:"Home",Ic:Icon.Home},{id:"map",label:"Map",Ic:Icon.Map},{id:"stages",label:"Stages",Ic:Icon.Lightning},{id:"profile",label:"Profile",Ic:Icon.User}];
     if(!user)return(
-    <div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",overflow:"hidden"}}>
+    <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",overflow:"hidden"}}>
       <style>{STYLES}</style>
       <Analytics/>
       <AuthScreen/>
@@ -4809,7 +4812,7 @@ const weekStats=useMemo(()=>{
 
     // Settings screen overlay
   if(showSettings)return(
-    <div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif"}}>
+    <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif"}}>
       <style>{STYLES}</style>
       <div style={{height:44,background:"#fff"}}/>
            <SettingsScreen settings={settings} onSave={saveSettings} 
@@ -4819,7 +4822,7 @@ onBack={()=>setShowSettings(false)}/>
 
 // Bike Setup screen overlay
 if(showBikeSetup)return(
-<div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
+<div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
 <style>{STYLES}</style>
 <div style={{height:44,background:"#fff"}}/>
 <BikeSetupScreen settings={settings} onSave={setSettings} onBack={()=>setShowBikeSetup(false)}/>
@@ -4828,10 +4831,10 @@ if(showBikeSetup)return(
 
         // Course builder overlay
   if(showCourseBuilder)return(
-    <div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
+    <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
       <style>{STYLES}</style>
       <div style={{height:44,background:"#fff"}}/>
-      <div style={{height:"calc(100vh - 44px)"}}>
+      <div style={{height:"calc(var(--app-h) - 44px)"}}>
         <CourseBuilderSheet stages={stages} course={editingCourse} onClose={()=>{setShowCourseBuilder(false);setEditingCourse(null);}} onSave={async c=>{if(c.id&&courses.some(x=>x.id===c.id)){const{error}=await supabase.from('courses').update({name:c.name,privacy:c.privacy,mode:c.mode,stage_ids:c.stageIds}).eq('id',c.id);if(error){alert(error.message);}else{setCourses(prev=>prev.map(x=>x.id===c.id?{...x,name:c.name,privacy:c.privacy,mode:c.mode,stageIds:c.stageIds}:x));}setShowCourseBuilder(false);setEditingCourse(null);}else{const{data,error}=await supabase.from('courses').insert({name:c.name,privacy:c.privacy,mode:c.mode,stage_ids:c.stageIds,created_by:user.id}).select().single();if(!error){setCourses(prev=>[...prev,{...c,id:data.id,created_by:user.id}]);if(c.privacy!=="private"&&window.confirm(`Share "${c.name}" to the feed?`)){logEvent(user.id,'course_created',`created a new course: ${c.name}`).then(()=>setRefreshTick(t=>t+1));}}setShowCourseBuilder(false);setCoursesFilter("courses");setTab("stages");}}}/>
       </div>
     </div>
@@ -4839,7 +4842,7 @@ if(showBikeSetup)return(
 
     // Statistics screen overlay
   if(showProgress)return(
-    <div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
+    <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
       <style>{STYLES}</style>
             <StatisticsScreen stages={stages} courses={courses} user={user} onBack={()=>setShowProgress(false)}
         crCount={stages.filter(s=>s.cr).length} courseCRCount={courseCRCount}
@@ -4850,7 +4853,7 @@ if(showBikeSetup)return(
 
     // Groups screen overlay
   if(showGroups)return(
-    <div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
+    <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
       <style>{STYLES}</style>
       {activeGroup
         ?(groupMapOpen
@@ -4869,13 +4872,13 @@ if(showBikeSetup)return(
 
   
   if(showNotifications)return(
-    <div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
+    <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
       <style>{STYLES}</style>
       <NotificationsScreen notifications={notifications} onBack={()=>setShowNotifications(false)} onMarkAll={markAllNotificationsRead} onOpen={openNotification}/>
     </div>
   );
   if(activeRace)return(
-    <div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif"}}>
+    <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif"}}>
       <style>{STYLES}</style>
       <RaceScreen course={activeRace} stages={stages} user={user} onFinish={()=>setActiveRace(null)} onActivity={()=>setRefreshTick(t=>t+1)}/>
 
@@ -4883,14 +4886,14 @@ if(showBikeSetup)return(
   );
 
   return(
-        <div ref={containerRef} style={{width:"100%",height:"100vh",position:"relative",background:"#fff",overflow:"hidden",fontFamily:"'Inter',sans-serif"}}>
+        <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",background:"#fff",overflow:"hidden",fontFamily:"'Inter',sans-serif"}}>
       <style>{STYLES}</style>
       <Analytics/>
       <div style={{height:44,background:tab==="map"?"transparent":"#fff",position:"relative",zIndex:10}}/>
 
             {/* HOME */}
       {tab==="home"&&(
-        <div style={{height:"calc(100vh - 44px - 83px)",overflowY:"auto"}}>
+        <div style={{height:"calc(var(--app-h) - 44px - 83px)",overflowY:"auto"}}>
           <div style={{padding:"12px 16px 14px",borderBottom:`1px solid ${C.border}`,position:"sticky",top:0,background:"#fff",zIndex:5}}>
             <div style={{fontSize:22,fontWeight:800,color:C.text,marginBottom:12}}>Feed</div>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -5005,7 +5008,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
 
       {/* STAGES */}
       {tab==="stages"&&(
-        <div style={{height:"calc(100vh - 44px - 83px)",overflowY:"auto"}}>
+        <div style={{height:"calc(var(--app-h) - 44px - 83px)",overflowY:"auto"}}>
                     <div style={{padding:"12px 16px 0",position:"sticky",top:0,background:"#fff",zIndex:5,borderBottom:`1px solid ${C.border}`,paddingBottom:12}}>
             <div style={{display:"flex",background:C.surface,borderRadius:10,padding:3,marginBottom:12}}>
               {[{val:"stages",label:"Stages"},{val:"courses",label:"Courses"}].map(t=>(
@@ -5065,7 +5068,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
 
       {/* PROFILE */}
       {tab==="profile"&&(
-        <div style={{height:"calc(100vh - 44px - 83px)",overflowY:"auto"}}>
+        <div style={{height:"calc(var(--app-h) - 44px - 83px)",overflowY:"auto"}}>
             <ProfileScreen stages={stages} settings={settings} courseResults={courseResults} weeklyActivity={weeklyActivity} pastWeeks={weekStats} courseCRCount={courseCRCount} onSettingsPress={()=>setShowSettings(true)} onStatPress={key=>setSheet('stat-'+key)} onGoToStages={()=>{setCoursesFilter('stages');setTab('stages');}} onGoToCourses={()=>{setCoursesFilter('courses');setTab('stages');}}onOpenProgress={()=>setShowProgress(true)} onOpenBikeSetup={()=>setShowBikeSetup(true)}/>
 
         </div>
