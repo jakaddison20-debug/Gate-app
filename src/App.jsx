@@ -4917,9 +4917,6 @@ export default function App(){
   const [activeGroup,setActiveGroup]=useState(null);
   const [showH2h,setShowH2h]=useState(false);
   const [h2hList,setH2hList]=useState([]);
-  useEffect(()=>{if(!user)return;supabase.rpc('list_challenges').then(({data,error})=>{if(!error&&Array.isArray(data))setH2hList(data);});},[user,refreshTick,showH2h]);
-  const h2hRequests=h2hList.filter(c=>c.status==='pending'&&c.opponent_id===user?.id).length;
-  const h2hActive=h2hList.filter(c=>c.status==='active').length;
   const [groupMapOpen,setGroupMapOpen]=useState(false);
   const [pickingGroup,setPickingGroup]=useState(null);
   const [pickingExistingIds,setPickingExistingIds]=useState([]);
@@ -4949,6 +4946,9 @@ export default function App(){
   const [recapBusy,setRecapBusy]=useState(false);
   const [recapPosting,setRecapPosting]=useState(false);
   const [refreshTick,setRefreshTick]=useState(0);
+  useEffect(()=>{if(!user)return;supabase.rpc('list_challenges').then(({data,error})=>{if(!error&&Array.isArray(data))setH2hList(data);});},[user,refreshTick,showH2h]);
+  const h2hRequests=h2hList.filter(c=>c.status==='pending'&&c.opponent_id===user?.id).length;
+  const h2hActive=h2hList.filter(c=>c.status==='active').length;
     useEffect(()=>{
   const onVisible=()=>{if(document.visibilityState==="visible"){syncOfflineTimes().then(()=>setRefreshTick(t=>t+1));}};
   document.addEventListener('visibilitychange',onVisible);
