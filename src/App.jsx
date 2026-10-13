@@ -1685,7 +1685,7 @@ if(item.event_type==='day_recap'&&item.context&&item.context.stages){
   const n=item.context.stages.length;
   return(<div style={{padding:"14px 16px",borderBottom:`1px solid ${C.border}`}}><DayRecapCard recap={item.context} head={{name:item.userName,avatarUrl:item.avatarUrl,ago:item.ago,text:`rode ${n} stage${n===1?"":"s"} today`}}/></div>);
 }
-const icons={stage_record:{Ic:Icon.Crown,color:"#92400E",bg:"#FFFBEB"},personal_best:{kind:"up",color:C.blue,bg:"#EFF6FF"},course_finish:{Ic:Icon.Flag,color:C.orange,bg:C.orangeL},stage_created:{Ic:Icon.Lightning,color:C.blue,bg:`${C.blue}15`},course_created:{Ic:Icon.Flag,color:C.blue,bg:`${C.blue}15`},day_recap:{Ic:Icon.BarChart,color:C.green,bg:`${C.green}15`}};
+const icons={stage_record:{Ic:Icon.Crown,color:"#92400E",bg:"#FFFBEB"},personal_best:{kind:"up",color:C.blue,bg:"#EFF6FF"},course_finish:{Ic:Icon.Flag,color:C.orange,bg:C.orangeL},stage_created:{Ic:Icon.Lightning,color:C.blue,bg:`${C.blue}15`},course_created:{Ic:Icon.Flag,color:C.blue,bg:`${C.blue}15`},day_recap:{Ic:Icon.BarChart,color:C.green,bg:`${C.green}15`},h2h_result:{Ic:Icon.Crown,color:"#92400E",bg:"#FFFBEB"}};
 const cfg=icons[item.event_type]||{Ic:Icon.Lightning,color:C.muted,bg:C.surface};
 const showViewStage=item.stage_id&&['stage_record','personal_best','stage_created'].includes(item.event_type);
 return(
@@ -2089,7 +2089,7 @@ function GroupRow({group,onPress}){
     </button>
   );
 }
-function GroupsScreen({user,onBack,onOpenGroup}){
+function GroupsScreen({user,onBack,onOpenGroup,h2h,onOpenH2h}){
   const [groups,setGroups]=useState(null);
   const [view,setView]=useState('list');
   const [newName,setNewName]=useState("");
@@ -2144,6 +2144,17 @@ function GroupsScreen({user,onBack,onOpenGroup}){
         {view==='list'&&<button className="tap" onClick={()=>setView('create')} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"7px 12px",color:C.blue,fontSize:13,fontWeight:600}}><Icon.Plus size={14} color={C.blue}/>New</button>}
       </div>
       <div style={{flex:1,overflowY:"auto"}}>
+        {view==='list'&&onOpenH2h&&(
+          <button className="tap" onClick={onOpenH2h} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"14px 16px",borderBottom:`1px solid ${C.border}`,background:"white",textAlign:"left"}}>
+            <div style={{width:40,height:40,borderRadius:10,background:`${C.blue}12`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{fontSize:13,fontWeight:800,color:C.blue,letterSpacing:0.3}}>VS</span></div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:14,fontWeight:600,color:C.text}}>Head to head</div>
+              <div style={{fontSize:12,color:C.muted,marginTop:2}}>{h2h&&(h2h.requests||h2h.active)?`${h2h.requests} request${h2h.requests===1?"":"s"} · ${h2h.active} active`:"Challenge a mate"}</div>
+            </div>
+            {h2h&&h2h.requests>0&&<div style={{minWidth:20,height:20,padding:"0 6px",borderRadius:10,background:C.blue,color:"#fff",fontSize:11,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{h2h.requests}</div>}
+            <Icon.ChevronRight size={16} color={C.mutedL}/>
+          </button>
+        )}
         {view==='list'&&(groups===null?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>:
           groups.length===0?(
             <div style={{textAlign:"center",padding:"48px 20px",color:C.muted}}>
@@ -2327,6 +2338,401 @@ function GroupDetailScreen({group,user,onBack,onOpenMap}){
           </div>
           <button className="tap" onClick={copyCode} style={{background:"none",border:"none",padding:6}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Head to head ──────────────────────────────────────────────────────────────
+const h2hDelta=ms=>`${ms<0?"-":"+"}${(Math.abs(ms)/1000).toFixed(2)}s`;
+function h2hLeft(iso){const ms=new Date(iso).getTime()-Date.now();if(ms<=0)return"Ended";const h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000);return h>0?`Ends in ${h}h ${m}m`:`Ends in ${m}m`;}
+function H2hPill({d}){const c=d<0?C.green:C.red;return <div style={{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 9px",borderRadius:999,background:`${c}26`,color:c,fontSize:12,fontWeight:800}}><svg width="11" height="11" viewBox="0 0 12 12"><polygon points={d<0?"1,3 11,3 6,10":"1,9 11,9 6,2"} fill={c}/></svg>{h2hDelta(d)}</div>;}
+
+function h2hSummarise(runs,meId){
+  const by={};
+  (runs||[]).forEach(r=>{
+    const o=by[r.stage_id]||(by[r.stage_id]={stageId:r.stage_id,name:r.stage_name||"Stage",me:null,them:null});
+    if(r.user_id===meId)o.me=r;else o.them=r;
+  });
+  const stages=Object.values(by).sort((a,b)=>(b.me&&b.them?1:0)-(a.me&&a.them?1:0)||a.name.localeCompare(b.name));
+  let meWins=0,themWins=0,gap=0,both=0;
+  stages.forEach(s=>{if(s.me&&s.them){both++;gap+=s.me.time_ms-s.them.time_ms;if(s.me.time_ms<s.them.time_ms)meWins++;else if(s.them.time_ms<s.me.time_ms)themWins++;}});
+  const winner=meWins>themWins?"me":themWins>meWins?"them":gap<0?"me":gap>0?"them":"draw";
+  return{stages,meWins,themWins,gap,both,winner};
+}
+
+function H2hGapGraph({me,them}){
+  const idRef=useRef("g"+Math.random().toString(36).slice(2,8));
+  const a=Array.isArray(me.splits)?me.splits:[],b=Array.isArray(them.splits)?them.splits:[];
+  const n=Math.min(a.length,b.length);
+  if(n<2)return <div style={{fontSize:12,color:C.mutedL,padding:"8px 0"}}>No split data for this stage</div>;
+  const pts=[0];
+  for(let i=0;i<n;i++)pts.push((Number(a[i])-Number(b[i]))/1000);
+  pts.push((me.time_ms-them.time_ms)/1000);
+  const W=318,H=104,x0=6,x1=W-6,z=H/2;
+  const maxAbs=Math.max(0.3,...pts.map(Math.abs));
+  const sc=(H/2-12)/maxAbs;
+  const P=pts.map((d,i)=>[x0+(x1-x0)*i/(pts.length-1),z+d*sc]);
+  const path=P.map(p=>`${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
+  const area=`${x0},${z} ${path} ${x1},${z}`;
+  const id=idRef.current,last=P[P.length-1],endC=pts[pts.length-1]<0?C.green:C.red;
+  return(
+    <div>
+      <div style={{position:"relative"}}>
+        <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"auto",display:"block"}}>
+          <defs>
+            <clipPath id={id+"u"}><rect x="0" y="0" width={W} height={z}/></clipPath>
+            <clipPath id={id+"d"}><rect x="0" y={z} width={W} height={z}/></clipPath>
+          </defs>
+          <polygon points={area} fill={C.green} fillOpacity="0.16" clipPath={`url(#${id}u)`}/>
+          <polygon points={area} fill={C.red} fillOpacity="0.16" clipPath={`url(#${id}d)`}/>
+          <line x1="0" y1={z} x2={W} y2={z} stroke={C.mutedL} strokeWidth="1" strokeDasharray="3 3"/>
+          <polyline points={path} fill="none" stroke={C.blue} strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round"/>
+          <circle cx={last[0]} cy={last[1]} r="4" fill={endC} stroke="#fff" strokeWidth="2"/>
+        </svg>
+        <div style={{position:"absolute",left:2,top:0,fontSize:10,fontWeight:700,color:C.green}}>AHEAD</div>
+        <div style={{position:"absolute",left:2,bottom:0,fontSize:10,fontWeight:700,color:C.red}}>BEHIND</div>
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",marginTop:4,fontSize:11,color:C.muted}}><span>Start</span><span>Finish</span></div>
+    </div>
+  );
+}
+
+function H2hStageCard({s,otherName}){
+  const [open,setOpen]=useState(false);
+  const lab={fontSize:10,color:C.muted,fontWeight:600};
+  if(!s.them||!s.me){
+    const mine=!!s.me,t=mine?s.me:s.them;
+    return(
+      <div style={{border:`1px dashed ${C.border}`,borderRadius:12,padding:"12px 14px",marginBottom:8}}>
+        <div style={{fontSize:14,fontWeight:600,color:C.text,marginBottom:8}}>{s.name}</div>
+        <div style={{display:"flex"}}>
+          <div style={{flex:1}}><div style={lab}>YOU</div>{mine?<div style={{fontSize:16,fontWeight:700,color:C.text,fontVariantNumeric:"tabular-nums"}}>{formatTime(t.time_ms)}</div>:<div style={{fontSize:14,color:C.mutedL,fontStyle:"italic",marginTop:2}}>Not ridden yet</div>}</div>
+          <div style={{flex:1}}><div style={lab}>{otherName.toUpperCase()}</div>{!mine?<div style={{fontSize:16,fontWeight:700,color:C.text,fontVariantNumeric:"tabular-nums"}}>{formatTime(t.time_ms)}</div>:<div style={{fontSize:14,color:C.mutedL,fontStyle:"italic",marginTop:2}}>Waiting for {otherName}…</div>}</div>
+        </div>
+      </div>
+    );
+  }
+  const d=s.me.time_ms-s.them.time_ms;
+  const ca=d<0?C.green:C.red,cb=d<0?C.red:C.green;
+  return(
+    <div style={{border:`${open?1.5:1}px solid ${open?C.blue:C.border}`,borderRadius:12,padding:"12px 14px",marginBottom:8}}>
+      <button className="tap" onClick={()=>setOpen(o=>!o)} style={{width:"100%",background:"none",border:"none",padding:0,textAlign:"left"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+          <div style={{flex:1,fontSize:14,fontWeight:600,color:C.text}}>{s.name}</div>
+          <H2hPill d={d}/>
+          {open?<Icon.ChevronUp size={16} color={C.muted}/>:<Icon.ChevronDown size={16} color={C.mutedL}/>}
+        </div>
+        <div style={{display:"flex"}}>
+          <div style={{flex:1}}><div style={lab}>YOU</div><div style={{fontSize:16,fontWeight:700,color:ca,fontVariantNumeric:"tabular-nums"}}>{formatTime(s.me.time_ms)}</div></div>
+          <div style={{flex:1}}><div style={lab}>{otherName.toUpperCase()}</div><div style={{fontSize:16,fontWeight:700,color:cb,fontVariantNumeric:"tabular-nums"}}>{formatTime(s.them.time_ms)}</div></div>
+        </div>
+      </button>
+      {open&&(
+        <div style={{borderTop:`1px solid ${C.border}`,marginTop:12,paddingTop:12}}>
+          <div style={{fontSize:12,fontWeight:600,color:C.text,marginBottom:10}}>Your gap to {otherName}</div>
+          <H2hGapGraph me={s.me} them={s.them}/>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function H2hPodium({sum,otherName,meAvatar,otherAvatar}){
+  const draw=sum.winner==="draw";
+  const meFirst=sum.winner!=="them";
+  const col=(name,pos,wins,me,av)=>{
+    const ring=pos===1?"#C9A227":"#AEB2B8",size=pos===1?60:48,h=pos===1?118:84;
+    return(
+      <div key={name+pos} style={{display:"flex",flexDirection:"column",alignItems:"center"}}>
+        <div style={{borderRadius:"50%",border:`3px solid ${ring}`,marginBottom:8,lineHeight:0}}><Avatar size={size} url={av}/></div>
+        <div style={{fontSize:14,fontWeight:me?700:500,color:C.text}}>{name}</div>
+        <div style={{fontSize:12,color:C.muted,margin:"2px 0 10px"}}>{wins} stage{wins===1?"":"s"}</div>
+        <div style={{width:140,height:h,background:pos===1?"#FFFBEB":C.surface,border:`1px solid ${pos===1?"#F3E3B0":C.border}`,borderBottom:"none",borderRadius:"12px 12px 0 0",display:"flex",alignItems:"center",justifyContent:"center"}}><PositionBadge pos={pos} size={pos===1?44:38}/></div>
+      </div>
+    );
+  };
+  const mePos=draw||meFirst?1:2,thPos=draw||!meFirst?1:2;
+  const mine=col("You",mePos,sum.meWins,true,meAvatar),theirs=col(otherName,thPos,sum.themWins,false,otherAvatar);
+  return <div style={{display:"flex",justifyContent:"center",alignItems:"flex-end",gap:6,padding:"8px 16px 0",borderBottom:`1px solid ${C.border}`}}>{mePos<=thPos?<>{mine}{theirs}</>:<>{theirs}{mine}</>}</div>;
+}
+
+function H2hDetail({c,user,meAvatar,onBack,onReload,onActivity}){
+  const [runs,setRuns]=useState(null);
+  const [confirming,setConfirming]=useState(false);
+  const [busy,setBusy]=useState(false);
+  const [shared,setShared]=useState(false);
+  const done=c.status==="finished";
+  const name=c.other_name||"Rider";
+  const load=useCallback(()=>{supabase.rpc("get_challenge_runs",{p_id:c.id}).then(({data,error})=>{if(!error&&Array.isArray(data))setRuns(data);else if(error)setRuns(r=>r||[]);});},[c.id]);
+  useEffect(()=>{load();if(done)return;const t=setInterval(load,20000);return()=>clearInterval(t);},[load,done]);
+  const sum=useMemo(()=>h2hSummarise(runs,user.id),[runs,user.id]);
+
+  const finish=async()=>{
+    setBusy(true);
+    const{error}=await supabase.rpc("finish_challenge",{p_id:c.id});
+    setBusy(false);setConfirming(false);
+    if(error){alert(error.message);return;}
+    onReload();
+  };
+  const rematch=async()=>{
+    const{error}=await supabase.rpc("create_challenge",{p_opponent:c.other_id});
+    if(error){alert(error.message);return;}
+    onReload();onBack();
+  };
+  const scoreText=`${sum.meWins}–${sum.themWins}`;
+  const shareToFeed=()=>{
+    const tail=sum.gap!==0?` · ${h2hDelta(sum.gap)}`:"";
+    const msg=sum.winner==="me"?`beat ${name} ${scoreText} in a head to head${tail}`:sum.winner==="them"?`lost ${scoreText} to ${name} in a head to head`:`drew ${scoreText} with ${name} in a head to head`;
+    logEvent(user.id,"h2h_result",msg,null,{challenge_id:c.id});
+    setShared(true);onActivity&&onActivity();
+  };
+  const shareText=()=>{
+    const t=`GATE head to head: me ${scoreText} ${name}`;
+    if(navigator.share){navigator.share({title:"GATE head to head",text:t}).catch(()=>{});}
+    else if(navigator.clipboard){navigator.clipboard.writeText(t).then(()=>alert("Copied"));}
+  };
+  const leadPill=sum.both>0?<H2hPill d={sum.gap}/>:null;
+  const soft={width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:14,color:C.text,fontSize:14,fontWeight:600};
+  const main={width:"100%",background:"rgba(37,99,235,0.10)",border:`1.5px solid ${C.blue}`,borderRadius:12,padding:14,color:C.text,fontSize:14,fontWeight:700};
+
+  return(
+    <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff",position:"relative"}}>
+      <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+        <button className="tap" onClick={onBack} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:17,fontWeight:700,color:C.text}}>You vs {name}</div>
+          <div style={{fontSize:12,color:C.muted}}>{done?"Finished":h2hLeft(c.ends_at)}</div>
+        </div>
+        {!done&&<button className="tap" onClick={shareText} style={{background:"none",border:"none",padding:6}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.6" x2="15.4" y2="6.4"/><line x1="8.6" y1="13.4" x2="15.4" y2="17.6"/></svg></button>}
+      </div>
+
+      <div style={{flex:1,overflowY:"auto"}}>
+        {runs===null?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>:done?(
+          <>
+            <div style={{padding:"18px 20px 10px",textAlign:"center"}}>
+              <div style={{fontSize:28,fontWeight:800,color:C.text,marginBottom:4}}>{sum.winner==="me"?"You won":sum.winner==="them"?`${name} won`:"Draw"}</div>
+              <div style={{fontSize:14,color:C.muted,marginBottom:10}}>{sum.both>0?`Stages won ${scoreText}`:"No stages ridden by both"}</div>
+              {leadPill}
+            </div>
+            <H2hPodium sum={sum} otherName={name} meAvatar={meAvatar} otherAvatar={c.other_avatar}/>
+            <div style={{padding:"14px 16px 16px"}}>
+              <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:10}}>Stages</div>
+              {sum.stages.length===0?<div style={{fontSize:13,color:C.mutedL}}>No runs were saved</div>:sum.stages.map(s=><H2hStageCard key={s.stageId} s={s} otherName={name}/>)}
+            </div>
+          </>
+        ):(
+          <div style={{padding:"16px 16px 16px"}}>
+            <div style={{border:`1px solid ${C.border}`,borderRadius:14,padding:"16px 14px 14px",marginBottom:18}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 22px"}}>
+                <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}><Avatar size={34} url={meAvatar}/><div style={{fontSize:12,fontWeight:700,color:C.text}}>You</div></div>
+                <div style={{display:"flex",alignItems:"center",gap:14}}>
+                  <div style={{fontSize:42,fontWeight:800,color:C.text,lineHeight:1}}>{sum.meWins}</div>
+                  <div style={{fontSize:24,fontWeight:300,color:C.mutedL}}>–</div>
+                  <div style={{fontSize:42,fontWeight:800,color:C.text,lineHeight:1}}>{sum.themWins}</div>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}><Avatar size={34} url={c.other_avatar}/><div style={{fontSize:12,fontWeight:500,color:C.text}}>{name}</div></div>
+              </div>
+              <div style={{textAlign:"center",fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.5,textTransform:"uppercase",marginTop:12}}>Stages won</div>
+              {sum.both>0&&<div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}>{leadPill}<div style={{fontSize:12,color:C.muted}}>on the {sum.both} stage{sum.both===1?"":"s"} you both rode</div></div>}
+            </div>
+            <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:10}}>Stages</div>
+            {sum.stages.length===0?(
+              <div style={{textAlign:"center",padding:"28px 20px",color:C.muted}}>
+                <Icon.Flag size={32} color={C.mutedL}/>
+                <div style={{fontSize:15,fontWeight:500,marginTop:12,marginBottom:4,color:C.text}}>No runs yet</div>
+                <div style={{fontSize:13,color:C.mutedL}}>Ride any stage and save it. It shows up here.</div>
+              </div>
+            ):sum.stages.map(s=><H2hStageCard key={s.stageId} s={s} otherName={name}/>)}
+          </div>
+        )}
+      </div>
+
+      <div style={{padding:"12px 16px 34px",borderTop:`1px solid ${C.border}`,background:"#fff",flexShrink:0}}>
+        {done?(
+          <>
+            <button className="tap" onClick={shareToFeed} disabled={shared} style={{...main,marginBottom:10,opacity:shared?0.6:1}}>{shared?"Shared ✓":"Share to feed"}</button>
+            <button className="tap" onClick={rematch} style={soft}>Rematch</button>
+          </>
+        ):(
+          <button className="tap" onClick={()=>setConfirming(true)} style={soft}>Finish challenge</button>
+        )}
+      </div>
+
+      {confirming&&(
+        <>
+          <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.3)",zIndex:5}} onClick={()=>setConfirming(false)}/>
+          <div style={{position:"absolute",left:0,right:0,bottom:0,background:"#fff",borderRadius:"16px 16px 0 0",padding:"10px 20px 36px",zIndex:6}}>
+            <div style={{display:"flex",justifyContent:"center",paddingBottom:14}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div>
+            <div style={{fontSize:18,fontWeight:700,color:C.text,marginBottom:6}}>Finish with {name}?</div>
+            <div style={{fontSize:13,color:C.muted,lineHeight:1.5,marginBottom:18}}>Results are final. No more runs will count.</div>
+            <button className="tap" onClick={finish} disabled={busy} style={{...main,marginBottom:10}}>{busy?"Finishing…":"Finish challenge"}</button>
+            <button className="tap" onClick={()=>setConfirming(false)} style={soft}>Keep riding</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function H2hScreen({user,onBack,onActivity}){
+  const [list,setList]=useState(null);
+  const [view,setView]=useState({name:"home"});
+  const [meAvatar,setMeAvatar]=useState(null);
+  const [sums,setSums]=useState({});
+  const [mates,setMates]=useState(null);
+  const [picked,setPicked]=useState(null);
+  const [sending,setSending]=useState(false);
+
+  const reload=useCallback(()=>{
+    supabase.rpc("list_challenges").then(({data,error})=>{if(error){console.log(error);setList(l=>l||[]);return;}setList(Array.isArray(data)?data:[]);});
+    onActivity&&onActivity();
+  },[onActivity]);
+  useEffect(()=>{reload();supabase.from("profiles").select("avatar_url").eq("id",user.id).single().then(({data})=>{if(data)setMeAvatar(data.avatar_url||null);});},[user.id]);
+
+  // lead text for active + finished rows
+  useEffect(()=>{
+    if(!list)return;
+    list.filter(c=>c.status==="active"||c.status==="finished").slice(0,12).forEach(c=>{
+      supabase.rpc("get_challenge_runs",{p_id:c.id}).then(({data,error})=>{if(!error&&Array.isArray(data))setSums(s=>({...s,[c.id]:h2hSummarise(data,user.id)}));});
+    });
+  },[list,user.id]);
+
+  const respond=async(c,accept)=>{
+    const{error}=await supabase.rpc("respond_challenge",{p_id:c.id,p_accept:accept});
+    if(error){alert(error.message);return;}
+    reload();
+  };
+  const openPick=()=>{
+    setPicked(null);setMates(null);setView({name:"pick"});
+    supabase.rpc("list_group_mates").then(({data})=>setMates(Array.isArray(data)?data:[]));
+  };
+  const send=async()=>{
+    if(!picked)return;
+    setSending(true);
+    const{error}=await supabase.rpc("create_challenge",{p_opponent:picked});
+    setSending(false);
+    if(error){alert(error.message);return;}
+    reload();setView({name:"home"});
+  };
+
+  const header=(title,right,back)=>(
+    <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+      <button className="tap" onClick={back} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
+      <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>{title}</div>
+      {right}
+    </div>
+  );
+  const label=(t,mt=0)=><div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,margin:`${mt}px 0 8px`}}>{t}</div>;
+  const row=(c,sub,right,opts={})=>(
+    <button key={c.id} className="tap" disabled={opts.noPress} onClick={opts.noPress?undefined:()=>setView({name:"detail",id:c.id})} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:"#fff",border:`1px ${opts.dashed?"dashed":"solid"} ${C.border}`,borderRadius:12,marginBottom:8,textAlign:"left"}}>
+      <Avatar size={40} url={c.other_avatar}/>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:14,fontWeight:600,color:C.text}}>{c.other_name||"Rider"}</div>
+        <div style={{fontSize:12,color:C.muted,marginTop:2}}>{sub}</div>
+      </div>
+      {right}
+      {!opts.noPress&&<Icon.ChevronRight size={16} color={C.mutedL}/>}
+    </button>
+  );
+  const leadText=(c,s)=>{
+    if(!s)return <div style={{fontSize:12,color:C.mutedL}}>…</div>;
+    const sc=`${s.meWins}–${s.themWins}`;
+    if(c.status==="finished")return s.winner==="me"?<div style={{fontSize:13,fontWeight:700,color:C.green}}>Won {sc}</div>:s.winner==="them"?<div style={{fontSize:13,fontWeight:700,color:C.red}}>Lost {sc}</div>:<div style={{fontSize:13,fontWeight:700,color:C.muted}}>Draw</div>;
+    return s.winner==="me"&&s.both>0?<div style={{fontSize:13,fontWeight:700,color:C.green}}>You lead {sc}</div>:s.winner==="them"?<div style={{fontSize:13,fontWeight:700,color:C.red}}>{c.other_name} leads {sc}</div>:<div style={{fontSize:13,fontWeight:700,color:C.muted}}>All square</div>;
+  };
+
+  // ── detail
+  if(view.name==="detail"&&list){
+    const c=list.find(x=>x.id===view.id);
+    if(c)return <H2hDetail c={c} user={user} meAvatar={meAvatar} onBack={()=>setView({name:"home"})} onReload={reload} onActivity={onActivity}/>;
+  }
+
+  // ── pick a mate
+  if(view.name==="pick")return(
+    <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
+      {header("Challenge a mate",null,()=>setView({name:"home"}))}
+      <div style={{flex:1,overflowY:"auto",padding:"20px 16px"}}>
+        <div style={{fontSize:13,color:C.muted,marginBottom:18}}>Pick a rider. Once they accept, you have 24 hours.</div>
+        {label("People in your groups")}
+        {mates===null?<div style={{padding:30,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>:mates.length===0?(
+          <div style={{textAlign:"center",padding:"32px 20px",color:C.muted}}>
+            <Icon.Users size={34} color={C.mutedL}/>
+            <div style={{fontSize:15,fontWeight:500,marginTop:12,marginBottom:4,color:C.text}}>No one to challenge yet</div>
+            <div style={{fontSize:13,color:C.mutedL}}>Join a group with your mates first</div>
+          </div>
+        ):mates.map(m=>{
+          const sel=picked===m.user_id;
+          return(
+            <button key={m.user_id} className="tap" onClick={()=>setPicked(m.user_id)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:sel?"#EFF6FF":"#fff",border:`${sel?1.5:1}px solid ${sel?C.blue:C.border}`,borderRadius:12,marginBottom:8,textAlign:"left"}}>
+              <Avatar size={40} url={m.avatar_url}/>
+              <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:600,color:C.text}}>{m.display_name||"Rider"}</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>{m.group_name}</div></div>
+              <div style={{width:22,height:22,borderRadius:"50%",border:`2px solid ${sel?C.blue:C.mutedL}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{sel&&<div style={{width:10,height:10,borderRadius:"50%",background:C.blue}}/>}</div>
+            </button>
+          );
+        })}
+      </div>
+      <div style={{padding:"16px 20px 36px"}}>
+        <button className="tap" onClick={send} disabled={!picked||sending} style={{width:"100%",background:picked?"rgba(37,99,235,0.10)":C.surface,border:`1.5px solid ${picked?C.blue:C.border}`,borderRadius:12,padding:14,color:picked?C.text:C.muted,fontSize:14,fontWeight:700}}>{sending?"Sending…":"Send challenge"}</button>
+      </div>
+    </div>
+  );
+
+  // ── home
+  const reqs=(list||[]).filter(c=>c.status==="pending"&&c.opponent_id===user.id);
+  const sent=(list||[]).filter(c=>c.status==="pending"&&c.challenger_id===user.id);
+  const act=(list||[]).filter(c=>c.status==="active");
+  const fin=(list||[]).filter(c=>c.status==="finished");
+  return(
+    <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
+      {header("Head to head",<button className="tap" onClick={openPick} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"7px 12px",color:C.blue,fontSize:13,fontWeight:600}}><Icon.Plus size={14} color={C.blue}/>Challenge</button>,onBack)}
+      <div style={{flex:1,overflowY:"auto",padding:"18px 16px"}}>
+        {list===null?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>:list.length===0?(
+          <div style={{textAlign:"center",padding:"48px 20px",color:C.muted}}>
+            <Icon.Users size={36} color={C.mutedL}/>
+            <div style={{fontSize:15,fontWeight:500,marginBottom:4,marginTop:12,color:C.text}}>No head to heads yet</div>
+            <div style={{fontSize:13,color:C.mutedL}}>Challenge a mate and ride for 24 hours</div>
+          </div>
+        ):(
+          <>
+            {reqs.length>0&&<>{label("Requests")}{reqs.map(c=>(
+              <div key={c.id} style={{background:"#EFF6FF",border:"1px solid #BFD3F8",borderRadius:12,padding:"12px 14px",marginBottom:8}}>
+                <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+                  <Avatar size={40} url={c.other_avatar}/>
+                  <div style={{flex:1}}><div style={{fontSize:14,fontWeight:600,color:C.text}}>{c.other_name||"Rider"}</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>Wants a head to head</div></div>
+                </div>
+                <div style={{display:"flex",gap:8}}>
+                  <button className="tap" onClick={()=>respond(c,true)} style={{flex:1,background:"rgba(37,99,235,0.10)",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:10,fontSize:13,fontWeight:700,color:C.text}}>Accept</button>
+                  <button className="tap" onClick={()=>respond(c,false)} style={{flex:1,background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,padding:10,fontSize:13,fontWeight:600,color:C.text}}>Decline</button>
+                </div>
+              </div>
+            ))}</>}
+            {act.length>0&&<>{label("Active",reqs.length?14:0)}{act.map(c=>row(c,h2hLeft(c.ends_at),leadText(c,sums[c.id])))}</>}
+            {sent.length>0&&<>{label("Sent",14)}{sent.map(c=>row(c,"Waiting for them to accept",<div style={{fontSize:12,color:C.mutedL,fontWeight:600}}>Sent</div>,{dashed:true,noPress:true}))}</>}
+            {fin.length>0&&<>{label("Finished",14)}{fin.map(c=>row(c,timeAgo(c.finished_at||c.ends_at),leadText(c,sums[c.id])))}</>}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Strip for the Race complete screen
+function H2hSaveStrip({user}){
+  const [name,setName]=useState(null);
+  useEffect(()=>{
+    if(!user)return;
+    supabase.rpc("list_challenges").then(({data})=>{
+      const a=(Array.isArray(data)?data:[]).filter(c=>c.status==="active");
+      if(a.length)setName(a.length===1?(a[0].other_name||"your mate"):`${a.length} mates`);
+    });
+  },[user]);
+  if(!name)return null;
+  return(
+    <div style={{padding:"0 20px 4px"}}>
+      <div style={{background:"#EFF6FF",border:"1px solid #BFD3F8",borderRadius:12,padding:"12px 14px"}}>
+        <div style={{fontSize:10,fontWeight:800,color:C.blue,letterSpacing:0.8}}>HEAD TO HEAD</div>
+        <div style={{fontSize:14,fontWeight:600,color:C.text,marginTop:2}}>Saves to your head to head with {name}</div>
       </div>
     </div>
   );
@@ -3632,7 +4038,7 @@ function RaceStageComplete({base,splits,courseStages,stageIndex,totalStages,isLa
 }
 
 // Race complete (Race mode)
-function RaceComplete({base,course,splits,courseStages,totalStages,onSave}){
+function RaceComplete({base,course,splits,courseStages,totalStages,onSave,user}){
   const total=splits.reduce((a,s)=>a+s.time,0);
   const prevTotal=totalStages>1?(base.courseBest===undefined?null:base.courseBest):(base.stageBest[splits[0].stageId]??null);
   const delta=prevTotal===null?null:total-prevTotal;
@@ -3657,6 +4063,7 @@ function RaceComplete({base,course,splits,courseStages,totalStages,onSave}){
         <div style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:12}}>Stage Breakdown</div>
         {splits.map((s,i)=><RaceRow key={i} i={i} name={s.name} time={s.time} out={stageOutcome(base,s.stageId,s.time)}/>)}
       </div>
+      <H2hSaveStrip user={user}/>
       <RaceNextBtn onClick={onSave}>Save Results</RaceNextBtn>
     </div>
   );
@@ -4097,7 +4504,7 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
   if(phase==="done"){
     const finalTotal=isPractice?null:isMashup?mashupTotal:splits.reduce((a,s)=>a+s.time,0);
     const saveRaceResults=async()=>{if(totalStages>1){const{error}=await supabase.from('course_results').insert({course_id:course.id,user_id:user.id,total_time_ms:finalTotal,mode:course.mode});if(error){alert("Couldn't save course result: "+error.message);}else{logEvent(user.id,'course_finish',`finished ${course.name} · ${formatTime(finalTotal)}`,null,{course_id:course.id,total_time_ms:finalTotal,stage_count:totalStages}).then(()=>onActivity&&onActivity());}}try{localStorage.removeItem(progressKey);}catch(e){}onFinish();};
-    if(!isPractice&&!isMashup)return <RaceComplete base={raceBase.current} course={course} splits={splits} courseStages={courseStages} totalStages={totalStages} onSave={saveRaceResults}/>;
+    if(!isPractice&&!isMashup)return <RaceComplete base={raceBase.current} course={course} splits={splits} courseStages={courseStages} totalStages={totalStages} onSave={saveRaceResults} user={user}/>;
     const headerBg=isPractice?"#15803D":isMashup?C.blue:C.orange;
     return(
       <div style={{position:"fixed",inset:0,background:"#fff",zIndex:100,display:"flex",flexDirection:"column"}}>
@@ -4508,6 +4915,11 @@ export default function App(){
   const [showProgress,setShowProgress]=useState(false);
   const [showGroups,setShowGroups]=useState(false);
   const [activeGroup,setActiveGroup]=useState(null);
+  const [showH2h,setShowH2h]=useState(false);
+  const [h2hList,setH2hList]=useState([]);
+  useEffect(()=>{if(!user)return;supabase.rpc('list_challenges').then(({data,error})=>{if(!error&&Array.isArray(data))setH2hList(data);});},[user,refreshTick,showH2h]);
+  const h2hRequests=h2hList.filter(c=>c.status==='pending'&&c.opponent_id===user?.id).length;
+  const h2hActive=h2hList.filter(c=>c.status==='active').length;
   const [groupMapOpen,setGroupMapOpen]=useState(false);
   const [pickingGroup,setPickingGroup]=useState(null);
   const [pickingExistingIds,setPickingExistingIds]=useState([]);
@@ -4609,7 +5021,7 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
 
     const [recentStageTimes,setRecentStageTimes]=useState([]);
 const [feed,setFeed]=useState([]);
-useEffect(()=>{if(!user)return;const loadFeed=cols=>supabase.from('app_events').select(cols).in('event_type',['stage_record','personal_best','course_finish','stage_created','course_created','day_recap']).order('created_at',{ascending:false}).limit(50);loadFeed('id,event_type,message,created_at,stage_id,context,profiles(display_name,avatar_url)').then(async({data,error})=>{if(error){console.log('feed query failed, retrying without context',error);({data}=await loadFeed('id,event_type,message,created_at,stage_id,profiles(display_name,avatar_url)'));}if(data)setFeed(data.map(e=>({id:e.id,event_type:e.event_type,message:e.message,stage_id:e.stage_id,userName:e.profiles?.display_name||'Rider',avatarUrl:e.profiles?.avatar_url||null,context:e.context,ago:timeAgo(e.created_at)})));});},[user,refreshTick]);
+useEffect(()=>{if(!user)return;const loadFeed=cols=>supabase.from('app_events').select(cols).in('event_type',['stage_record','personal_best','course_finish','stage_created','course_created','day_recap','h2h_result']).order('created_at',{ascending:false}).limit(50);loadFeed('id,event_type,message,created_at,stage_id,context,profiles(display_name,avatar_url)').then(async({data,error})=>{if(error){console.log('feed query failed, retrying without context',error);({data}=await loadFeed('id,event_type,message,created_at,stage_id,profiles(display_name,avatar_url)'));}if(data)setFeed(data.map(e=>({id:e.id,event_type:e.event_type,message:e.message,stage_id:e.stage_id,userName:e.profiles?.display_name||'Rider',avatarUrl:e.profiles?.avatar_url||null,context:e.context,ago:timeAgo(e.created_at)})));});},[user,refreshTick]);
   const [pushState,setPushState]=useState('hidden');
 useEffect(()=>{
   if(!user)return;
@@ -4853,6 +5265,12 @@ if(showBikeSetup)return(
   );
 
     // Groups screen overlay
+  if(showH2h)return(
+    <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
+      <style>{STYLES}</style>
+      <H2hScreen user={user} onBack={()=>{setShowH2h(false);setShowGroups(true);}} onActivity={()=>setRefreshTick(t=>t+1)}/>
+    </div>
+  );
   if(showGroups)return(
     <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
       <style>{STYLES}</style>
@@ -4867,7 +5285,7 @@ if(showBikeSetup)return(
                 setTab('map');
               }}/>
             :<GroupDetailScreen group={activeGroup} user={user} onBack={()=>setActiveGroup(null)} onOpenMap={()=>setGroupMapOpen(true)}/>)
-        :<GroupsScreen user={user} onBack={()=>setShowGroups(false)} onOpenGroup={g=>setActiveGroup(g)}/>}
+        :<GroupsScreen user={user} onBack={()=>setShowGroups(false)} onOpenGroup={g=>setActiveGroup(g)} h2h={{requests:h2hRequests,active:h2hActive}} onOpenH2h={()=>{setShowGroups(false);setShowH2h(true);}}/>}
     </div>
   );
 
@@ -4898,7 +5316,7 @@ if(showBikeSetup)return(
           <div style={{padding:"12px 16px 14px",borderBottom:`1px solid ${C.border}`,position:"sticky",top:0,background:"#fff",zIndex:5}}>
             <div style={{fontSize:22,fontWeight:800,color:C.text,marginBottom:12}}>Feed</div>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <button className="tap" onClick={()=>setShowGroups(true)} style={{width:38,height:38,borderRadius:11,background:"#fff",border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}><Icon.Users size={17} color={C.text}/></button>
+              <button className="tap" onClick={()=>setShowGroups(true)} style={{position:"relative",width:38,height:38,borderRadius:11,background:"#fff",border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}><Icon.Users size={17} color={C.text}/>{h2hRequests>0&&<div style={{position:"absolute",top:-5,right:-5,minWidth:17,height:17,padding:"0 4px",borderRadius:9,background:C.blue,color:"#fff",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid #fff",boxSizing:"content-box"}}>{h2hRequests>9?"9+":h2hRequests}</div>}</button>
               <button className="tap" onClick={()=>setShowNewPost(true)} style={{width:38,height:38,borderRadius:11,background:"#fff",border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}><Icon.Plus size={19} color={C.text}/></button>
               <button className="tap" style={{flex:1,height:38,display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:"#fff",border:`1px solid ${C.border}`,borderRadius:11,padding:"0 12px",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}><svg width="13" height="13" viewBox="0 0 24 24"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10" fill={C.blue}/></svg><span style={{color:C.text,fontSize:14,fontWeight:700}}>Upgrade</span></button>
                <button className="tap" onClick={()=>setShowNotifications(true)} style={{position:"relative",width:38,height:38,borderRadius:11,background:"#fff",border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}><Icon.Bell size={17} color={C.text}/>{unreadCount>0&&<div style={{position:"absolute",top:-5,right:-5,minWidth:17,height:17,padding:"0 4px",borderRadius:9,background:C.blue,color:"#fff",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid #fff",boxSizing:"content-box"}}>{unreadCount>9?"9+":unreadCount}</div>}</button>
