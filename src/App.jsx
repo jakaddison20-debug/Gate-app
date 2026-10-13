@@ -2605,7 +2605,7 @@ function H2hScreen({user,onBack,onActivity}){
   };
   const openPick=()=>{
     setPicked(null);setMates(null);setView({name:"pick"});
-    supabase.rpc("list_group_mates").then(({data})=>setMates(Array.isArray(data)?data:[]));
+    supabase.rpc("list_connections").then(({data})=>setMates(Array.isArray(data?.following)?data.following:[]));
   };
   const send=async()=>{
     if(!picked)return;
@@ -2654,19 +2654,19 @@ function H2hScreen({user,onBack,onActivity}){
       {header("Challenge a mate",null,()=>setView({name:"home"}))}
       <div style={{flex:1,overflowY:"auto",padding:"20px 16px"}}>
         <div style={{fontSize:13,color:C.muted,marginBottom:18}}>Pick a rider. Once they accept, you have 24 hours.</div>
-        {label("People in your groups")}
+        {label("People you follow")}
         {mates===null?<div style={{padding:30,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>:mates.length===0?(
           <div style={{textAlign:"center",padding:"32px 20px",color:C.muted}}>
             <Icon.Users size={34} color={C.mutedL}/>
             <div style={{fontSize:15,fontWeight:500,marginTop:12,marginBottom:4,color:C.text}}>No one to challenge yet</div>
-            <div style={{fontSize:13,color:C.mutedL}}>Join a group with your mates first</div>
+            <div style={{fontSize:13,color:C.mutedL}}>Follow a rider first</div>
           </div>
         ):mates.map(m=>{
           const sel=picked===m.user_id;
           return(
             <button key={m.user_id} className="tap" onClick={()=>setPicked(m.user_id)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:sel?"#EFF6FF":"#fff",border:`${sel?1.5:1}px solid ${sel?C.blue:C.border}`,borderRadius:12,marginBottom:8,textAlign:"left"}}>
               <Avatar size={40} url={m.avatar_url}/>
-              <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:600,color:C.text}}>{m.display_name||"Rider"}</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>{m.group_name}</div></div>
+              <div style={{flex:1,minWidth:0,fontSize:14,fontWeight:600,color:C.text}}>{m.display_name||"Rider"}{m.follows_me&&<span style={{display:"inline-block",marginLeft:8,padding:"2px 7px",borderRadius:6,background:C.surface,border:`1px solid ${C.border}`,color:C.muted,fontSize:10,fontWeight:600,verticalAlign:1}}>Follows you</span>}</div>
               <div style={{width:22,height:22,borderRadius:"50%",border:`2px solid ${sel?C.blue:C.mutedL}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{sel&&<div style={{width:10,height:10,borderRadius:"50%",background:C.blue}}/>}</div>
             </button>
           );
@@ -2733,6 +2733,119 @@ function H2hSaveStrip({user}){
       <div style={{background:"#EFF6FF",border:"1px solid #BFD3F8",borderRadius:12,padding:"12px 14px"}}>
         <div style={{fontSize:10,fontWeight:800,color:C.blue,letterSpacing:0.8}}>HEAD TO HEAD</div>
         <div style={{fontSize:14,fontWeight:600,color:C.text,marginTop:2}}>Saves to your head to head with {name}</div>
+      </div>
+    </div>
+  );
+}
+
+function FollowBtn({following,label,busy,onClick}){
+  const base={borderRadius:10,fontSize:13,flexShrink:0,opacity:busy?0.6:1};
+  return following
+    ?<button className="tap" disabled={busy} onClick={onClick} style={{...base,background:C.surface,border:`1px solid ${C.border}`,padding:"8px 14px",fontWeight:600,color:C.text}}>{label||"Following"}</button>
+    :<button className="tap" disabled={busy} onClick={onClick} style={{...base,background:"rgba(37,99,235,0.10)",border:`1.5px solid ${C.blue}`,padding:"7px 14px",fontWeight:700,color:C.text}}>{label||"Follow"}</button>;
+}
+
+function FollowRow({p,chip,right}){
+  return(
+    <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:"#fff",border:`1px solid ${C.border}`,borderRadius:12,marginBottom:8}}>
+      <Avatar size={40} url={p.avatar_url}/>
+      <div style={{flex:1,minWidth:0,fontSize:14,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+        {p.display_name||"Rider"}
+        {chip&&<span style={{display:"inline-block",marginLeft:8,padding:"2px 7px",borderRadius:6,background:C.surface,border:`1px solid ${C.border}`,color:C.muted,fontSize:10,fontWeight:600,verticalAlign:1}}>Follows you</span>}
+      </div>
+      {right}
+    </div>
+  );
+}
+
+function FollowScreen({user,onBack,onChanged}){
+  const [view,setView]=useState("list");
+  const [tab,setTab]=useState("Followers");
+  const [data,setData]=useState(null);
+  const [q,setQ]=useState("");
+  const [results,setResults]=useState(null);
+  const [busyId,setBusyId]=useState(null);
+
+  const load=useCallback(()=>{
+    supabase.rpc("list_connections").then(({data:d,error})=>{
+      if(error){console.log(error);setData(x=>x||{followers:[],following:[]});return;}
+      setData({followers:d?.followers||[],following:d?.following||[]});
+    });
+  },[]);
+  useEffect(()=>{load();},[load]);
+
+  useEffect(()=>{
+    if(view!=="find")return;
+    const term=q.trim();
+    if(term.length<2){setResults(null);return;}
+    const t=setTimeout(()=>{
+      supabase.rpc("search_riders",{p_q:term}).then(({data:d,error})=>{if(!error&&Array.isArray(d))setResults(d);else setResults([]);});
+    },250);
+    return()=>clearTimeout(t);
+  },[q,view]);
+
+  const toggle=async(id,isFollowing)=>{
+    setBusyId(id);
+    const{error}=await supabase.rpc(isFollowing?"unfollow_user":"follow_user",{p_id:id});
+    setBusyId(null);
+    if(error){alert(error.message);return;}
+    setResults(r=>r?r.map(x=>x.user_id===id?{...x,i_follow:!isFollowing}:x):r);
+    load();onChanged&&onChanged();
+  };
+
+  const header=(title,right,back)=>(
+    <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+      <button className="tap" onClick={back} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
+      <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>{title}</div>
+      {right}
+    </div>
+  );
+
+  // ── find riders
+  if(view==="find")return(
+    <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
+      {header("Find riders",null,()=>{setView("list");setQ("");setResults(null);})}
+      <div style={{flex:1,overflowY:"auto",padding:"16px 16px 24px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"12px 14px",background:C.surface,marginBottom:16}}>
+          <Icon.Search size={18}/>
+          <input autoFocus value={q} onChange={e=>setQ(e.target.value)} style={{flex:1,minWidth:0,border:"none",outline:"none",background:"transparent",fontSize:15,color:C.text}}/>
+        </div>
+        {results===null?null:results.length===0?(
+          <div style={{textAlign:"center",padding:"32px 20px",fontSize:13,color:C.mutedL}}>No riders found</div>
+        ):results.map(p=>(
+          <FollowRow key={p.user_id} p={p} right={<FollowBtn following={p.i_follow} busy={busyId===p.user_id} onClick={()=>toggle(p.user_id,p.i_follow)}/>}/>
+        ))}
+      </div>
+    </div>
+  );
+
+  // ── followers / following
+  const list=data?(tab==="Followers"?data.followers:data.following):[];
+  const left=data?(tab==="Followers"?`${data.followers.length} follower${data.followers.length===1?"":"s"}`:`${data.following.length} following`):"";
+  const find=<button className="tap" onClick={()=>setView("find")} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"7px 12px",color:C.blue,fontSize:13,fontWeight:600}}><Icon.Plus size={14} color={C.blue}/>Find</button>;
+  return(
+    <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
+      {header("Followers",find,onBack)}
+      <div style={{flex:1,overflowY:"auto",padding:"16px 16px 24px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+          <div style={{fontSize:12,fontWeight:600,color:C.text}}>{left}</div>
+          <div style={{display:"flex",background:C.surface,borderRadius:8,padding:2,gap:2}}>
+            {["Followers","Following"].map(n=>{
+              const on=tab===n;
+              return <button key={n} className="tap" onClick={()=>setTab(n)} style={{padding:"5px 10px",borderRadius:6,background:on?"#fff":"transparent",border:"none",fontSize:12,fontWeight:on?600:400,color:on?C.text:C.muted,boxShadow:on?"0 1px 4px rgba(0,0,0,0.08)":"none"}}>{n}</button>;
+            })}
+          </div>
+        </div>
+        {data===null?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>:list.length===0?(
+          <div style={{textAlign:"center",padding:"48px 20px",color:C.muted}}>
+            <Icon.Users size={36} color={C.mutedL}/>
+            <div style={{fontSize:15,fontWeight:500,marginTop:12,marginBottom:4,color:C.text}}>{tab==="Followers"?"No followers yet":"Not following anyone yet"}</div>
+            <div style={{fontSize:13,color:C.mutedL}}>{tab==="Followers"?"Riders who follow you show up here":"Tap Find to follow a rider"}</div>
+          </div>
+        ):list.map(p=>tab==="Followers"
+          ?<FollowRow key={p.user_id} p={p} right={<FollowBtn following={p.i_follow} label={p.i_follow?"Following":"Follow back"} busy={busyId===p.user_id} onClick={()=>toggle(p.user_id,p.i_follow)}/>}/>
+          :<FollowRow key={p.user_id} p={p} chip={p.follows_me} right={<FollowBtn following={true} busy={busyId===p.user_id} onClick={()=>toggle(p.user_id,true)}/>}/>
+        )}
       </div>
     </div>
   );
@@ -3313,7 +3426,7 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
 }
 
 // ── Profile ───────────────────────────────────────────────────────────────────
-function ProfileScreen({stages,settings,courseResults,pastWeeks,onSettingsPress,onGoToStages,onGoToCourses,onOpenProgress,onOpenBikeSetup}){
+function ProfileScreen({stages,settings,courseResults,pastWeeks,onSettingsPress,onGoToStages,onGoToCourses,onOpenProgress,onOpenBikeSetup,followerCount,onOpenFollowers}){
   const [selectedWeek,setSelectedWeek]=useState(pastWeeks.length-1);
   const stagesRidden=stages.filter(s=>s.time).length;
   const coursesComplete=courseResults.length;
@@ -3332,12 +3445,12 @@ function ProfileScreen({stages,settings,courseResults,pastWeeks,onSettingsPress,
           <div style={{flex:1}}><div style={{fontSize:20,fontWeight:800,color:C.text}}>{settings.displayName}</div></div>
           <button className="tap" onClick={onSettingsPress} style={{width:36,height:36,borderRadius:9,background:C.surface,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon.Settings size={18} color={C.muted}/></button>
         </div>
-        <div style={{display:"flex",gap:28}}>
-          {[{label:"Followers",value:"—"},{label:"Stages Ridden",value:String(stagesRidden)},{label:"Courses Complete",value:String(coursesComplete)}].map(s=>(
-            <div key={s.label}>
-              <div style={{fontSize:11,color:C.muted,fontWeight:500}}>{s.label}</div>
+        <div style={{display:"flex",gap:8}}>
+          {[{label:"Followers",value:followerCount==null?"—":String(followerCount),onClick:onOpenFollowers},{label:"Stages Ridden",value:String(stagesRidden)},{label:"Courses Complete",value:String(coursesComplete)}].map(s=>(
+            <button key={s.label} className="tap" onClick={s.onClick||undefined} style={{flex:1,minWidth:0,background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 12px",textAlign:"left"}}>
+              <div style={{fontSize:11,color:C.muted,fontWeight:500,whiteSpace:"nowrap"}}>{s.label}</div>
               <div style={{fontSize:17,color:C.text,fontWeight:700,marginTop:3}}>{s.value}</div>
-            </div>
+            </button>
           ))}
         </div>
       </div>
@@ -4916,6 +5029,8 @@ export default function App(){
   const [showGroups,setShowGroups]=useState(false);
   const [activeGroup,setActiveGroup]=useState(null);
   const [showH2h,setShowH2h]=useState(false);
+  const [showFollow,setShowFollow]=useState(false);
+  const [followerCount,setFollowerCount]=useState(null);
   const [h2hList,setH2hList]=useState([]);
   const [groupMapOpen,setGroupMapOpen]=useState(false);
   const [pickingGroup,setPickingGroup]=useState(null);
@@ -4949,6 +5064,7 @@ export default function App(){
   useEffect(()=>{if(!user)return;supabase.rpc('list_challenges').then(({data,error})=>{if(!error&&Array.isArray(data))setH2hList(data);});},[user,refreshTick,showH2h]);
   const h2hRequests=h2hList.filter(c=>c.status==='pending'&&c.opponent_id===user?.id).length;
   const h2hActive=h2hList.filter(c=>c.status==='active').length;
+  useEffect(()=>{if(!user)return;supabase.rpc('follow_counts').then(({data,error})=>{if(!error&&data)setFollowerCount(data.followers);});},[user,refreshTick,showFollow]);
     useEffect(()=>{
   const onVisible=()=>{if(document.visibilityState==="visible"){syncOfflineTimes().then(()=>setRefreshTick(t=>t+1));}};
   document.addEventListener('visibilitychange',onVisible);
@@ -5234,6 +5350,16 @@ onBack={()=>setShowSettings(false)}/>
 );
 
 // Bike Setup screen overlay
+if(showFollow)return(
+<div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
+<style>{STYLES}</style>
+<div style={{height:44,background:"#fff"}}/>
+<div style={{height:"calc(100% - 44px)"}}>
+<FollowScreen user={user} onBack={()=>setShowFollow(false)} onChanged={()=>setRefreshTick(t=>t+1)}/>
+</div>
+</div>
+);
+
 if(showBikeSetup)return(
 <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
 <style>{STYLES}</style>
@@ -5488,7 +5614,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
       {/* PROFILE */}
       {tab==="profile"&&(
         <div style={{height:"calc(var(--app-h) - 44px - 83px)",overflowY:"auto"}}>
-            <ProfileScreen stages={stages} settings={settings} courseResults={courseResults} weeklyActivity={weeklyActivity} pastWeeks={weekStats} courseCRCount={courseCRCount} onSettingsPress={()=>setShowSettings(true)} onStatPress={key=>setSheet('stat-'+key)} onGoToStages={()=>{setCoursesFilter('stages');setTab('stages');}} onGoToCourses={()=>{setCoursesFilter('courses');setTab('stages');}}onOpenProgress={()=>setShowProgress(true)} onOpenBikeSetup={()=>setShowBikeSetup(true)}/>
+            <ProfileScreen stages={stages} settings={settings} courseResults={courseResults} weeklyActivity={weeklyActivity} pastWeeks={weekStats} courseCRCount={courseCRCount} onSettingsPress={()=>setShowSettings(true)} onStatPress={key=>setSheet('stat-'+key)} onGoToStages={()=>{setCoursesFilter('stages');setTab('stages');}} onGoToCourses={()=>{setCoursesFilter('courses');setTab('stages');}}onOpenProgress={()=>setShowProgress(true)} onOpenBikeSetup={()=>setShowBikeSetup(true)} followerCount={followerCount} onOpenFollowers={()=>setShowFollow(true)}/>
 
         </div>
       )}
