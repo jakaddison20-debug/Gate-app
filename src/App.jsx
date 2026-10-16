@@ -2438,7 +2438,7 @@ function H2hStageCard({s,otherName}){
   );
 }
 
-function H2hPodium({sum,otherName,meAvatar,otherAvatar}){
+function H2hPodium({sum,otherName,meAvatar,otherAvatar,bare}){
   const draw=sum.winner==="draw";
   const meFirst=sum.winner!=="them";
   const col=(name,pos,wins,me,av)=>{
@@ -2454,7 +2454,7 @@ function H2hPodium({sum,otherName,meAvatar,otherAvatar}){
   };
   const mePos=draw||meFirst?1:2,thPos=draw||!meFirst?1:2;
   const mine=col("You",mePos,sum.meWins,true,meAvatar),theirs=col(otherName,thPos,sum.themWins,false,otherAvatar);
-  return <div style={{display:"flex",justifyContent:"center",alignItems:"flex-end",gap:6,padding:"8px 16px 0",borderBottom:`1px solid ${C.border}`}}>{mePos<=thPos?<>{mine}{theirs}</>:<>{theirs}{mine}</>}</div>;
+  return <div style={{display:"flex",justifyContent:"center",alignItems:"flex-end",gap:6,padding:"8px 16px 0",borderBottom:bare?"none":`1px solid ${C.border}`}}>{mePos<=thPos?<>{mine}{theirs}</>:<>{theirs}{mine}</>}</div>;
 }
 
 function H2hDetail({c,user,meAvatar,onBack,onReload,onActivity}){
@@ -2846,6 +2846,92 @@ function FollowScreen({user,onBack,onChanged}){
           ?<FollowRow key={p.user_id} p={p} right={<FollowBtn following={p.i_follow} label={p.i_follow?"Following":"Follow back"} busy={busyId===p.user_id} onClick={()=>toggle(p.user_id,p.i_follow)}/>}/>
           :<FollowRow key={p.user_id} p={p} chip={p.follows_me} right={<FollowBtn following={true} busy={busyId===p.user_id} onClick={()=>toggle(p.user_id,true)}/>}/>
         )}
+      </div>
+    </div>
+  );
+}
+
+const TROPHY_MEDAL={
+  1:{name:"Gold",col:"#C9A227",bg:"#FFFBEB"},
+  2:{name:"Silver",col:"#9AA0A6",bg:"#F4F5F6"},
+  3:{name:"Bronze",col:"#AD8158",bg:"#FBF3EC"},
+};
+function TrophyCrown({size,color}){
+  return <svg width={size} height={size*20/24} viewBox="0 0 24 20"><path d="M3 19l-1.5-10L7 13l5-9 5 9 5.5-4L20 19H3z" fill={color} stroke={color} strokeLinejoin="round" strokeWidth="1"/><rect x="3" y="17" width="17" height="2.6" rx="1" fill={color}/></svg>;
+}
+function TrophyMedal({pos,count}){
+  const m=TROPHY_MEDAL[pos],has=count>0;
+  return(
+    <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center"}}>
+      <div style={{width:64,height:64,borderRadius:"50%",border:has?`3px solid ${m.col}`:`1.5px dashed ${C.mutedL}`,background:has?m.bg:"#fff",display:"flex",alignItems:"center",justifyContent:"center"}}><TrophyCrown size={30} color={has?m.col:C.mutedL}/></div>
+      <div style={{fontSize:26,fontWeight:800,color:has?C.text:C.mutedL,lineHeight:1,marginTop:10}}>{count}</div>
+      <div style={{fontSize:11,fontWeight:600,color:has?C.muted:C.mutedL,marginTop:3}}>{m.name}</div>
+    </div>
+  );
+}
+function TrophyDot({pos}){
+  const m=TROPHY_MEDAL[pos];
+  return <div style={{width:22,height:22,borderRadius:"50%",background:m.bg,border:`2px solid ${m.col}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><TrophyCrown size={11} color={m.col}/></div>;
+}
+
+function TrophyRow({r,meAvatar}){
+  const [open,setOpen]=useState(false);
+  const won=r.result==="won",lost=r.result==="lost";
+  const pos=lost?2:1;
+  const score=`${r.me_wins}–${r.them_wins}`;
+  const label=won?`Won ${score}`:lost?`Lost ${score}`:`Draw ${score}`;
+  const col=won?C.green:lost?C.red:C.muted;
+  const sum={meWins:r.me_wins,themWins:r.them_wins,winner:won?"me":lost?"them":"draw"};
+  return(
+    <div style={{border:`${open?1.5:1}px solid ${open?C.blue:C.border}`,borderRadius:12,marginBottom:8,overflow:"hidden"}}>
+      <button className="tap" onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:"none",border:"none",textAlign:"left"}}>
+        <Avatar size={40} url={r.other_avatar}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:14,fontWeight:600,color:C.text}}>You vs {r.other_name}</div>
+          <div style={{fontSize:12,color:C.muted,marginTop:2}}>{timeAgo(r.ended_at)}</div>
+        </div>
+        <div style={{fontSize:13,fontWeight:700,color:col}}>{label}</div>
+        <TrophyDot pos={pos}/>
+        {open?<Icon.ChevronUp size={16} color={C.muted}/>:<Icon.ChevronDown size={16} color={C.mutedL}/>}
+      </button>
+      {open&&(
+        <div style={{borderTop:`1px solid ${C.border}`,paddingTop:6}}>
+          <H2hPodium sum={sum} otherName={r.other_name} meAvatar={meAvatar} otherAvatar={r.other_avatar} bare/>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TrophyCabinetScreen({user,onBack}){
+  const [rows,setRows]=useState(null);
+  const [meAvatar,setMeAvatar]=useState(null);
+  useEffect(()=>{
+    supabase.rpc("list_trophy_h2h").then(({data,error})=>{if(error){console.log(error);setRows([]);return;}setRows(Array.isArray(data)?data:[]);});
+    supabase.from("profiles").select("avatar_url").eq("id",user.id).single().then(({data})=>{if(data)setMeAvatar(data.avatar_url||null);});
+  },[user.id]);
+  const list=rows||[];
+  const gold=list.filter(r=>r.result!=="lost").length;
+  const silver=list.filter(r=>r.result==="lost").length;
+  return(
+    <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
+      <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+        <button className="tap" onClick={onBack} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
+        <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>Trophy cabinet</div>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"16px 16px 24px"}}>
+        <div style={{border:`1px solid ${C.border}`,borderRadius:14,padding:"18px 10px 16px",display:"flex",marginBottom:18}}>
+          <TrophyMedal pos={2} count={silver}/>
+          <TrophyMedal pos={1} count={gold}/>
+          <TrophyMedal pos={3} count={0}/>
+        </div>
+        <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>Head to head</div>
+        {rows===null?<div style={{padding:30,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>:list.length===0?(
+          <div style={{textAlign:"center",padding:"32px 20px",color:C.muted}}>
+            <div style={{fontSize:15,fontWeight:500,marginBottom:4,color:C.text}}>No medals yet</div>
+            <div style={{fontSize:13,color:C.mutedL}}>Finish a head to head to earn one</div>
+          </div>
+        ):list.map(r=><TrophyRow key={r.id} r={r} meAvatar={meAvatar}/>)}
       </div>
     </div>
   );
@@ -3426,7 +3512,7 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
 }
 
 // ── Profile ───────────────────────────────────────────────────────────────────
-function ProfileScreen({stages,settings,courseResults,pastWeeks,onSettingsPress,onGoToStages,onGoToCourses,onOpenProgress,onOpenBikeSetup,followerCount,onOpenFollowers}){
+function ProfileScreen({stages,settings,courseResults,pastWeeks,onSettingsPress,onGoToStages,onGoToCourses,onOpenProgress,onOpenBikeSetup,followerCount,onOpenFollowers,onOpenTrophies}){
   const [selectedWeek,setSelectedWeek]=useState(pastWeeks.length-1);
   const stagesRidden=stages.filter(s=>s.time).length;
   const coursesComplete=courseResults.length;
@@ -3500,6 +3586,7 @@ function ProfileScreen({stages,settings,courseResults,pastWeeks,onSettingsPress,
       <div style={{padding:"10px 16px 24px"}}>
         {[
           {label:"Statistics",Ic:Icon.BarChart,onClick:onOpenProgress},
+          {label:"Trophies",Ic:Icon.Trophy,onClick:onOpenTrophies},
           {label:"Stages",Ic:Icon.Lightning,onClick:onGoToStages},
           {label:"Courses",Ic:Icon.Flag,onClick:onGoToCourses},
           {label:"Bike Setup",Ic:Icon.Bike,onClick:onOpenBikeSetup},
@@ -5030,6 +5117,7 @@ export default function App(){
   const [activeGroup,setActiveGroup]=useState(null);
   const [showH2h,setShowH2h]=useState(false);
   const [showFollow,setShowFollow]=useState(false);
+  const [showTrophies,setShowTrophies]=useState(false);
   const [followerCount,setFollowerCount]=useState(null);
   const [h2hList,setH2hList]=useState([]);
   const [groupMapOpen,setGroupMapOpen]=useState(false);
@@ -5360,6 +5448,16 @@ if(showFollow)return(
 </div>
 );
 
+if(showTrophies)return(
+<div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
+<style>{STYLES}</style>
+<div style={{height:44,background:"#fff"}}/>
+<div style={{height:"calc(100% - 44px)"}}>
+<TrophyCabinetScreen user={user} onBack={()=>setShowTrophies(false)}/>
+</div>
+</div>
+);
+
 if(showBikeSetup)return(
 <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
 <style>{STYLES}</style>
@@ -5614,7 +5712,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
       {/* PROFILE */}
       {tab==="profile"&&(
         <div style={{height:"calc(var(--app-h) - 44px - 83px)",overflowY:"auto"}}>
-            <ProfileScreen stages={stages} settings={settings} courseResults={courseResults} weeklyActivity={weeklyActivity} pastWeeks={weekStats} courseCRCount={courseCRCount} onSettingsPress={()=>setShowSettings(true)} onStatPress={key=>setSheet('stat-'+key)} onGoToStages={()=>{setCoursesFilter('stages');setTab('stages');}} onGoToCourses={()=>{setCoursesFilter('courses');setTab('stages');}}onOpenProgress={()=>setShowProgress(true)} onOpenBikeSetup={()=>setShowBikeSetup(true)} followerCount={followerCount} onOpenFollowers={()=>setShowFollow(true)}/>
+            <ProfileScreen stages={stages} settings={settings} courseResults={courseResults} weeklyActivity={weeklyActivity} pastWeeks={weekStats} courseCRCount={courseCRCount} onSettingsPress={()=>setShowSettings(true)} onStatPress={key=>setSheet('stat-'+key)} onGoToStages={()=>{setCoursesFilter('stages');setTab('stages');}} onGoToCourses={()=>{setCoursesFilter('courses');setTab('stages');}}onOpenProgress={()=>setShowProgress(true)} onOpenBikeSetup={()=>setShowBikeSetup(true)} followerCount={followerCount} onOpenFollowers={()=>setShowFollow(true)} onOpenTrophies={()=>setShowTrophies(true)}/>
 
         </div>
       )}
