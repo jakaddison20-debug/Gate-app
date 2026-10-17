@@ -5079,10 +5079,30 @@ function recapMapUrl(paths,w=480,h=270){
 
 // ── Build today's recap ──────────────────────────────────────────────────────
 const recapTotal=ms=>{const s=Math.round(ms/1000),h=Math.floor(s/3600),m=Math.floor((s%3600)/60),r=s%60;return h?`${h}:${String(m).padStart(2,'0')}:${String(r).padStart(2,'0')}`:`${m}:${String(r).padStart(2,'0')}`;};
+const recapWeekStart=()=>{const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-((d.getDay()+6)%7));return d;};
+const WEEK_DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const weekRange=(fromIso,toIso)=>{const a=new Date(fromIso),b=new Date(toIso);const f=d=>d.toLocaleDateString('en-GB',{day:'numeric',month:'short'});return a.getMonth()===b.getMonth()?`${a.getDate()} – ${f(b)}`:`${f(a)} – ${f(b)}`;};
+async function weekRecapInfo(user){
+  const {data}=await supabase.from('stage_times').select('stage_id').eq('user_id',user.id).gte('created_at',recapWeekStart().toISOString());
+  const rows=data||[];
+  return rows.length?{stages:new Set(rows.map(t=>String(t.stage_id))).size,runs:rows.length}:null;
+}
+function WeekStrip({days}){
+  return(
+    <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6,padding:"12px 12px 0"}}>
+      {days.map((n,i)=>(
+        <div key={i} style={{textAlign:"center"}}>
+          <div style={{height:34,borderRadius:8,background:n?C.blue:"#fff",border:`1px solid ${n?C.blue:C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#fff"}}>{n||""}</div>
+          <div style={{fontSize:10,color:C.muted,marginTop:4}}>{WEEK_DAYS[i]}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // Reads today's runs for this rider, finds each stage's best today and whether it beat their earlier best.
-async function computeDayRecap(user,stages){
-  const start=new Date();start.setHours(0,0,0,0);
+async function computeDayRecap(user,stages,from){
+  const start=from?new Date(from):new Date();if(!from)start.setHours(0,0,0,0);
   const {data:todays}=await supabase.from('stage_times').select('stage_id,time_ms,created_at').eq('user_id',user.id).gte('created_at',start.toISOString());
   if(!todays||!todays.length)return null;
   const ids=[...new Set(todays.map(t=>String(t.stage_id)))];
@@ -5107,9 +5127,12 @@ async function computeDayRecap(user,stages){
     const {data:trs}=await supabase.from('run_traces').select('stage_id,time_ms,points').eq('user_id',user.id).in('stage_id',ids);
     (trs||[]).forEach(tr=>{if(!todays.some(t=>String(t.stage_id)===String(tr.stage_id)&&t.time_ms===tr.time_ms))return;const v=topMphFromTrace(tr.points);if(v&&v>spdTop)spdTop=v;});
   }catch(e){}
+  let dayCounts=null;
+  if(from){dayCounts=[0,0,0,0,0,0,0];todays.forEach(t=>{dayCounts[(new Date(t.created_at).getDay()+6)%7]++;});}
   const list=rows.map((r,i)=>({n:i+1,line:r.st.line_coords&&r.st.line_coords.length>1?r.st.line_coords:[r.st.start,r.st.finish]}));
   return{
     date:new Date().toISOString(),
+    ...(from?{kind:'week',from:start.toISOString(),days:dayCounts,days_ridden:dayCounts.filter(Boolean).length}:{}),
     run_count:todays.length,
     total_time_ms:todays.reduce((a,t)=>a+t.time_ms,0),
     descent_ft:haveDescent?Math.round(descent/10)*10:null,
@@ -5125,6 +5148,7 @@ async function computeDayRecap(user,stages){
 function DayRecapCard({recap,head}){
   const [open,setOpen]=useState(false);
   const url=recapMapUrl(recap.map);
+  const isWeek=!!recap.days;
   const n=recap.stages.length,names=recap.stages.slice(0,2).map(s=>s.name).join(", ")+(n>2?` +${n-2}`:"");
   const box=(v,l)=><div style={{background:"#fff",borderRadius:10,padding:"10px 8px",textAlign:"center",border:`1px solid ${C.border}`}}><div style={{fontSize:14,fontWeight:700,color:C.text}}>{v}</div><div style={{fontSize:10,color:C.muted,marginTop:2}}>{l}</div></div>;
   return(
@@ -5138,9 +5162,10 @@ function DayRecapCard({recap,head}){
         {url&&<img src={url} alt="" style={{width:"100%",height:"100%",display:"block",objectFit:"cover"}} onError={e=>{e.currentTarget.style.display="none";}}/>}
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,padding:"12px 12px 0"}}>
-        {box(recap.run_count,"Runs")}{box(recapTotal(recap.total_time_ms),"Total time")}{box(recap.descent_ft?`${fatCommas(recap.descent_ft)} ft`:"–","Descent")}
+        {isWeek?<>{box(recap.days_ridden,"Days ridden")}{box(recap.run_count,"Runs")}{box(recapTotal(recap.total_time_ms),"Total time")}</>:<>{box(recap.run_count,"Runs")}{box(recapTotal(recap.total_time_ms),"Total time")}{box(recap.descent_ft?`${fatCommas(recap.descent_ft)} ft`:"–","Descent")}</>}
       </div>
-      {(recap.avg_mph||recap.top_mph)&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,padding:"8px 12px 0"}}>{box(recap.avg_mph?`${recap.avg_mph.toFixed(1)} mph`:"–","Average speed")}{box(recap.top_mph?`${recap.top_mph.toFixed(1)} mph`:"–","Top speed")}</div>}
+      {isWeek?<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,padding:"8px 12px 0"}}>{box(recap.descent_ft?`${fatCommas(recap.descent_ft)} ft`:"–","Descent")}{box(recap.top_mph?`${recap.top_mph.toFixed(1)} mph`:"–","Top speed")}</div>:(recap.avg_mph||recap.top_mph)&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,padding:"8px 12px 0"}}>{box(recap.avg_mph?`${recap.avg_mph.toFixed(1)} mph`:"–","Average speed")}{box(recap.top_mph?`${recap.top_mph.toFixed(1)} mph`:"–","Top speed")}</div>}
+      {isWeek&&<WeekStrip days={recap.days}/>}
       <div style={{margin:12,background:"#fff",border:`1px solid ${C.border}`,borderRadius:12,overflow:"hidden"}}>
         <button className="tap" onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"13px 14px",background:"#fff",border:"none",textAlign:"left"}}>
           <div style={{width:40,height:40,borderRadius:"50%",border:`5px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,color:C.text,flexShrink:0,boxSizing:"border-box"}}>{n}</div>
@@ -5168,8 +5193,8 @@ async function drawRecapImage(recap,name){
   let mapImg=null;
   if(url){try{mapImg=await new Promise((res,rej)=>{const i=new Image();i.crossOrigin='anonymous';i.onload=()=>res(i);i.onerror=rej;i.src=url;});}catch(e){}}
   const rows=recap.stages.slice(0,6),more=recap.stages.length-rows.length,rowH=118,mapW=W-P*2,mapH=Math.round(mapW*9/16);
-  const hasSpd=!!(recap.avg_mph||recap.top_mph);
-  const H=P+70+40+80+30+mapH+30+170+30+(hasSpd?170+24:0)+rows.length*rowH+(more>0?86:0)+30+60+P/2;
+  const hasSpd=!!recap.days||!!(recap.avg_mph||recap.top_mph);
+  const H=P+70+40+80+30+mapH+30+170+30+(recap.days?140:0)+(hasSpd?170+24:0)+rows.length*rowH+(more>0?86:0)+30+60+P/2;
   const cv=document.createElement('canvas');cv.width=W;cv.height=H;
   const ctx=cv.getContext('2d');
   ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
@@ -5177,23 +5202,34 @@ async function drawRecapImage(recap,name){
   // header: bolt + GATE, date
   ctx.save();ctx.translate(P,y);ctx.scale(2.4,2.4);ctx.beginPath();[[13,2],[3,14],[12,14],[11,22],[21,10],[12,10]].forEach(([a,b],i)=>i?ctx.lineTo(a,b):ctx.moveTo(a,b));ctx.closePath();ctx.fillStyle=C.blue;ctx.fill();ctx.restore();
   ctx.textBaseline='alphabetic';ctx.fillStyle=C.text;ctx.font=`800 46px ${F}`;if('letterSpacing' in ctx)ctx.letterSpacing='4px';ctx.fillText('GATE',P+72,y+46);if('letterSpacing' in ctx)ctx.letterSpacing='0px';
-  ctx.textAlign='right';ctx.fillStyle=C.muted;ctx.font=`600 32px ${F}`;ctx.fillText(new Date(recap.date).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}),W-P,y+44);ctx.textAlign='left';
+  ctx.textAlign='right';ctx.fillStyle=C.muted;ctx.font=`600 32px ${F}`;ctx.fillText(recap.days?weekRange(recap.from,recap.date):new Date(recap.date).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}),W-P,y+44);ctx.textAlign='left';
   y+=70+40;
-  ctx.fillStyle=C.text;ctx.font=`800 68px ${F}`;ctx.fillText(`${name}'s ride`,P,y+54);y+=80+30;
+  ctx.fillStyle=C.text;ctx.font=`800 68px ${F}`;ctx.fillText(recap.days?`${name}'s week`:`${name}'s ride`,P,y+54);y+=80+30;
   // map
   ctx.save();rrect(ctx,P,y,mapW,mapH,28);ctx.clip();ctx.fillStyle=C.mapPark;ctx.fillRect(P,y,mapW,mapH);if(mapImg)ctx.drawImage(mapImg,P,y,mapW,mapH);ctx.restore();
   rrect(ctx,P,y,mapW,mapH,28);ctx.strokeStyle=C.border;ctx.lineWidth=2;ctx.stroke();y+=mapH+30;
   // stats
-  const bw=(mapW-48)/3,vals=[[String(recap.run_count),'Runs'],[recapTotal(recap.total_time_ms),'Total time'],[recap.descent_ft?`${fatCommas(recap.descent_ft)} ft`:'–','Descent']];
+  const bw=(mapW-48)/3,vals=recap.days?[[String(recap.days_ridden),'Days ridden'],[String(recap.run_count),'Runs'],[recapTotal(recap.total_time_ms),'Total time']]:[[String(recap.run_count),'Runs'],[recapTotal(recap.total_time_ms),'Total time'],[recap.descent_ft?`${fatCommas(recap.descent_ft)} ft`:'–','Descent']];
   vals.forEach(([v,l],i)=>{const x=P+i*(bw+24);rrect(ctx,x,y,bw,170,24);ctx.fillStyle=C.surface;ctx.fill();ctx.strokeStyle=C.border;ctx.stroke();ctx.textAlign='center';ctx.fillStyle=C.text;ctx.font=`700 52px ${F}`;ctx.fillText(v,x+bw/2,y+84);ctx.fillStyle=C.muted;ctx.font=`400 30px ${F}`;ctx.fillText(l,x+bw/2,y+130);});
   ctx.textAlign='left';
   if(hasSpd){
     y+=170+24;
-    const sw=(mapW-24)/2,sv=[[recap.avg_mph?`${recap.avg_mph.toFixed(1)} mph`:'–','Average speed'],[recap.top_mph?`${recap.top_mph.toFixed(1)} mph`:'–','Top speed']];
+    const sw=(mapW-24)/2,sv=recap.days?[[recap.descent_ft?`${fatCommas(recap.descent_ft)} ft`:'–','Descent'],[recap.top_mph?`${recap.top_mph.toFixed(1)} mph`:'–','Top speed']]:[[recap.avg_mph?`${recap.avg_mph.toFixed(1)} mph`:'–','Average speed'],[recap.top_mph?`${recap.top_mph.toFixed(1)} mph`:'–','Top speed']];
     sv.forEach(([v,l],i)=>{const x=P+i*(sw+24);rrect(ctx,x,y,sw,170,24);ctx.fillStyle=C.surface;ctx.fill();ctx.strokeStyle=C.border;ctx.stroke();ctx.textAlign='center';ctx.fillStyle=C.text;ctx.font=`700 52px ${F}`;ctx.fillText(v,x+sw/2,y+84);ctx.fillStyle=C.muted;ctx.font=`400 30px ${F}`;ctx.fillText(l,x+sw/2,y+130);});
     ctx.textAlign='left';
   }
   y+=170+30;
+  if(recap.days){
+    const cw=(mapW-6*14)/7;
+    recap.days.forEach((n,i)=>{
+      const x=P+i*(cw+14);
+      rrect(ctx,x,y,cw,76,16);ctx.fillStyle=n?C.blue:C.surface;ctx.fill();ctx.strokeStyle=n?C.blue:C.border;ctx.lineWidth=2;ctx.stroke();
+      ctx.textAlign='center';
+      if(n){ctx.fillStyle='#fff';ctx.font=`700 32px ${F}`;ctx.fillText(String(n),x+cw/2,y+49);}
+      ctx.fillStyle=C.muted;ctx.font=`400 24px ${F}`;ctx.fillText(WEEK_DAYS[i],x+cw/2,y+110);
+    });
+    ctx.textAlign='left';y+=140;
+  }
   // stage rows
   const listH=rows.length*rowH+(more>0?86:0);
   rrect(ctx,P,y,mapW,listH,28);ctx.fillStyle='#fff';ctx.fill();ctx.strokeStyle=C.border;ctx.stroke();
@@ -5217,27 +5253,32 @@ async function shareRecapImage(recap,name){
   const cv=await drawRecapImage(recap,name);
   const blob=await new Promise(r=>cv.toBlob(r,'image/png'));
   if(!blob)return;
-  const file=new File([blob],'gate-ride.png',{type:'image/png'});
+  const file=new File([blob],recap.days?'gate-week.png':'gate-ride.png',{type:'image/png'});
   if(navigator.canShare&&navigator.canShare({files:[file]})){
     try{await navigator.share({files:[file],title:'My GATE ride'});return;}catch(e){if(e&&e.name==='AbortError')return;}
   }
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='gate-ride.png';a.click();
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=recap.days?'gate-week.png':'gate-ride.png';a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),4000);
 }
 
 // ── Sheets ───────────────────────────────────────────────────────────────────
-// The "+" sheet. For now it has one choice. todayInfo = {stages,runs} or null when there are no rides today.
-function NewPostSheet({todayInfo,alreadyShared,busy,onDayRecap}){
-  const ready=!!todayInfo&&!alreadyShared&&!busy;
-  const sub=busy?"Building your recap…":alreadyShared?"Already shared today":todayInfo?`Today · ${todayInfo.stages} stage${todayInfo.stages===1?"":"s"} · ${todayInfo.runs} run${todayInfo.runs===1?"":"s"}`:"No rides today yet";
+// The "+" sheet. todayInfo / weekInfo = {stages,runs} or null when there are no rides.
+function NewPostSheet({todayInfo,weekInfo,alreadyShared,busy,onDayRecap,onWeekRecap}){
+  const dayReady=!!todayInfo&&!alreadyShared&&!busy,weekReady=!!weekInfo&&!busy;
+  const daySub=busy?"Building your recap…":alreadyShared?"Already shared today":todayInfo?`Today · ${todayInfo.stages} stage${todayInfo.stages===1?"":"s"} · ${todayInfo.runs} run${todayInfo.runs===1?"":"s"}`:"No rides today yet";
+  const weekSub=busy?"Building your recap…":weekInfo?`This week · ${weekInfo.stages} stage${weekInfo.stages===1?"":"s"} · ${weekInfo.runs} run${weekInfo.runs===1?"":"s"}`:"No rides this week yet";
+  const row=(title,sub,ready,onClick)=>(
+    <button className="tap" disabled={!ready} onClick={onClick} style={{width:"100%",display:"flex",alignItems:"center",gap:14,padding:14,background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,textAlign:"left",opacity:ready?1:0.55,marginBottom:10}}>
+      <div style={{width:44,height:44,borderRadius:12,background:`${C.green}15`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.BarChart size={20} color={C.green}/></div>
+      <div style={{flex:1}}><div style={{fontSize:15,fontWeight:700,color:C.text}}>{title}</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>{sub}</div></div>
+      <Icon.ChevronRight size={16} color={C.mutedL}/>
+    </button>
+  );
   return(
     <div style={{padding:"0 20px 28px"}}>
       <div style={{fontSize:17,fontWeight:700,color:C.text,marginBottom:14}}>New post</div>
-      <button className="tap" disabled={!ready} onClick={onDayRecap} style={{width:"100%",display:"flex",alignItems:"center",gap:14,padding:14,background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,textAlign:"left",opacity:ready?1:0.55}}>
-        <div style={{width:44,height:44,borderRadius:12,background:`${C.green}15`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.BarChart size={20} color={C.green}/></div>
-        <div style={{flex:1}}><div style={{fontSize:15,fontWeight:700,color:C.text}}>Day recap</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>{sub}</div></div>
-        <Icon.ChevronRight size={16} color={C.mutedL}/>
-      </button>
+      {row("Day recap",daySub,dayReady,onDayRecap)}
+      {row("Week recap",weekSub,weekReady,onWeekRecap)}
     </div>
   );
 }
@@ -5246,7 +5287,7 @@ function DayRecapPreviewSheet({recap,name,posting,onPost,onDismiss}){
   const [sharing,setSharing]=useState(false);
   return(
     <div style={{padding:"0 16px 22px"}}>
-      <div style={{fontSize:17,fontWeight:700,color:C.text,marginBottom:4,padding:"0 4px"}}>Share today's ride?</div>
+      <div style={{fontSize:17,fontWeight:700,color:C.text,marginBottom:4,padding:"0 4px"}}>{recap.days?"Share this week's ride?":"Share today's ride?"}</div>
       <div style={{fontSize:13,color:C.muted,marginBottom:12,padding:"0 4px"}}>Other riders on GATE will see this in their feed.</div>
       <div style={{marginBottom:14}}><DayRecapCard recap={recap}/></div>
       <div style={{display:"flex",gap:10}}>
@@ -5487,7 +5528,9 @@ const openNotification=(n)=>{
 }; 
 const [todayStageTimes,setTodayStageTimes]=useState([]);
 const [daySharedToday,setDaySharedToday]=useState(false);
-useEffect(()=>{if(!user)return;const startOfDay=new Date();startOfDay.setHours(0,0,0,0);supabase.from('stage_times').select('time_ms,stage_id').eq('user_id',user.id).gte('created_at',startOfDay.toISOString()).then(({data})=>{if(data)setTodayStageTimes(data);});supabase.from('app_events').select('id').eq('user_id',user.id).eq('event_type','day_recap').gte('created_at',startOfDay.toISOString()).then(({data})=>{setDaySharedToday(!!(data&&data.length));});},[user,refreshTick]);
+const [weekInfo,setWeekInfo]=useState(null);
+useEffect(()=>{if(!user)return;weekRecapInfo(user).then(setWeekInfo).catch(()=>{});},[user,refreshTick]);
+useEffect(()=>{if(!user)return;const startOfDay=new Date();startOfDay.setHours(0,0,0,0);supabase.from('stage_times').select('time_ms,stage_id').eq('user_id',user.id).gte('created_at',startOfDay.toISOString()).then(({data})=>{if(data)setTodayStageTimes(data);});supabase.from('app_events').select('id,context').eq('user_id',user.id).eq('event_type','day_recap').gte('created_at',startOfDay.toISOString()).then(({data})=>{setDaySharedToday(!!(data&&data.some(r=>!(r.context&&r.context.days))));});},[user,refreshTick]);
 const openDayRecap=async()=>{
   if(recapBusy)return;setRecapBusy(true);
   const r=await computeDayRecap(user,stages).catch(()=>null);
@@ -5495,13 +5538,20 @@ const openDayRecap=async()=>{
   if(!r){alert("No rides found for today yet.");return;}
   setShowNewPost(false);setRecapDraft(r);
 };
+const openWeekRecap=async()=>{
+  if(recapBusy)return;setRecapBusy(true);
+  const r=await computeDayRecap(user,stages,recapWeekStart()).catch(()=>null);
+  setRecapBusy(false);
+  if(!r){alert("No rides found this week yet.");return;}
+  setShowNewPost(false);setRecapDraft(r);
+};
 const postDayRecap=async()=>{
   if(!recapDraft||recapPosting)return;setRecapPosting(true);
   const n=recapDraft.stages.length;
-  const{error}=await supabase.from('app_events').insert({user_id:user.id,event_type:'day_recap',message:`rode ${n} stage${n===1?'':'s'} today · ${formatTime(recapDraft.total_time_ms)}`,stage_id:null,context:recapDraft});
+  const{error}=await supabase.from('app_events').insert({user_id:user.id,event_type:'day_recap',message:recapDraft.days?`rode ${n} stage${n===1?'':'s'} this week · ${recapTotal(recapDraft.total_time_ms)}`:`rode ${n} stage${n===1?'':'s'} today · ${formatTime(recapDraft.total_time_ms)}`,stage_id:null,context:recapDraft});
   setRecapPosting(false);
   if(error){console.log('day recap post failed',error);alert("Couldn't post your recap: "+error.message);return;}
-  setRecapDraft(null);setDaySharedToday(true);setRefreshTick(t=>t+1);
+  setRecapDraft(null);if(!recapDraft.days)setDaySharedToday(true);setRefreshTick(t=>t+1);
 };
   const [todayKey,setTodayKey]=useState(new Date().toDateString());
   useEffect(()=>{
@@ -5911,7 +5961,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
         <><div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:45}} onClick={()=>setSheet(null)}/><div className="slide-up" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:46,maxHeight:"82vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><LobbySheet onClose={()=>setSheet(null)}/></div></>
       )}
 
-          {showNewPost&&(<><div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:59}} onClick={()=>setShowNewPost(false)}/><div className="slide-up" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:60,maxHeight:"88vh",overflowY:"auto",paddingBottom:"env(safe-area-inset-bottom)"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 14px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><NewPostSheet todayInfo={todayStageTimes.length?{stages:new Set(todayStageTimes.map(t=>t.stage_id)).size,runs:todayStageTimes.length}:null} alreadyShared={daySharedToday} busy={recapBusy} onDayRecap={openDayRecap}/></div></>)}
+          {showNewPost&&(<><div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:59}} onClick={()=>setShowNewPost(false)}/><div className="slide-up" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:60,maxHeight:"88vh",overflowY:"auto",paddingBottom:"env(safe-area-inset-bottom)"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 14px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><NewPostSheet todayInfo={todayStageTimes.length?{stages:new Set(todayStageTimes.map(t=>t.stage_id)).size,runs:todayStageTimes.length}:null} weekInfo={weekInfo} alreadyShared={daySharedToday} busy={recapBusy} onDayRecap={openDayRecap} onWeekRecap={openWeekRecap}/></div></>)}
 
           {recapDraft&&(<><div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:59}} onClick={()=>setRecapDraft(null)}/><div className="slide-up" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:60,maxHeight:"88vh",overflowY:"auto",paddingBottom:"env(safe-area-inset-bottom)"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 12px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><DayRecapPreviewSheet recap={recapDraft} name={settings.displayName||"My"} posting={recapPosting} onPost={postDayRecap} onDismiss={()=>setRecapDraft(null)}/></div></>)}
 
