@@ -7,6 +7,7 @@ const DEFAULT_CENTER={lat:53.4919264,lng:-0.3294266};
 
 const FAT_GATE_RADIUS=10;
 const FINISH_GATE_RADIUS=20;
+const START_NEAR_M=40;
 
 function haversine(a,b){const R=6371000,dLat=((b.lat-a.lat)*Math.PI)/180,dLng=((b.lng-a.lng)*Math.PI)/180,s=Math.sin(dLat/2)**2+Math.cos((a.lat*Math.PI)/180)*Math.cos((b.lat*Math.PI)/180)*Math.sin(dLng/2)**2;return R*2*Math.atan2(Math.sqrt(s),Math.sqrt(1-s));}
 function metersOffset(from,to){const latRad=from.lat*Math.PI/180;return{x:(to.lng-from.lng)*111320*Math.cos(latRad),y:(to.lat-from.lat)*110540};}
@@ -4663,11 +4664,11 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
               <div style={{fontSize:11,color:C.muted,marginTop:4}}>Tap "Another Run" after each completion to keep improving</div>
             </div>
           )}
-                        <div style={{textAlign:"center",padding:"10px 14px",background:introDist===null?C.surface:introDist<=20?`${C.green}15`:`${C.blue}15`,borderRadius:10,border:`1px solid ${introDist===null?C.border:introDist<=20?C.green:C.blue}`}}>
-            <div style={{fontSize:13,fontWeight:600,color:introDist===null?C.muted:introDist<=20?C.green:C.blue}}>{introDist===null?"📍 Finding your location…":introDist<=20?"✓ You're at the start":`📍 ${introDist}m from the start`}</div>
-            {introDist!==null&&introDist>20&&<div style={{fontSize:11,color:C.muted,marginTop:2}}>Get within 20m to start</div>}
+                        <div style={{textAlign:"center",padding:"10px 14px",background:introDist===null?C.surface:introDist<=START_NEAR_M?`${C.green}15`:`${C.blue}15`,borderRadius:10,border:`1px solid ${introDist===null?C.border:introDist<=START_NEAR_M?C.green:C.blue}`}}>
+            <div style={{fontSize:13,fontWeight:600,color:introDist===null?C.muted:introDist<=START_NEAR_M?C.green:C.blue}}>{introDist===null?"📍 Finding your location…":introDist<=START_NEAR_M?"✓ You're at the start":`📍 ${introDist}m from the start`}</div>
+            {introDist!==null&&introDist>START_NEAR_M&&<div style={{fontSize:11,color:C.muted,marginTop:2}}>Get within {START_NEAR_M}m to start</div>}
           </div>
-                    <button className="tap" onClick={()=>{if(introDist!==null&&introDist<=20)setPhase("transfer");}} style={{width:"100%",background:(introDist!==null&&introDist<=20)?modeInfo.btnColor:C.surface,border:"none",borderRadius:14,padding:18,color:(introDist!==null&&introDist<=20)?"#fff":C.mutedL,fontSize:16,fontWeight:700,boxShadow:(introDist!==null&&introDist<=20)?`0 4px 20px ${modeInfo.btnColor}44`:"none"}}>
+                    <button className="tap" onClick={()=>{if(introDist!==null&&introDist<=START_NEAR_M)setPhase("transfer");}} style={{width:"100%",background:(introDist!==null&&introDist<=START_NEAR_M)?modeInfo.btnColor:C.surface,border:"none",borderRadius:14,padding:18,color:(introDist!==null&&introDist<=START_NEAR_M)?"#fff":C.mutedL,fontSize:16,fontWeight:700,boxShadow:(introDist!==null&&introDist<=START_NEAR_M)?`0 4px 20px ${modeInfo.btnColor}44`:"none"}}>
             {modeInfo.btn} →
           </button>
           <button className="tap" onClick={()=>setShowRaceMap(true)} style={{width:"100%",background:"none",border:`1px solid ${C.border}`,borderRadius:14,padding:14,color:C.text,fontSize:14,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
