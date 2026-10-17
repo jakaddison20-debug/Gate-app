@@ -1237,15 +1237,11 @@ function improvementRows(grouped,stages){
   }).filter(Boolean);
 }
 
-function InsightHubTile({ring,title,sub,onClick}){
+function InsightHubTile({ring,title,onClick}){
   return(
-    <button className="tap" onClick={onClick} style={{display:"flex",alignItems:"center",gap:16,background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:"18px 16px",marginTop:12,width:"100%",textAlign:"left"}}>
-      {ring}
-      <div style={{flex:1,minWidth:0}}>
-        <div style={{fontSize:16,fontWeight:700,color:C.text}}>{title}</div>
-        <div style={{fontSize:12,color:C.muted,marginTop:4}}>{sub}</div>
-      </div>
-      <Icon.ChevronRight size={16} color={C.mutedL}/>
+    <button className="tap" onClick={onClick} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:12,background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:"18px 16px 16px",minWidth:0}}>
+      <div style={{width:70,height:70,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{transform:"scale(1.25)"}}>{ring}</div></div>
+      <div style={{fontSize:14,fontWeight:600,color:C.text}}>{title}</div>
     </button>
   );
 }
@@ -3277,7 +3273,12 @@ function FatigueRing({size=56,r=22,stroke=6,load,children}){
 }
 
 function FatigueHubTile({model,loading,onClick}){
-  const body=(ring,sub)=><InsightHubTile onClick={onClick} title="Fatigue" ring={ring} sub={sub}/>;
+  const body=(ring)=>(
+    <button className="tap" onClick={onClick} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:12,background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:"18px 16px 16px",minWidth:0}}>
+      <div style={{width:70,height:70,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{transform:"scale(1.25)"}}>{ring}</div></div>
+      <div style={{fontSize:14,fontWeight:600,color:C.text}}>Fatigue</div>
+    </button>
+  );
   if(loading||!model)return body(<FatigueRing load={0}><span style={{fontSize:12,fontWeight:800,color:C.text}}>–</span></FatigueRing>,"Loading…");
   if(!model.ready)return body(<FatigueRing load={0}><span style={{fontSize:12,fontWeight:800,color:C.text}}>–</span></FatigueRing>,`Needs ${FADE_MIN_DAYS}+ days of riding · ${model.count} so far`);
   return body(
@@ -3484,16 +3485,11 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
         )}
         {view==='hub'&&(
           <div style={{padding:"0 16px 32px"}}>
-            <button className="tap" onClick={()=>setView('consistency')} style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px",display:"flex",alignItems:"center",gap:14,textAlign:"left"}}>
-              {consistency&&consistency.overall!==null?<ConsistencyRing score={consistency.overall} size={54}/>:<div style={{width:54,height:54,borderRadius:"50%",border:"5px solid #E6E6E6",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:800,color:C.mutedL,flexShrink:0}}>{consistency===null?"…":"—"}</div>}
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:16,fontWeight:700,color:C.text}}>Consistency</div>
-                <div style={{fontSize:12,color:C.muted,marginTop:3}}>{consistency&&consistency.overall!==null?<><span style={{color:consistencyColor(consistency.overall),fontWeight:600}}>{consistencyLabel(consistency.overall)}</span> · across {consistency.rows.length} stage{consistency.rows.length===1?"":"s"}</>:consistency===null?"Loading…":"Ride a stage 3 times to get a score"}</div>
-              </div>
-              <Icon.ChevronRight size={16} color={C.mutedL}/>
-            </button>
-            <ImprovementHubTile rows={impRows} onClick={()=>setView('improvement')}/>
-            <FatigueHubTile model={fatModel} loading={!descents} onClick={()=>setView('fatigue')}/>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:12}}>
+              <InsightHubTile onClick={()=>setView('consistency')} title="Consistency" ring={consistency&&consistency.overall!==null?<ConsistencyRing score={consistency.overall} size={54}/>:<div style={{width:54,height:54,borderRadius:"50%",border:"5px solid #E6E6E6",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:800,color:C.mutedL,flexShrink:0}}>{consistency===null?"…":"—"}</div>}/>
+              <ImprovementHubTile rows={impRows} onClick={()=>setView('improvement')}/>
+              <FatigueHubTile model={fatModel} loading={!descents} onClick={()=>setView('fatigue')}/>
+            </div>
           </div>
         )}
         {view==='consistency'&&(
