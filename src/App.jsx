@@ -7,6 +7,8 @@ const DEFAULT_CENTER={lat:53.4919264,lng:-0.3294266};
 
 const FAT_GATE_RADIUS=10;
 const FINISH_GATE_RADIUS=20;
+const START_NEAR_M=40;
+const START_ARM_MIN_M=20;
 
 function haversine(a,b){const R=6371000,dLat=((b.lat-a.lat)*Math.PI)/180,dLng=((b.lng-a.lng)*Math.PI)/180,s=Math.sin(dLat/2)**2+Math.cos((a.lat*Math.PI)/180)*Math.cos((b.lat*Math.PI)/180)*Math.sin(dLng/2)**2;return R*2*Math.atan2(Math.sqrt(s),Math.sqrt(1-s));}
 function metersOffset(from,to){const latRad=from.lat*Math.PI/180;return{x:(to.lng-from.lng)*111320*Math.cos(latRad),y:(to.lat-from.lat)*110540};}
@@ -258,7 +260,7 @@ const SegControl=({options,value,onChange})=>(
   </div>
 );
 
-function SettingsScreen({settings,onSave,onBack}){
+function SettingsScreen({settings,onSave,onBack,onHowTo}){
 const [s,setS]=useState(settings);
 const [uploading,setUploading]=useState(false);
 useEffect(()=>{setS(settings);},[settings]);
@@ -348,6 +350,15 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
           <Row label="Share activity to feed" sub="Your rides appear in mates' feeds" noBorder right={
             <Toggle value={s.privacy.shareActivity} onChange={v=>update("privacy.shareActivity",v)}/>
           }/>
+        </Section>
+
+        {/* Help */}
+        <Section title="Help">
+          <button className="tap" onClick={onHowTo} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"14px 16px",background:"none",border:"none",textAlign:"left"}}>
+            <Icon.Lightning size={18} color={C.blue}/>
+            <div style={{flex:1,fontSize:14,fontWeight:500,color:C.text}}>How GATE works</div>
+            <Icon.ChevronRight/>
+          </button>
         </Section>
 
         {/* Danger zone */}
@@ -3097,6 +3108,42 @@ function TrophyCabinetScreen({user,onBack}){
   );
 }
 
+const HOWTO_KEY=uid=>`gate_howto_seen_${uid||"anon"}`;
+function HowItWorksScreen({onClose}){
+  const steps=[
+    {Ic:Icon.Location,t:"Make a stage",b:"Stand at the top and tap Place Start Gate. Ride the trail, then tap Place Finish Gate at the bottom. Name it and tap Create Stage."},
+    {Ic:Icon.Flag,t:"Race it",b:"Open a stage and tap Race Stage. Get 30–40 m from the start gate, no closer, then tap Arm Start Gate."},
+    {Ic:Icon.Lightning,t:"Ride through the gates",b:"Your time starts when you cross the start gate and stops at the finish. No tapping needed."}
+  ];
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:9999,background:"#fff",display:"flex",flexDirection:"column",overflowY:"auto"}}>
+      <div style={{padding:"calc(env(safe-area-inset-top, 0px) + 40px) 20px 0",display:"flex",alignItems:"center",gap:7}}>
+        <svg width="18" height="18" viewBox="0 0 24 24"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10" fill={C.blue}/></svg>
+        <span style={{fontSize:17,fontWeight:800,letterSpacing:1.5,color:C.text}}>GATE</span>
+      </div>
+      <div style={{padding:"22px 20px 0"}}>
+        <div style={{fontSize:26,fontWeight:800,color:C.text}}>How GATE works</div>
+        <div style={{fontSize:14,color:C.muted,marginTop:6}}>Make a stage, then race it.</div>
+      </div>
+      <div style={{padding:"22px 20px 0",display:"flex",flexDirection:"column",gap:12}}>
+        {steps.map((s,i)=>(
+          <div key={i} style={{display:"flex",gap:14,background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:16}}>
+            <div style={{width:44,height:44,borderRadius:12,background:`${C.blue}15`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><s.Ic size={22} color={C.blue}/></div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:11,fontWeight:800,color:C.blue}}>STEP {i+1}</div>
+              <div style={{fontSize:16,fontWeight:700,color:C.text,marginTop:2}}>{s.t}</div>
+              <div style={{fontSize:13,color:C.muted,marginTop:4,lineHeight:1.45}}>{s.b}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{marginTop:"auto",padding:"24px 20px calc(env(safe-area-inset-bottom, 0px) + 28px)"}}>
+        <button className="tap" onClick={onClose} style={{width:"100%",background:C.blue,border:"none",borderRadius:14,padding:15,color:"#fff",fontSize:15,fontWeight:700}}>Got it</button>
+      </div>
+    </div>
+  );
+}
+
 function GroupMapScreen({group,stages,user,onBack,onAddStages}){
   const [groupStageIds,setGroupStageIds]=useState(null);
   const isCreator=group.created_by===user.id;
@@ -4504,6 +4551,19 @@ else setGateStatus("waiting");
 return()=>navigator.geolocation.clearWatch(id);
 },[phase,stageIndex,armed]);
 
+const armCheckRef=useRef(false);
+const tryArm=()=>{
+  const go=()=>{setGateStatus("waiting");setDistToGate(null);setArmed(true);};
+  if(armCheckRef.current)return;
+  if(!navigator.geolocation||!currentStage||!currentStage.start){go();return;}
+  armCheckRef.current=true;
+  navigator.geolocation.getCurrentPosition(pos=>{
+    armCheckRef.current=false;
+    const d=haversine({lat:pos.coords.latitude,lng:pos.coords.longitude},currentStage.start);
+    if(d<START_ARM_MIN_M){alert(`You're ${Math.round(d)}m from the start gate. Move back to at least ${START_ARM_MIN_M}m, then tap Arm Start Gate.`);return;}
+    go();
+  },()=>{armCheckRef.current=false;go();},{enableHighAccuracy:true,maximumAge:0,timeout:8000});
+};
 const startCountdown=(crossTs=null)=>{playBeep(880,150);setGateStatus("waiting");startTimeRef.current=crossTs||Date.now();timerMsRef.current=Date.now()-startTimeRef.current;setTimerMs(timerMsRef.current);setPhase("racing");timerRef.current=setInterval(()=>{timerMsRef.current=Date.now()-startTimeRef.current;setTimerMs(timerMsRef.current);},10);clearTimeout(finishTimeoutRef.current);finishTimeoutRef.current=setTimeout(()=>{finishTimeoutRef.current=null;if(timerRef.current){clearInterval(timerRef.current);setPhase("transfer");setTimerMs(0);logEvent(user?.id,"finish_timeout","Finish gate not reached within 10 minutes",currentStage?.id);alert("Run cancelled — finish gate not reached in time");}},600000);};    
   const stopStage=(saveTime=false,crossTs=null)=>{
 playBeep(440,250);
@@ -4618,11 +4678,11 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
               <div style={{fontSize:11,color:C.muted,marginTop:4}}>Tap "Another Run" after each completion to keep improving</div>
             </div>
           )}
-                        <div style={{textAlign:"center",padding:"10px 14px",background:introDist===null?C.surface:introDist<=20?`${C.green}15`:`${C.blue}15`,borderRadius:10,border:`1px solid ${introDist===null?C.border:introDist<=20?C.green:C.blue}`}}>
-            <div style={{fontSize:13,fontWeight:600,color:introDist===null?C.muted:introDist<=20?C.green:C.blue}}>{introDist===null?"📍 Finding your location…":introDist<=20?"✓ You're at the start":`📍 ${introDist}m from the start`}</div>
-            {introDist!==null&&introDist>20&&<div style={{fontSize:11,color:C.muted,marginTop:2}}>Get within 20m to start</div>}
+                        <div style={{textAlign:"center",padding:"10px 14px",background:introDist===null?C.surface:introDist<=START_NEAR_M?`${C.green}15`:`${C.blue}15`,borderRadius:10,border:`1px solid ${introDist===null?C.border:introDist<=START_NEAR_M?C.green:C.blue}`}}>
+            <div style={{fontSize:13,fontWeight:600,color:introDist===null?C.muted:introDist<=START_NEAR_M?C.green:C.blue}}>{introDist===null?"📍 Finding your location…":introDist<=START_NEAR_M?"✓ You're at the start":`📍 ${introDist}m from the start`}</div>
+            {introDist!==null&&introDist>START_NEAR_M&&<div style={{fontSize:11,color:C.muted,marginTop:2}}>Get within {START_NEAR_M}m to start</div>}
           </div>
-                    <button className="tap" onClick={()=>{if(introDist!==null&&introDist<=20)setPhase("transfer");}} style={{width:"100%",background:(introDist!==null&&introDist<=20)?modeInfo.btnColor:C.surface,border:"none",borderRadius:14,padding:18,color:(introDist!==null&&introDist<=20)?"#fff":C.mutedL,fontSize:16,fontWeight:700,boxShadow:(introDist!==null&&introDist<=20)?`0 4px 20px ${modeInfo.btnColor}44`:"none"}}>
+                    <button className="tap" onClick={()=>{if(introDist!==null&&introDist<=START_NEAR_M)setPhase("transfer");}} style={{width:"100%",background:(introDist!==null&&introDist<=START_NEAR_M)?modeInfo.btnColor:C.surface,border:"none",borderRadius:14,padding:18,color:(introDist!==null&&introDist<=START_NEAR_M)?"#fff":C.mutedL,fontSize:16,fontWeight:700,boxShadow:(introDist!==null&&introDist<=START_NEAR_M)?`0 4px 20px ${modeInfo.btnColor}44`:"none"}}>
             {modeInfo.btn} →
           </button>
           <button className="tap" onClick={()=>setShowRaceMap(true)} style={{width:"100%",background:"none",border:`1px solid ${C.border}`,borderRadius:14,padding:14,color:C.text,fontSize:14,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
@@ -4708,7 +4768,7 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
 </div>
 <div style={{fontSize:20,fontWeight:700,color:C.text,marginBottom:8}}>{stageIndex===0?`Head to Stage 1`:`Transfer to Stage ${stageIndex+1}`}</div>
 <div style={{fontSize:14,color:C.muted,marginBottom:20,maxWidth:260}}>Gate detection is off. Tap below once you're ready — the app will start watching for the start gate.</div>
-<button className="tap" onClick={()=>{setGateStatus("waiting");setDistToGate(null);setArmed(true);}} style={{background:C.blue,border:"none",borderRadius:14,padding:"14px 28px",color:"#fff",fontSize:15,fontWeight:700}}>Arm Start Gate</button>
+<button className="tap" onClick={tryArm} style={{background:C.blue,border:"none",borderRadius:14,padding:"14px 28px",color:"#fff",fontSize:15,fontWeight:700}}>Arm Start Gate</button>
 </>
 ):(
 <>
@@ -5377,6 +5437,12 @@ export default function App(){
     setStages(prev=>prev.filter(s=>s.id!==id));
     setSelectedStage(null);
   };
+  const [showHowTo,setShowHowTo]=useState(false);
+  useEffect(()=>{
+    if(!user)return;
+    try{if(!localStorage.getItem(HOWTO_KEY(user.id)))setShowHowTo(true);}catch(e){}
+  },[user&&user.id]);
+  const closeHowTo=()=>{try{localStorage.setItem(HOWTO_KEY(user&&user.id),"1");}catch(e){}setShowHowTo(false);};
   const containerRef=useRef(null);
   const wakeLockRef=useRef(null);
   const [mapSize,setMapSize]=useState({w:390,h:844});
@@ -5657,7 +5723,8 @@ const weekStats=useMemo(()=>{
       <style>{STYLES}</style>
       <div style={{height:44,background:"#fff"}}/>
            <SettingsScreen settings={settings} onSave={saveSettings} 
-onBack={()=>setShowSettings(false)}/>
+onBack={()=>setShowSettings(false)} onHowTo={()=>setShowHowTo(true)}/>
+      {showHowTo&&<HowItWorksScreen onClose={closeHowTo}/>}
 </div>
 );
 
@@ -5961,6 +6028,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
         <><div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:45}} onClick={()=>setSheet(null)}/><div className="slide-up" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:46,maxHeight:"82vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><LobbySheet onClose={()=>setSheet(null)}/></div></>
       )}
 
+          {showHowTo&&<HowItWorksScreen onClose={closeHowTo}/>}
           {showNewPost&&(<><div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:59}} onClick={()=>setShowNewPost(false)}/><div className="slide-up" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:60,maxHeight:"88vh",overflowY:"auto",paddingBottom:"env(safe-area-inset-bottom)"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 14px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><NewPostSheet todayInfo={todayStageTimes.length?{stages:new Set(todayStageTimes.map(t=>t.stage_id)).size,runs:todayStageTimes.length}:null} weekInfo={weekInfo} alreadyShared={daySharedToday} busy={recapBusy} onDayRecap={openDayRecap} onWeekRecap={openWeekRecap}/></div></>)}
 
           {recapDraft&&(<><div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:59}} onClick={()=>setRecapDraft(null)}/><div className="slide-up" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:60,maxHeight:"88vh",overflowY:"auto",paddingBottom:"env(safe-area-inset-bottom)"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 12px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><DayRecapPreviewSheet recap={recapDraft} name={settings.displayName||"My"} posting={recapPosting} onPost={postDayRecap} onDismiss={()=>setRecapDraft(null)}/></div></>)}
