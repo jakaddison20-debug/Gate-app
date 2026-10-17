@@ -8,6 +8,7 @@ const DEFAULT_CENTER={lat:53.4919264,lng:-0.3294266};
 const FAT_GATE_RADIUS=10;
 const FINISH_GATE_RADIUS=20;
 const START_NEAR_M=40;
+const START_ARM_MIN_M=20;
 
 function haversine(a,b){const R=6371000,dLat=((b.lat-a.lat)*Math.PI)/180,dLng=((b.lng-a.lng)*Math.PI)/180,s=Math.sin(dLat/2)**2+Math.cos((a.lat*Math.PI)/180)*Math.cos((b.lat*Math.PI)/180)*Math.sin(dLng/2)**2;return R*2*Math.atan2(Math.sqrt(s),Math.sqrt(1-s));}
 function metersOffset(from,to){const latRad=from.lat*Math.PI/180;return{x:(to.lng-from.lng)*111320*Math.cos(latRad),y:(to.lat-from.lat)*110540};}
@@ -4550,6 +4551,19 @@ else setGateStatus("waiting");
 return()=>navigator.geolocation.clearWatch(id);
 },[phase,stageIndex,armed]);
 
+const armCheckRef=useRef(false);
+const tryArm=()=>{
+  const go=()=>{setGateStatus("waiting");setDistToGate(null);setArmed(true);};
+  if(armCheckRef.current)return;
+  if(!navigator.geolocation||!currentStage||!currentStage.start){go();return;}
+  armCheckRef.current=true;
+  navigator.geolocation.getCurrentPosition(pos=>{
+    armCheckRef.current=false;
+    const d=haversine({lat:pos.coords.latitude,lng:pos.coords.longitude},currentStage.start);
+    if(d<START_ARM_MIN_M){alert(`You're ${Math.round(d)}m from the start gate. Move back to at least ${START_ARM_MIN_M}m, then tap Arm Start Gate.`);return;}
+    go();
+  },()=>{armCheckRef.current=false;go();},{enableHighAccuracy:true,maximumAge:0,timeout:8000});
+};
 const startCountdown=(crossTs=null)=>{playBeep(880,150);setGateStatus("waiting");startTimeRef.current=crossTs||Date.now();timerMsRef.current=Date.now()-startTimeRef.current;setTimerMs(timerMsRef.current);setPhase("racing");timerRef.current=setInterval(()=>{timerMsRef.current=Date.now()-startTimeRef.current;setTimerMs(timerMsRef.current);},10);clearTimeout(finishTimeoutRef.current);finishTimeoutRef.current=setTimeout(()=>{finishTimeoutRef.current=null;if(timerRef.current){clearInterval(timerRef.current);setPhase("transfer");setTimerMs(0);logEvent(user?.id,"finish_timeout","Finish gate not reached within 10 minutes",currentStage?.id);alert("Run cancelled — finish gate not reached in time");}},600000);};    
   const stopStage=(saveTime=false,crossTs=null)=>{
 playBeep(440,250);
@@ -4754,7 +4768,7 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
 </div>
 <div style={{fontSize:20,fontWeight:700,color:C.text,marginBottom:8}}>{stageIndex===0?`Head to Stage 1`:`Transfer to Stage ${stageIndex+1}`}</div>
 <div style={{fontSize:14,color:C.muted,marginBottom:20,maxWidth:260}}>Gate detection is off. Tap below once you're ready — the app will start watching for the start gate.</div>
-<button className="tap" onClick={()=>{setGateStatus("waiting");setDistToGate(null);setArmed(true);}} style={{background:C.blue,border:"none",borderRadius:14,padding:"14px 28px",color:"#fff",fontSize:15,fontWeight:700}}>Arm Start Gate</button>
+<button className="tap" onClick={tryArm} style={{background:C.blue,border:"none",borderRadius:14,padding:"14px 28px",color:"#fff",fontSize:15,fontWeight:700}}>Arm Start Gate</button>
 </>
 ):(
 <>
