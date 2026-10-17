@@ -17,13 +17,14 @@ function formatDist(m){return m>=1000?`${(m/1000).toFixed(1)}km`:`${Math.round(m
 function timeAgo(iso){const s=(Date.now()-new Date(iso).getTime())/1000;if(s<60)return'just now';if(s<3600)return`${Math.floor(s/60)}m ago`;if(s<86400)return`${Math.floor(s/3600)}h ago`;if(s<604800)return`${Math.floor(s/86400)}d ago`;return new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short'});}
 function playBeep(freq=880,duration=150){try{const ctx=new(window.AudioContext||window.webkitAudioContext)();const osc=ctx.createOscillator();const gain=ctx.createGain();osc.connect(gain);gain.connect(ctx.destination);osc.frequency.value=freq;osc.type='sine';gain.gain.setValueAtTime(0.3,ctx.currentTime);gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+duration/1000);osc.start();osc.stop(ctx.currentTime+duration/1000);}catch(e){console.log(e);}}
 function logEvent(userId,type,message,stageId=null,context=null){if(!userId)return Promise.resolve();return supabase.from('app_events').insert({user_id:userId,event_type:type,message,stage_id:stageId?String(stageId):null,context}).then(()=>{}).catch(err=>console.log('logEvent failed:',err?.message||err));}
-async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,trace}){
+async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,bike_id,trace}){
   const overallRes=await supabase.from('stage_times').select('time_ms').eq('stage_id',stage_id).order('time_ms',{ascending:true}).limit(1);
   const ownRes=await supabase.from('stage_times').select('time_ms').eq('stage_id',stage_id).eq('user_id',user_id).order('time_ms',{ascending:true}).limit(1);
   const prevBest=overallRes.data&&overallRes.data[0]?overallRes.data[0].time_ms:null;
   const ownPrevBest=ownRes.data&&ownRes.data[0]?ownRes.data[0].time_ms:null;
   const payload={stage_id,user_id,time_ms};
   if(created_at)payload.created_at=created_at;
+  if(bike_id)payload.bike_id=bike_id;
   const{error}=await supabase.from('stage_times').insert(payload);
   if(error)throw error;
   // Keep the GPS path of your best run on this stage (powers the speed/gap charts). Never fails the save.
@@ -2077,6 +2078,157 @@ return(
 );
 }
 
+let ACTIVE_BIKE_ID=null;
+const BIKE_KEYS=["riderWeight","tireDryFront","tireDryRear","tireWetFront","tireWetRear","shockMode","shockPsi","shockSpringRate","shockLsc","shockHsc","shockLsr","shockHsr","shockHsb","shockTokens","shockSag","forkMode","forkPsi","forkSpringRate","forkLsc","forkHsc","forkLsr","forkHsr","forkHsb","forkTokens","forkSag","bikeNotes","forkNotes","shockNotes"];
+function pickBike(s){const o={};BIKE_KEYS.forEach(k=>{o[k]=s[k]??DEFAULT_SETTINGS[k]??"";});return o;}
+function bikeSettings(b){return{...pickBike(DEFAULT_SETTINGS),...(b.setup||{}),bikeName:b.name||""};}
+function profileBikeUpdate(s){return{bike_name:s.bikeName,rider_weight:s.riderWeight,tire_dry_front:s.tireDryFront,tire_dry_rear:s.tireDryRear,tire_wet_front:s.tireWetFront,tire_wet_rear:s.tireWetRear,shock_mode:s.shockMode,shock_psi:s.shockPsi,shock_spring_rate:s.shockSpringRate,shock_lsc:s.shockLsc,shock_hsc:s.shockHsc,shock_lsr:s.shockLsr,shock_hsr:s.shockHsr,shock_hsb:s.shockHsb,shock_tokens:s.shockTokens,shock_sag:s.shockSag,fork_mode:s.forkMode,fork_psi:s.forkPsi,fork_spring_rate:s.forkSpringRate,fork_lsc:s.forkLsc,fork_hsc:s.forkHsc,fork_lsr:s.forkLsr,fork_hsr:s.forkHsr,fork_hsb:s.forkHsb,fork_tokens:s.forkTokens,fork_sag:s.forkSag,bike_notes:s.bikeNotes,fork_notes:s.forkNotes,shock_notes:s.shockNotes};}
+
+function BikeDetailsScreen({user,bike,isActive,settings,setSettings,onSaved,onBack}){
+  const [s,setS]=useState(()=>bikeSettings(bike));
+  const [saving,setSaving]=useState(false);
+  const setField=(key,val)=>setS(prev=>({...prev,[key]:val}));
+  const saveAndClose=async()=>{
+    if(saving)return;
+    setSaving(true);
+    const name=(s.bikeName||"").trim()||"My bike";
+    const{data,error}=await supabase.from('bikes').update({name,setup:pickBike(s)}).eq('id',bike.id).select().single();
+    if(error){setSaving(false);alert("Couldn't save bike: "+error.message);return;}
+    if(isActive){
+      const merged={...settings,...s,bikeName:name};
+      const{error:e2}=await supabase.from('profiles').update(profileBikeUpdate(merged)).eq('id',user.id);
+      if(e2){setSaving(false);alert("Couldn't save bike: "+e2.message);return;}
+      setSettings(merged);
+    }
+    onSaved(data);
+    setSaving(false);
+    onBack();
+  };
+  return(
+    <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
+      <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+        <button className="tap" onClick={saveAndClose} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
+        <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>Bike details</div>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"20px 16px 40px"}}>
+        <div style={{background:"white",border:`1px solid ${C.border}`,borderRadius:16,padding:"16px",marginBottom:16}}>
+          <img src="/bike-setup.jpeg" alt="Bike" style={{width:"100%",height:"auto",display:"block",margin:"0 auto 14px"}}/>
+          <input value={s.bikeName} onChange={e=>setField("bikeName",e.target.value)} placeholder="Name your bike" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"12px 14px",fontSize:16,fontWeight:700,color:C.text,background:C.surface,marginBottom:12,boxSizing:"border-box",textAlign:"center"}}/>
+          <div style={{marginBottom:14}}>
+            <UnitField label="Rider weight — with gear" unit="kg" value={s.riderWeight} onChange={v=>setField("riderWeight",v)}/>
+          </div>
+          <div style={{fontSize:10,fontWeight:700,color:C.mutedL,letterSpacing:0.6,textTransform:"uppercase",marginBottom:6}}>Dry</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+            <UnitField label="Tire — Rear" unit="psi" value={s.tireDryRear} onChange={v=>setField("tireDryRear",v)}/>
+            <UnitField label="Tire — Front" unit="psi" value={s.tireDryFront} onChange={v=>setField("tireDryFront",v)}/>
+          </div>
+          <div style={{fontSize:10,fontWeight:700,color:C.mutedL,letterSpacing:0.6,textTransform:"uppercase",marginBottom:6}}>Wet</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <UnitField label="Tire — Rear" unit="psi" value={s.tireWetRear} onChange={v=>setField("tireWetRear",v)}/>
+            <UnitField label="Tire — Front" unit="psi" value={s.tireWetFront} onChange={v=>setField("tireWetFront",v)}/>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:10,marginBottom:16}}>
+          <SuspensionColumn title="Shock" prefix="shock" s={s} setField={setField}/>
+          <SuspensionColumn title="Fork" prefix="fork" s={s} setField={setField}/>
+        </div>
+        <NotesField label="Bike notes" value={s.bikeNotes} onChange={v=>setField("bikeNotes",v)}/>
+        <NotesField label="Fork notes" value={s.forkNotes} onChange={v=>setField("forkNotes",v)}/>
+        <NotesField label="Shock notes" value={s.shockNotes} onChange={v=>setField("shockNotes",v)}/>
+      </div>
+    </div>
+  );
+}
+
+function GarageScreen({user,settings,setSettings,bikes,setBikes,activeBikeId,setActiveBikeId,onBack}){
+  const [detailId,setDetailId]=useState(null);
+  const [counts,setCounts]=useState({});
+  const [busy,setBusy]=useState(false);
+
+  useEffect(()=>{
+    if(!user)return;
+    supabase.from('stage_times').select('stage_id,bike_id').eq('user_id',user.id).not('bike_id','is',null).then(({data})=>{
+      const m={};
+      (data||[]).forEach(t=>{(m[t.bike_id]=m[t.bike_id]||new Set()).add(t.stage_id);});
+      const c={};
+      Object.keys(m).forEach(k=>{c[k]=m[k].size;});
+      setCounts(c);
+    });
+  },[user]);
+
+  const chooseBike=async(b)=>{
+    if(!user||busy)return;
+    setBusy(true);
+    const s={...settings,...bikeSettings(b)};
+    const{error}=await supabase.from('profiles').update({active_bike_id:b.id,...profileBikeUpdate(s)}).eq('id',user.id);
+    setBusy(false);
+    if(error){alert("Couldn't switch bike: "+error.message);return;}
+    setSettings(s);
+    setActiveBikeId(b.id);
+  };
+
+  const addBike=async()=>{
+    if(!user||busy)return;
+    setBusy(true);
+    const{data,error}=await supabase.from('bikes').insert({user_id:user.id,name:"New bike",setup:pickBike(DEFAULT_SETTINGS)}).select().single();
+    setBusy(false);
+    if(error){alert("Couldn't add bike: "+error.message);return;}
+    setBikes(prev=>[...prev,data]);
+    if(!activeBikeId)await chooseBike(data);
+    setDetailId(data.id);
+  };
+
+  const detailBike=bikes.find(b=>b.id===detailId);
+  if(detailBike)return(
+    <BikeDetailsScreen
+      key={detailBike.id}
+      user={user}
+      bike={detailBike}
+      isActive={detailBike.id===activeBikeId}
+      settings={settings}
+      setSettings={setSettings}
+      onSaved={nb=>setBikes(prev=>prev.map(x=>x.id===nb.id?nb:x))}
+      onBack={()=>setDetailId(null)}
+    />
+  );
+
+  return(
+    <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
+      <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+        <button className="tap" onClick={onBack} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
+        <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>Garage</div>
+        <button className="tap" onClick={addBike} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"7px 12px",color:C.blue,fontSize:13,fontWeight:600}}><Icon.Plus size={14} color={C.blue}/>Add bike</button>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"18px 16px 40px"}}>
+        <div style={{fontSize:13,color:C.muted,marginBottom:18}}>Your stage times save to the bike you are using.</div>
+        {bikes.length===0&&<div style={{fontSize:13,color:C.mutedL}}>Add your first bike</div>}
+        {bikes.map(b=>{
+          const on=b.id===activeBikeId;
+          const n=counts[b.id]||0;
+          return(
+            <div key={b.id} style={{padding:"12px 14px",background:on?"#EFF6FF":"#fff",border:on?`1.5px solid ${C.blue}`:`1px solid ${C.border}`,borderRadius:12,marginBottom:8}}>
+              <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+                <div style={{width:40,height:40,borderRadius:10,background:"rgba(37,99,235,0.07)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.Bike size={22} color={C.blue}/></div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:14,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.name}</div>
+                  <div style={{fontSize:12,color:C.muted,marginTop:2}}>{n} stage{n===1?"":"s"} ridden</div>
+                </div>
+                {on&&<div style={{padding:"4px 9px",borderRadius:999,background:`${C.green}1F`,color:C.green,fontSize:11,fontWeight:800}}>Riding</div>}
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                {on
+                  ?<div style={{flex:1,background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,padding:10,textAlign:"center",fontSize:13,fontWeight:600,color:C.mutedL}}>Using this bike</div>
+                  :<button className="tap" onClick={()=>chooseBike(b)} disabled={busy} style={{flex:1,background:"rgba(37,99,235,0.10)",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:10,fontSize:13,fontWeight:700,color:C.text}}>Use bike</button>}
+                <button className="tap" onClick={()=>setDetailId(b.id)} style={{flex:1,background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,padding:10,fontSize:13,fontWeight:600,color:C.text}}>Bike details</button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function GroupRow({group,onPress}){
   return(
     <button className="tap" onClick={()=>onPress(group)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"14px 16px",borderBottom:`1px solid ${C.border}`,background:"white",textAlign:"left"}}>
@@ -3589,7 +3741,7 @@ function ProfileScreen({stages,settings,courseResults,pastWeeks,onSettingsPress,
           {label:"Trophies",Ic:Icon.Trophy,onClick:onOpenTrophies},
           {label:"Stages",Ic:Icon.Lightning,onClick:onGoToStages},
           {label:"Courses",Ic:Icon.Flag,onClick:onGoToCourses},
-          {label:"Bike Setup",Ic:Icon.Bike,onClick:onOpenBikeSetup},
+          {label:"Garage",Ic:Icon.Bike,onClick:onOpenBikeSetup},
           {label:"Posts",Ic:Icon.Image,onClick:null},
         ].map((item,i,arr)=>(
           <button key={item.label} className="tap" onClick={item.onClick||undefined} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"13px 0",background:"none",border:"none",borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none",textAlign:"left"}}>
@@ -3703,7 +3855,7 @@ function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,cou
           {label:"Statistics",Ic:Icon.BarChart,onClick:onOpenProgress},
           {label:"Stages",Ic:Icon.Lightning,onClick:onGoToStages},
          {label:"Courses",Ic:Icon.Flag,onClick:onGoToCourses},
-         {label:"Bike Setup",Ic:Icon.Bike,onClick:onOpenBikeSetup},
+         {label:"Garage",Ic:Icon.Bike,onClick:onOpenBikeSetup},
           {label:"Posts",Ic:Icon.Image,onClick:null},
         ].map((item,i,arr)=>(
           <button key={item.label} className="tap" onClick={item.onClick||undefined} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"13px 0",background:"none",border:"none",borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none",textAlign:"left"}}>
@@ -4360,7 +4512,7 @@ return{...prev,[currentStage.id]:(!current||finalTime<current)?finalTime:current
 }
 setPhase("split");
 if(saveTime&&!isPractice){
-  const entry={stage_id:currentStage.id,stage_name:currentStage.name,user_id:user.id,time_ms:finalTime,created_at:new Date(crossTs||Date.now()).toISOString(),trace:compactTrace(traceRef.current)};
+  const entry={stage_id:currentStage.id,stage_name:currentStage.name,user_id:user.id,time_ms:finalTime,created_at:new Date(crossTs||Date.now()).toISOString(),bike_id:ACTIVE_BIKE_ID,trace:compactTrace(traceRef.current)};
   saveStageTime(entry).then(()=>onActivity&&onActivity()).catch(err=>{console.log('save failed, storing offline',err);queueOfflineTime(entry);onActivity&&onActivity();});
 }
 };
@@ -5162,6 +5314,14 @@ export default function App(){
   },[]);
 
   useEffect(()=>{if(!user)return;supabase.from('profiles').select('display_name,avatar_url,app_settings,bike_name,rider_weight,tire_dry_front,tire_dry_rear,tire_wet_front,tire_wet_rear,shock_mode,shock_psi,shock_spring_rate,shock_lsc,shock_hsc,shock_lsr,shock_hsr,shock_hsb,shock_tokens,shock_sag,fork_mode,fork_psi,fork_spring_rate,fork_lsc,fork_hsc,fork_lsr,fork_hsr,fork_hsb,fork_tokens,fork_sag,bike_notes,fork_notes,shock_notes').eq('id',user.id).single().then(({data})=>{if(data)setSettings(prev=>({...prev,displayName:data.display_name||prev.displayName,avatarUrl:data.avatar_url||null,...(data.app_settings||{}),bikeName:data.bike_name??prev.bikeName,riderWeight:data.rider_weight??prev.riderWeight,tireDryFront:data.tire_dry_front??prev.tireDryFront,tireDryRear:data.tire_dry_rear??prev.tireDryRear,tireWetFront:data.tire_wet_front??prev.tireWetFront,tireWetRear:data.tire_wet_rear??prev.tireWetRear,shockMode:data.shock_mode??prev.shockMode,shockPsi:data.shock_psi??prev.shockPsi,shockSpringRate:data.shock_spring_rate??prev.shockSpringRate,shockLsc:data.shock_lsc??prev.shockLsc,shockHsc:data.shock_hsc??prev.shockHsc,shockLsr:data.shock_lsr??prev.shockLsr,shockHsr:data.shock_hsr??prev.shockHsr,shockHsb:data.shock_hsb??prev.shockHsb,shockTokens:data.shock_tokens??prev.shockTokens,shockSag:data.shock_sag??prev.shockSag,forkMode:data.fork_mode??prev.forkMode,forkPsi:data.fork_psi??prev.forkPsi,forkSpringRate:data.fork_spring_rate??prev.forkSpringRate,forkLsc:data.fork_lsc??prev.forkLsc,forkHsc:data.fork_hsc??prev.forkHsc,forkLsr:data.fork_lsr??prev.forkLsr,forkHsr:data.fork_hsr??prev.forkHsr,forkHsb:data.fork_hsb??prev.forkHsb,forkTokens:data.fork_tokens??prev.forkTokens,forkSag:data.fork_sag??prev.forkSag,bikeNotes:data.bike_notes??prev.bikeNotes,forkNotes:data.fork_notes??prev.forkNotes,shockNotes:data.shock_notes??prev.shockNotes}));});},[user,refreshTick]);
+  const [bikes,setBikes]=useState([]);
+  const [activeBikeId,setActiveBikeId]=useState(null);
+  useEffect(()=>{ACTIVE_BIKE_ID=activeBikeId;},[activeBikeId]);
+  useEffect(()=>{
+    if(!user)return;
+    supabase.from('bikes').select('id,name,setup,created_at').order('created_at',{ascending:true}).then(({data})=>{if(data)setBikes(data);});
+    supabase.from('profiles').select('active_bike_id').eq('id',user.id).single().then(({data})=>{if(data)setActiveBikeId(data.active_bike_id||null);});
+  },[user,refreshTick]);
   const containerRef=useRef(null);
   const wakeLockRef=useRef(null);
   const [mapSize,setMapSize]=useState({w:390,h:844});
@@ -5462,7 +5622,7 @@ if(showBikeSetup)return(
 <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
 <style>{STYLES}</style>
 <div style={{height:44,background:"#fff"}}/>
-<BikeSetupScreen settings={settings} onSave={setSettings} onBack={()=>setShowBikeSetup(false)}/>
+<GarageScreen user={user} settings={settings} setSettings={setSettings} bikes={bikes} setBikes={setBikes} activeBikeId={activeBikeId} setActiveBikeId={setActiveBikeId} onBack={()=>setShowBikeSetup(false)}/>
 </div>
 );
 
