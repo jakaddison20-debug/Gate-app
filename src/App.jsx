@@ -3738,7 +3738,7 @@ function ProfileScreen({stages,settings,courseResults,pastWeeks,onSettingsPress,
       <div style={{padding:"10px 16px 24px"}}>
         {[
           {label:"Statistics",Ic:Icon.BarChart,onClick:onOpenProgress},
-          {label:"Trophies",Ic:Icon.Trophy,onClick:onOpenTrophies},
+          {label:"Trophies",Ic:Icon.Crown,onClick:onOpenTrophies},
           {label:"Stages",Ic:Icon.Lightning,onClick:onGoToStages},
           {label:"Courses",Ic:Icon.Flag,onClick:onGoToCourses},
           {label:"Garage",Ic:Icon.Bike,onClick:onOpenBikeSetup},
