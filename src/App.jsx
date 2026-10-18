@@ -9,6 +9,7 @@ const FAT_GATE_RADIUS=10;
 const FINISH_GATE_RADIUS=20;
 const START_NEAR_M=40;
 const START_ARM_MIN_M=20;
+const FEED_TYPES=['stage_record','personal_best','course_finish','stage_created','course_created','day_recap','h2h_result'];
 
 function haversine(a,b){const R=6371000,dLat=((b.lat-a.lat)*Math.PI)/180,dLng=((b.lng-a.lng)*Math.PI)/180,s=Math.sin(dLat/2)**2+Math.cos((a.lat*Math.PI)/180)*Math.cos((b.lat*Math.PI)/180)*Math.sin(dLng/2)**2;return R*2*Math.atan2(Math.sqrt(s),Math.sqrt(1-s));}
 function metersOffset(from,to){const latRad=from.lat*Math.PI/180;return{x:(to.lng-from.lng)*111320*Math.cos(latRad),y:(to.lat-from.lat)*110540};}
@@ -5507,7 +5508,7 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
 
     const [recentStageTimes,setRecentStageTimes]=useState([]);
 const [feed,setFeed]=useState([]);
-useEffect(()=>{if(!user)return;const loadFeed=cols=>supabase.from('app_events').select(cols).in('event_type',['stage_record','personal_best','course_finish','stage_created','course_created','day_recap','h2h_result']).order('created_at',{ascending:false}).limit(50);loadFeed('id,event_type,message,created_at,stage_id,context,profiles(display_name,avatar_url)').then(async({data,error})=>{if(error){console.log('feed query failed, retrying without context',error);({data}=await loadFeed('id,event_type,message,created_at,stage_id,profiles(display_name,avatar_url)'));}if(data)setFeed(data.map(e=>({id:e.id,event_type:e.event_type,message:e.message,stage_id:e.stage_id,userName:e.profiles?.display_name||'Rider',avatarUrl:e.profiles?.avatar_url||null,context:e.context,ago:timeAgo(e.created_at)})));});},[user,refreshTick]);
+useEffect(()=>{if(!user)return;const loadFeed=cols=>supabase.from('app_events').select(cols).in('event_type',FEED_TYPES).order('created_at',{ascending:false}).limit(50);loadFeed('id,event_type,message,created_at,stage_id,context,profiles(display_name,avatar_url)').then(async({data,error})=>{let rows=data;if(error){console.log('feed query failed, retrying without the rider name lookup',error);logEvent(user.id,'feed_error',error.message||String(error),null,{code:error.code});const r=await supabase.from('app_events').select('id,event_type,message,created_at,stage_id,user_id').in('event_type',FEED_TYPES).order('created_at',{ascending:false}).limit(50);rows=r.data;if(r.error)logEvent(user.id,'feed_error_retry',r.error.message||String(r.error),null,{code:r.error.code});}if(rows)setFeed(rows.map(e=>({id:e.id,event_type:e.event_type,message:e.message,stage_id:e.stage_id,userName:e.profiles?.display_name||'Rider',avatarUrl:e.profiles?.avatar_url||null,context:e.context,ago:timeAgo(e.created_at)})));});},[user,refreshTick]);
   const [pushState,setPushState]=useState('hidden');
 useEffect(()=>{
   if(!user)return;
