@@ -24,6 +24,9 @@ const FINISH_MIN_MS=10000;  // ...and at least 10 s after the start
 const GATE_MOVING_MS=2;     // ignore fixes slower than 2 m/s (standing waiting at the start)
 const START_FIT_M=20;       // shorter window at the start, where you're still speeding up
 const START_GATE_RADIUS=20; // start gate detection radius (timing no longer depends on it)
+const GPS_MAX_ACC_M=50;    // ignore fixes the phone says are worse than 50 m (guesses from wifi/phone masts)
+const GPS_MAX_SPEED_MS=30; // ignore jumps faster than 30 m/s (67 mph)...
+const GPS_MAX_REJECTS=3;   // ...unless it keeps happening, then trust the new position
 function segClosest(prevPos,currPos,gate){
   if(!prevPos)return{d:haversine(currPos,gate),ts:currPos.ts};
   const t=gateCrossT(prevPos,currPos,gate);
@@ -46,6 +49,18 @@ function stageRemainingM(line,pos){
   let k=0,bd=Infinity;line.forEach((p,i)=>{const d=haversine(p,pos);if(d<bd){bd=d;k=i;}});
   let rem=0;for(let i=k;i<line.length-1;i++)rem+=haversine(line[i],line[i+1]);
   return rem;
+}
+function makeGpsFilter(){
+  let last=null,rejects=0;
+  return function ok(loc){
+    if(last&&loc.ts<=last.ts)return false; // same fix twice
+    if(typeof loc.acc==="number"&&loc.acc>GPS_MAX_ACC_M)return false;
+    if(last){
+      const dt=(loc.ts-last.ts)/1000;
+      if(haversine(last,loc)/dt>GPS_MAX_SPEED_MS&&rejects<GPS_MAX_REJECTS){rejects++;return false;}
+    }
+    rejects=0;last=loc;return true;
+  };
 }
 // Feed it every GPS fix {lat,lng,ts}. Returns null until it has decided, then {ts,how}.
 // Times the moment you pass the gate by fitting a straight line through the moving fixes either side of it.
@@ -4608,15 +4623,17 @@ function RaceScreen({course,stages,user,onFinish,onActivity}){
   const line=currentStage.line_coords||currentStage.lineCoords||null;
   const tracker=makeGateTracker(gate,START_GATE_RADIUS,lineDirAt(line,gate),START_FIT_M,true);
   let prev=null,done=false,id=null;
+  const gpsOk=makeGpsFilter();
   prevGpsRef.current=null;
   id=navigator.geolocation.watchPosition(pos=>{
     if(done)return;
-    const loc={lat:pos.coords.latitude,lng:pos.coords.longitude,ts:pos.timestamp};
+    const loc={lat:pos.coords.latitude,lng:pos.coords.longitude,ts:pos.timestamp,acc:pos.coords.accuracy};
     if(prev&&loc.ts<=prev.ts)return; // same fix delivered twice
-    prev=loc;prevGpsRef.current=loc;
+    const good=gpsOk(loc);
+    if(good){prev=loc;prevGpsRef.current=loc;}
     const dist=haversine(loc,gate);
     setDistToGate(Math.round(dist));
-    const hit=tracker(loc);
+    const hit=good?tracker(loc):null;
     if(hit){
       done=true;navigator.geolocation.clearWatch(id);
       setGateStatus("entered");
@@ -4669,6 +4686,7 @@ if(saveTime&&!isPractice){
   const line=currentStage.line_coords||currentStage.lineCoords||null;
   const tracker=makeGateTracker(gate,FINISH_GATE_RADIUS,lineDirAt(line,gate));
   let prev=null,near=null,done=false,id=null;
+  const gpsOk=makeGpsFilter();
   prevGpsRef.current=null;
   traceRef.current=[{t:0,lat:currentStage.start.lat,lng:currentStage.start.lng}];
   const finish=(ts,how,extra)=>{
@@ -4683,8 +4701,8 @@ if(saveTime&&!isPractice){
   };
   id=navigator.geolocation.watchPosition(pos=>{
     if(done)return;
-    const loc={lat:pos.coords.latitude,lng:pos.coords.longitude,ts:pos.timestamp};
-    if(prev&&loc.ts<=prev.ts)return; // same fix delivered twice
+    const loc={lat:pos.coords.latitude,lng:pos.coords.longitude,ts:pos.timestamp,acc:pos.coords.accuracy};
+    if(!gpsOk(loc))return; // skip repeated, junk or impossible fixes
     if(loc.ts>startTimeRef.current)traceRef.current.push({t:loc.ts-startTimeRef.current,lat:loc.lat,lng:loc.lng});
     const hit=tracker(loc);
     if(hit){finish(hit.ts,hit.how);return;}
