@@ -5545,10 +5545,28 @@ export default function App(){
   useEffect(()=>{if(!navigator.geolocation)return;let centered=false;const id=navigator.geolocation.watchPosition(pos=>{const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};setUserPos(loc);if(typeof pos.coords.heading==='number'&&!isNaN(pos.coords.heading))setUserHeading(pos.coords.heading);if(!centered){setMapCenter(loc);centered=true;}},err=>console.log(err),{enableHighAccuracy:true,maximumAge:2000,timeout:10000});return()=>navigator.geolocation.clearWatch(id);},[]);
 
 useEffect(()=>{
-  if(activeRace&&'wakeLock'in navigator){
-    navigator.wakeLock.request('screen').then(lock=>{wakeLockRef.current=lock;}).catch(err=>console.log(err));
-  }
-  return()=>{if(wakeLockRef.current){wakeLockRef.current.release();wakeLockRef.current=null;}};
+  if(!activeRace)return;
+  let stopped=false;
+  const grab=async()=>{
+    if(stopped||!('wakeLock' in navigator)||document.visibilityState!=="visible")return;
+    if(wakeLockRef.current&&!wakeLockRef.current.released)return;
+    try{
+      const lock=await navigator.wakeLock.request('screen');
+      if(stopped){lock.release().catch(()=>{});return;}
+      wakeLockRef.current=lock;
+    }catch(err){console.log(err);}
+  };
+  const onVis=()=>{
+    if(document.visibilityState==="visible")grab(); // the phone drops the lock when you leave the app, so take it back
+    else logEvent(user?.id,"race_backgrounded","GATE left the screen during a run",null);
+  };
+  grab();
+  document.addEventListener("visibilitychange",onVis);
+  return()=>{
+    stopped=true;
+    document.removeEventListener("visibilitychange",onVis);
+    if(wakeLockRef.current){wakeLockRef.current.release().catch(()=>{});wakeLockRef.current=null;}
+  };
 },[activeRace]);
   
   useEffect(()=>{const el=containerRef.current;if(!el)return;const ro=new ResizeObserver(e=>setMapSize({w:e[0].contentRect.width,h:e[0].contentRect.height}));ro.observe(el);setMapSize({w:el.clientWidth,h:el.clientHeight});return()=>ro.disconnect();},[]);
