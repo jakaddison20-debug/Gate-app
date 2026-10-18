@@ -3234,6 +3234,18 @@ function HowItWorksScreen({onClose}){
   );
 }
 
+const GPS_GOOD_M=10,GPS_FAIR_M=25;
+function GpsPill({acc}){
+  if(typeof acc!=="number")return null;
+  const lvl=acc<=GPS_GOOD_M?{c:C.green,t:"GPS good"}:acc<=GPS_FAIR_M?{c:"#D97706",t:"GPS settling"}:{c:C.red,t:"GPS weak"};
+  return(
+    <div style={{display:"inline-flex",alignItems:"center",gap:8,background:`${lvl.c}12`,border:`1px solid ${lvl.c}55`,borderRadius:999,padding:"7px 14px",marginBottom:20}}>
+      <div style={{width:8,height:8,borderRadius:"50%",background:lvl.c,boxShadow:`0 0 0 4px ${lvl.c}22`}}/>
+      <div style={{fontSize:13,fontWeight:600,color:lvl.c}}>{lvl.t}</div>
+      <div style={{fontSize:13,color:C.muted}}>· ±{Math.round(acc)} m</div>
+    </div>
+  );
+}
 function GroupMapScreen({group,stages,user,onBack,onAddStages}){
   const [groupStageIds,setGroupStageIds]=useState(null);
   const isCreator=group.created_by===user.id;
@@ -4584,7 +4596,7 @@ function RaceScreen({course,stages,user,onFinish,onActivity}){
   const [bestPerStage,setBestPerStage]=useState(savedProgress?savedProgress.bestPerStage:{}); // mashup: best time per stage id
   const [runCount,setRunCount]=useState(savedProgress?savedProgress.runCount:0); // how many full runs completed
   const [gateStatus,setGateStatus]=useState("waiting");
-  const [distToGate,setDistToGate]=useState(null); const [armed,setArmed]=useState(false); const timerRef=useRef(null); const finishTimeoutRef=useRef(null);
+  const [distToGate,setDistToGate]=useState(null); const [armed,setArmed]=useState(false); const [gpsAcc,setGpsAcc]=useState(null); const timerRef=useRef(null); const finishTimeoutRef=useRef(null);
   const countRef=useRef(null);
   const gpsRef=useRef(null);
   const startTimeRef=useRef(0);
@@ -4615,6 +4627,12 @@ function RaceScreen({course,stages,user,onFinish,onActivity}){
     return()=>navigator.geolocation.clearWatch(id);
   },[phase]);
 
+  useEffect(()=>{
+    if(phase!=="transfer"||armed||!navigator.geolocation)return;
+    const id=navigator.geolocation.watchPosition(pos=>setGpsAcc(pos.coords.accuracy),()=>{},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
+    return()=>navigator.geolocation.clearWatch(id);
+  },[phase,armed]);
+
   // Simulate GPS toward gate
         useEffect(()=>{
   if(phase!=="transfer"||!armed)return;
@@ -4633,6 +4651,7 @@ function RaceScreen({course,stages,user,onFinish,onActivity}){
     if(good){prev=loc;prevGpsRef.current=loc;}
     const dist=haversine(loc,gate);
     setDistToGate(Math.round(dist));
+    setGpsAcc(loc.acc);
     const hit=good?tracker(loc):null;
     if(hit){
       done=true;navigator.geolocation.clearWatch(id);
@@ -4878,6 +4897,7 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
 </div>
 <div style={{fontSize:20,fontWeight:700,color:C.text,marginBottom:8}}>{stageIndex===0?`Head to Stage 1`:`Transfer to Stage ${stageIndex+1}`}</div>
 <div style={{fontSize:14,color:C.muted,marginBottom:20,maxWidth:260}}>Gate detection is off. Tap below once you're ready — the app will start watching for the start gate.</div>
+<GpsPill acc={gpsAcc}/>
 <button className="tap" onClick={tryArm} style={{background:C.blue,border:"none",borderRadius:14,padding:"14px 28px",color:"#fff",fontSize:15,fontWeight:700}}>Arm Start Gate</button>
 </>
 ):(
@@ -4888,6 +4908,7 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
 <div style={{fontSize:20,fontWeight:700,color:C.text,marginBottom:8}}>{stageIndex===0?`Head to Stage 1`:`Transfer to Stage ${stageIndex+1}`}</div>
 <div style={{fontSize:24,fontWeight:800,color:gateColors[gateStatus],marginBottom:8,transition:"all 0.3s"}}>{gateMsg[gateStatus]}</div>
 <div style={{fontSize:13,color:C.muted,marginBottom:16}}>{isPractice?"Timer won't start — just ride it for feel":"Timer starts automatically when you enter the gate"}</div>
+<GpsPill acc={gpsAcc}/>
 <button className="tap" onClick={()=>{setArmed(false);setGateStatus("waiting");setDistToGate(null);}} style={{marginTop:16,background:"none",border:"none",color:C.muted,fontSize:12,textDecoration:"underline"}}>Disarm</button>
 </>
 )}
