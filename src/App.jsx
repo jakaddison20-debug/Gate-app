@@ -15,6 +15,66 @@ function haversine(a,b){const R=6371000,dLat=((b.lat-a.lat)*Math.PI)/180,dLng=((
 function metersOffset(from,to){const latRad=from.lat*Math.PI/180;return{x:(to.lng-from.lng)*111320*Math.cos(latRad),y:(to.lat-from.lat)*110540};}
 function segmentCrossesGate(prevPos,currPos,gate,radius){if(!prevPos)return false;const a=metersOffset(gate,prevPos);const b=metersOffset(gate,currPos);const dx=b.x-a.x,dy=b.y-a.y;const lenSq=dx*dx+dy*dy;let t=lenSq===0?0:-(a.x*dx+a.y*dy)/lenSq;t=Math.max(0,Math.min(1,t));const cx=a.x+t*dx,cy=a.y+t*dy;return Math.sqrt(cx*cx+cy*cy)<=radius;}
 function gateCrossT(prevPos,currPos,gate){const a=metersOffset(gate,prevPos);const b=metersOffset(gate,currPos);const dx=b.x-a.x,dy=b.y-a.y;const lenSq=dx*dx+dy*dy;let t=lenSq===0?0:-(a.x*dx+a.y*dy)/lenSq;return Math.max(0,Math.min(1,t));}
+const GATE_FIT_M=35;        // use GPS fixes within 35 m either side of the gate
+const GATE_AFTER_FIXES=1;   // decide at the first fix past the gate
+const FINISH_NEAR_M=40;     // safety net: came within 40 m of the finish pin...
+const FINISH_LEAVE_M=25;    // ...then got 25 m further away than the closest point...
+const FINISH_END_M=60;      // ...while in the last 60 m of the stage line...
+const FINISH_MIN_MS=10000;  // ...and at least 10 s after the start
+function segClosest(prevPos,currPos,gate){
+  if(!prevPos)return{d:haversine(currPos,gate),ts:currPos.ts};
+  const t=gateCrossT(prevPos,currPos,gate);
+  const a=metersOffset(gate,prevPos),b=metersOffset(gate,currPos);
+  return{d:Math.hypot(a.x+t*(b.x-a.x),a.y+t*(b.y-a.y)),ts:prevPos.ts+t*(currPos.ts-prevPos.ts)};
+}
+function unitVec(from,to){const o=metersOffset(from,to),L=Math.hypot(o.x,o.y);return L>3?{x:o.x/L,y:o.y/L}:null;}
+// direction the trail runs through the gate, from the stage line (null if no line)
+function lineDirAt(line,gate){
+  if(!line||line.length<2)return null;
+  let k=0,bd=Infinity;line.forEach((p,i)=>{const d=haversine(p,gate);if(d<bd){bd=d;k=i;}});
+  let a=k,b=k;
+  while(a>0&&haversine(line[a],line[k])<10)a--;
+  while(b<line.length-1&&haversine(line[b],line[k])<10)b++;
+  return unitVec(line[a],line[b]);
+}
+// metres of stage line left after the point nearest pos (null if no line)
+function stageRemainingM(line,pos){
+  if(!line||line.length<2)return null;
+  let k=0,bd=Infinity;line.forEach((p,i)=>{const d=haversine(p,pos);if(d<bd){bd=d;k=i;}});
+  let rem=0;for(let i=k;i<line.length-1;i++)rem+=haversine(line[i],line[i+1]);
+  return rem;
+}
+// Feed it every GPS fix {lat,lng,ts}. Returns null until it has decided, then {ts,how}.
+// Times the moment you pass the gate by fitting a straight line through the fixes either side of it.
+function makeGateTracker(gate,radius,dir){
+  const buf=[];let detected=false,closest=null,sinceDet=0;
+  return function push(loc){
+    buf.push(loc);
+    if(buf.length<2)return null;
+    const c=segClosest(buf[buf.length-2],loc,gate);
+    if(!detected){
+      if(c.d>radius){if(buf.length>12)buf.shift();return null;}
+      detected=true;
+    }
+    sinceDet++;
+    if(!closest||c.d<closest.d)closest=c;
+    const u=dir||unitVec(buf[0],loc)||{x:0,y:1};
+    const along=p=>{const o=metersOffset(gate,p);return o.x*u.x+o.y*u.y;};
+    const pre=[],post=[];
+    buf.forEach(p=>{const s=along(p);if(s<=0){if(s>=-GATE_FIT_M&&!post.length)pre.push({t:p.ts,s});}else if(post.length<GATE_AFTER_FIXES&&s<=GATE_FIT_M)post.push({t:p.ts,s});});
+    const leaving=haversine(loc,gate)>=closest.d+15;
+    if(post.length<GATE_AFTER_FIXES&&sinceDet<10&&!leaving)return null;
+    const pts=pre.concat(post);
+    if(pts.length>=3&&post.length){
+      const n=pts.length,mt=pts.reduce((a,p)=>a+p.t,0)/n,ms=pts.reduce((a,p)=>a+p.s,0)/n;
+      let sxy=0,sxx=0;pts.forEach(p=>{sxy+=(p.t-mt)*(p.s-ms);sxx+=(p.t-mt)**2;});
+      const v=sxx?sxy/sxx:0; // metres per ms
+      const ts=mt-ms/v;
+      if(v>0.0005&&ts>=pts[0].t-1000&&ts<=pts[n-1].t+1000)return{ts,how:'fit'};
+    }
+    return{ts:closest.ts,how:'closest'};
+  };
+}
 function formatTime(ms){if(!ms)return"—";const m=Math.floor(ms/60000),s=Math.floor((ms%60000)/1000),cs=Math.floor((ms%1000)/10);return`${m}:${String(s).padStart(2,"0")}.${String(cs).padStart(2,"0")}`;}
 function formatDist(m){return m>=1000?`${(m/1000).toFixed(1)}km`:`${Math.round(m)}m`;}
 function timeAgo(iso){const s=(Date.now()-new Date(iso).getTime())/1000;if(s<60)return'just now';if(s<3600)return`${Math.floor(s/60)}m ago`;if(s<86400)return`${Math.floor(s/3600)}h ago`;if(s<604800)return`${Math.floor(s/86400)}d ago`;return new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short'});}
@@ -4587,26 +4647,41 @@ if(saveTime&&!isPractice){
 };
 
              useEffect(()=>{
-    if(phase!=="racing")return;
-    if(!navigator.geolocation)return;
-    const gate=currentStage.finish;
-    prevGpsRef.current=null;
-    traceRef.current=[{t:0,lat:currentStage.start.lat,lng:currentStage.start.lng}];
-    const id=navigator.geolocation.watchPosition(pos=>{
-      const loc={lat:pos.coords.latitude,lng:pos.coords.longitude,ts:pos.timestamp};
-      const prev=prevGpsRef.current;
-      const crossed=segmentCrossesGate(prev,loc,gate,FINISH_GATE_RADIUS)&&gateCrossT(prev,loc,gate)<0.999;
-      prevGpsRef.current=loc;
-      if(!crossed&&loc.ts>startTimeRef.current)traceRef.current.push({t:loc.ts-startTimeRef.current,lat:loc.lat,lng:loc.lng});
-      if(crossed){
-navigator.geolocation.clearWatch(id);
-const t=prev?gateCrossT(prev,loc,gate):0;
-const crossTs=prev?prev.ts+t*(loc.ts-prev.ts):loc.ts;
-traceRef.current.push({t:Math.max(0,crossTs-startTimeRef.current),lat:gate.lat,lng:gate.lng});
-stopStage(true,crossTs);
-}
-},err=>{console.log(err);logEvent(user?.id,"gps_error_racing",err.message||String(err),currentStage?.id,{code:err.code});},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
-return()=>navigator.geolocation.clearWatch(id);
+  if(phase!=="racing")return;
+  if(!navigator.geolocation)return;
+  const gate=currentStage.finish;
+  const line=currentStage.line_coords||currentStage.lineCoords||null;
+  const tracker=makeGateTracker(gate,FINISH_GATE_RADIUS,lineDirAt(line,gate));
+  let prev=null,near=null,done=false,id=null;
+  prevGpsRef.current=null;
+  traceRef.current=[{t:0,lat:currentStage.start.lat,lng:currentStage.start.lng}];
+  const finish=(ts,how,extra)=>{
+    if(done)return;done=true;
+    if(id!==null)navigator.geolocation.clearWatch(id);
+    if(how!=="fit")logEvent(user?.id,"finish_"+how,`Finish timed by ${how}`,currentStage?.id,extra||null);
+    const endTs=Math.max(ts,startTimeRef.current+1000);
+    const gt=endTs-startTimeRef.current;
+    traceRef.current=traceRef.current.filter(p=>p.t<gt);
+    traceRef.current.push({t:gt,lat:gate.lat,lng:gate.lng});
+    stopStage(true,endTs);
+  };
+  id=navigator.geolocation.watchPosition(pos=>{
+    if(done)return;
+    const loc={lat:pos.coords.latitude,lng:pos.coords.longitude,ts:pos.timestamp};
+    if(prev&&loc.ts<=prev.ts)return; // same fix delivered twice
+    if(loc.ts>startTimeRef.current)traceRef.current.push({t:loc.ts-startTimeRef.current,lat:loc.lat,lng:loc.lng});
+    const hit=tracker(loc);
+    if(hit){finish(hit.ts,hit.how);return;}
+    // safety net: never got inside the finish gate, but came close at the end of the stage, then rode away
+    const c=segClosest(prev,loc,gate);
+    if(c.d<=FINISH_NEAR_M&&c.ts-startTimeRef.current>=FINISH_MIN_MS){
+      const rem=stageRemainingM(line,loc);
+      if((rem===null||rem<=FINISH_END_M)&&(!near||c.d<near.d))near=c;
+    }
+    prev=loc;prevGpsRef.current=loc;
+    if(near&&haversine(loc,gate)>=near.d+FINISH_LEAVE_M)finish(near.ts,"safety_net",{closest_m:Math.round(near.d)});
+  },err=>{console.log(err);logEvent(user?.id,"gps_error_racing",err.message||String(err),currentStage?.id,{code:err.code});},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
+  return()=>{done=true;if(id!==null)navigator.geolocation.clearWatch(id);};
 },[phase,stageIndex]);
            
 
