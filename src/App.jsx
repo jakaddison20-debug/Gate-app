@@ -15,12 +15,117 @@ function haversine(a,b){const R=6371000,dLat=((b.lat-a.lat)*Math.PI)/180,dLng=((
 function metersOffset(from,to){const latRad=from.lat*Math.PI/180;return{x:(to.lng-from.lng)*111320*Math.cos(latRad),y:(to.lat-from.lat)*110540};}
 function segmentCrossesGate(prevPos,currPos,gate,radius){if(!prevPos)return false;const a=metersOffset(gate,prevPos);const b=metersOffset(gate,currPos);const dx=b.x-a.x,dy=b.y-a.y;const lenSq=dx*dx+dy*dy;let t=lenSq===0?0:-(a.x*dx+a.y*dy)/lenSq;t=Math.max(0,Math.min(1,t));const cx=a.x+t*dx,cy=a.y+t*dy;return Math.sqrt(cx*cx+cy*cy)<=radius;}
 function gateCrossT(prevPos,currPos,gate){const a=metersOffset(gate,prevPos);const b=metersOffset(gate,currPos);const dx=b.x-a.x,dy=b.y-a.y;const lenSq=dx*dx+dy*dy;let t=lenSq===0?0:-(a.x*dx+a.y*dy)/lenSq;return Math.max(0,Math.min(1,t));}
+const GATE_FIT_M=35;        // use GPS fixes within 35 m either side of the gate
+const GATE_AFTER_FIXES=1;   // decide at the first fix past the gate
+const FINISH_NEAR_M=40;     // safety net: came within 40 m of the finish pin...
+const FINISH_LEAVE_M=25;    // ...then got 25 m further away than the closest point...
+const FINISH_END_M=60;      // ...while in the last 60 m of the stage line...
+const FINISH_MIN_MS=10000;  // ...and at least 10 s after the start
+const GATE_MOVING_MS=2;     // ignore fixes slower than 2 m/s (standing waiting at the start)
+const START_FIT_M=20;       // shorter window at the start, where you're still speeding up
+const START_GATE_RADIUS=20; // start gate detection radius (timing no longer depends on it)
+const GPS_MAX_ACC_M=50;    // ignore fixes the phone says are worse than 50 m (guesses from wifi/phone masts)
+const GPS_MAX_SPEED_MS=30; // ignore jumps faster than 30 m/s (67 mph)...
+const GPS_MAX_REJECTS=3;   // ...unless it keeps happening, then trust the new position
+// GPS margin for one gate, in ms: average accuracy (m) ÷ speed (m/s). null if unknown.
+const GPS_WEAK_S=1.5; // runs with a bigger margin than this show "weak signal"
+function gpsMarginMs(accs,speedMs){
+  const a=accs.filter(x=>typeof x==="number"&&x>0);
+  if(!a.length||!(speedMs>0.5))return null;
+  return a.reduce((x,y)=>x+y,0)/a.length/speedMs*1000;
+}
+function segClosest(prevPos,currPos,gate){
+  if(!prevPos)return{d:haversine(currPos,gate),ts:currPos.ts};
+  const t=gateCrossT(prevPos,currPos,gate);
+  const a=metersOffset(gate,prevPos),b=metersOffset(gate,currPos);
+  return{d:Math.hypot(a.x+t*(b.x-a.x),a.y+t*(b.y-a.y)),ts:prevPos.ts+t*(currPos.ts-prevPos.ts)};
+}
+function unitVec(from,to){const o=metersOffset(from,to),L=Math.hypot(o.x,o.y);return L>3?{x:o.x/L,y:o.y/L}:null;}
+// direction the trail runs through the gate, from the stage line (null if no line)
+function lineDirAt(line,gate){
+  if(!line||line.length<2)return null;
+  let k=0,bd=Infinity;line.forEach((p,i)=>{const d=haversine(p,gate);if(d<bd){bd=d;k=i;}});
+  let a=k,b=k;
+  while(a>0&&haversine(line[a],line[k])<10)a--;
+  while(b<line.length-1&&haversine(line[b],line[k])<10)b++;
+  return unitVec(line[a],line[b]);
+}
+// metres of stage line left after the point nearest pos (null if no line)
+function stageRemainingM(line,pos){
+  if(!line||line.length<2)return null;
+  let k=0,bd=Infinity;line.forEach((p,i)=>{const d=haversine(p,pos);if(d<bd){bd=d;k=i;}});
+  let rem=0;for(let i=k;i<line.length-1;i++)rem+=haversine(line[i],line[i+1]);
+  return rem;
+}
+function makeGpsFilter(){
+  let last=null,rejects=0;
+  return function ok(loc){
+    if(last&&loc.ts<=last.ts)return false; // same fix twice
+    if(typeof loc.acc==="number"&&loc.acc>GPS_MAX_ACC_M)return false;
+    if(last){
+      const dt=(loc.ts-last.ts)/1000;
+      if(haversine(last,loc)/dt>GPS_MAX_SPEED_MS&&rejects<GPS_MAX_REJECTS){rejects++;return false;}
+    }
+    rejects=0;last=loc;return true;
+  };
+}
+// Feed it every GPS fix {lat,lng,ts}. Returns null until it has decided, then {ts,how}.
+// Times the moment you pass the gate by fitting a straight line through the moving fixes either side of it.
+// strict=true (start): never guesses; if it can't fit a clean pass it resets and keeps watching.
+function makeGateTracker(gate,radius,dir,fitM=GATE_FIT_M,strict=false){
+  const buf=[];let detected=false,closest=null,sinceDet=0;
+  return function push(loc){
+    buf.push(loc);
+    if(buf.length<2)return null;
+    const c=segClosest(buf[buf.length-2],loc,gate);
+    if(!detected){
+      if(c.d>radius){if(buf.length>12)buf.shift();return null;}
+      detected=true;
+    }
+    const q0=buf[buf.length-2],dt0=(loc.ts-q0.ts)/1000;
+    if(dt0>0&&haversine(loc,q0)/dt0>=GATE_MOVING_MS)sinceDet++;
+    if(!closest||c.d<closest.d)closest=c;
+    const u=dir||unitVec(buf[0],loc)||{x:0,y:1};
+    const along=p=>{const o=metersOffset(gate,p);return o.x*u.x+o.y*u.y;};
+    const pre=[],post=[];
+    buf.forEach((p,i)=>{
+      if(i===0)return;
+      const q=buf[i-1],dt=(p.ts-q.ts)/1000;
+      if(!(dt>0)||haversine(p,q)/dt<GATE_MOVING_MS)return; // skip fixes where you weren't moving
+      const s=along(p);
+      if(s<=0){if(s>=-fitM&&!post.length)pre.push({t:p.ts,s,acc:p.acc});}
+      else if(post.length<GATE_AFTER_FIXES&&s<=fitM)post.push({t:p.ts,s,acc:p.acc});
+    });
+    const leaving=haversine(loc,gate)>=closest.d+15;
+    if(post.length<GATE_AFTER_FIXES&&sinceDet<10&&!leaving)return null;
+    const pts=pre.concat(post);
+    const reset=()=>{detected=false;closest=null;sinceDet=0;while(buf.length>12)buf.shift();return null;};
+    if(pts.length>=3&&post.length){
+      const n=pts.length,mt=pts.reduce((a,p)=>a+p.t,0)/n,ms=pts.reduce((a,p)=>a+p.s,0)/n;
+      let sxy=0,sxx=0;pts.forEach(p=>{sxy+=(p.t-mt)*(p.s-ms);sxx+=(p.t-mt)**2;});
+      const v=sxx?sxy/sxx:0; // metres per ms
+      const ts=mt-ms/v;
+      if(v>0.0005&&ts>=pts[0].t-1000&&ts<=pts[n-1].t+1000)return{ts,how:'fit',marginMs:gpsMarginMs(pts.map(p=>p.acc),v*1000)};
+    }
+    if(strict)return reset();
+    const q=buf[buf.length-2],sp=haversine(q,loc)/Math.max(0.001,(loc.ts-q.ts)/1000);
+    return{ts:closest.ts,how:'closest',marginMs:gpsMarginMs([loc.acc],sp)};
+  };
+}
+
+// Helper for the finish screen: combines every stage's margin into one ±, or null if any is unknown
+function gpsMarginLabel(splits){
+  const m=(splits||[]).map(s=>s.gpsMarginMs);
+  if(!m.length||m.some(x=>typeof x!=="number"))return null;
+  const sec=Math.sqrt(m.reduce((a,x)=>a+x*x,0))/1000;
+  return{text:`GPS ±${sec.toFixed(1)}s`,weak:sec>GPS_WEAK_S};
+}
 function formatTime(ms){if(!ms)return"—";const m=Math.floor(ms/60000),s=Math.floor((ms%60000)/1000),cs=Math.floor((ms%1000)/10);return`${m}:${String(s).padStart(2,"0")}.${String(cs).padStart(2,"0")}`;}
 function formatDist(m){return m>=1000?`${(m/1000).toFixed(1)}km`:`${Math.round(m)}m`;}
 function timeAgo(iso){const s=(Date.now()-new Date(iso).getTime())/1000;if(s<60)return'just now';if(s<3600)return`${Math.floor(s/60)}m ago`;if(s<86400)return`${Math.floor(s/3600)}h ago`;if(s<604800)return`${Math.floor(s/86400)}d ago`;return new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short'});}
 function playBeep(freq=880,duration=150){try{const ctx=new(window.AudioContext||window.webkitAudioContext)();const osc=ctx.createOscillator();const gain=ctx.createGain();osc.connect(gain);gain.connect(ctx.destination);osc.frequency.value=freq;osc.type='sine';gain.gain.setValueAtTime(0.3,ctx.currentTime);gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+duration/1000);osc.start();osc.stop(ctx.currentTime+duration/1000);}catch(e){console.log(e);}}
 function logEvent(userId,type,message,stageId=null,context=null){if(!userId)return Promise.resolve();return supabase.from('app_events').insert({user_id:userId,event_type:type,message,stage_id:stageId?String(stageId):null,context}).then(()=>{}).catch(err=>console.log('logEvent failed:',err?.message||err));}
-async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,bike_id,trace}){
+async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,bike_id,gps_margin_ms,trace}){
   const overallRes=await supabase.from('stage_times').select('time_ms').eq('stage_id',stage_id).order('time_ms',{ascending:true}).limit(1);
   const ownRes=await supabase.from('stage_times').select('time_ms').eq('stage_id',stage_id).eq('user_id',user_id).order('time_ms',{ascending:true}).limit(1);
   const prevBest=overallRes.data&&overallRes.data[0]?overallRes.data[0].time_ms:null;
@@ -28,6 +133,7 @@ async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,bik
   const payload={stage_id,user_id,time_ms};
   if(created_at)payload.created_at=created_at;
   if(bike_id)payload.bike_id=bike_id;
+  if(gps_margin_ms!=null)payload.gps_margin_ms=gps_margin_ms;
   const{error}=await supabase.from('stage_times').insert(payload);
   if(error)throw error;
   // Keep the GPS path of your best run on this stage (powers the speed/gap charts). Never fails the save.
@@ -3145,6 +3251,18 @@ function HowItWorksScreen({onClose}){
   );
 }
 
+const GPS_GOOD_M=10,GPS_FAIR_M=25;
+function GpsPill({acc}){
+  if(typeof acc!=="number")return null;
+  const lvl=acc<=GPS_GOOD_M?{c:C.green,t:"GPS good"}:acc<=GPS_FAIR_M?{c:"#D97706",t:"GPS settling"}:{c:C.red,t:"GPS weak"};
+  return(
+    <div style={{display:"inline-flex",alignItems:"center",gap:8,background:`${lvl.c}12`,border:`1px solid ${lvl.c}55`,borderRadius:999,padding:"7px 14px",marginBottom:20}}>
+      <div style={{width:8,height:8,borderRadius:"50%",background:lvl.c,boxShadow:`0 0 0 4px ${lvl.c}22`}}/>
+      <div style={{fontSize:13,fontWeight:600,color:lvl.c}}>{lvl.t}</div>
+      <div style={{fontSize:13,color:C.muted}}>· ±{Math.round(acc)} m</div>
+    </div>
+  );
+}
 function GroupMapScreen({group,stages,user,onBack,onAddStages}){
   const [groupStageIds,setGroupStageIds]=useState(null);
   const isCreator=group.created_by===user.id;
@@ -4454,6 +4572,7 @@ function RaceComplete({base,course,splits,courseStages,totalStages,onSave,user})
   const kind=anyRecord?'record':(delta!==null&&delta<0?'pb':null);
   const col=delta===null?C.text:(delta<0?C.green:C.red);
   const dist=formatDist(courseStages.reduce((a,s)=>a+haversine(s.start,s.finish),0));
+  const gm=gpsMarginLabel(splits);
   return(
     <div style={{position:"fixed",inset:0,background:"#fff",zIndex:100,display:"flex",flexDirection:"column"}}>
       <div style={{padding:`${kind?56:92}px 20px 24px`,textAlign:"center"}}>
@@ -4465,7 +4584,7 @@ function RaceComplete({base,course,splits,courseStages,totalStages,onSave,user})
         <div style={{fontSize:12,color:C.muted,fontWeight:600,letterSpacing:1,marginBottom:6}}>TOTAL TIME</div>
         <div style={{fontSize:52,fontWeight:800,color:col,fontVariantNumeric:"tabular-nums",lineHeight:1.1}}>{formatTime(total)}</div>
         <RaceDeltaPill delta={delta} vs={prevTotal===null?"First run on this course":`vs your best ${formatTime(prevTotal)}`}/>
-        <div style={{fontSize:13,color:C.muted,margin:"14px 0 20px"}}>{dist} timed</div>
+        <div style={{fontSize:13,color:C.muted,margin:"14px 0 20px"}}>{dist} timed{gm&&<> · <span style={gm.weak?{color:"#D97706",fontWeight:600}:undefined}>{gm.text}{gm.weak?" · weak signal":""}</span></>}</div>
       </div>
       <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
         <div style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:12}}>Stage Breakdown</div>
@@ -4495,10 +4614,11 @@ function RaceScreen({course,stages,user,onFinish,onActivity}){
   const [bestPerStage,setBestPerStage]=useState(savedProgress?savedProgress.bestPerStage:{}); // mashup: best time per stage id
   const [runCount,setRunCount]=useState(savedProgress?savedProgress.runCount:0); // how many full runs completed
   const [gateStatus,setGateStatus]=useState("waiting");
-  const [distToGate,setDistToGate]=useState(null); const [armed,setArmed]=useState(false); const timerRef=useRef(null); const finishTimeoutRef=useRef(null);
+  const [distToGate,setDistToGate]=useState(null); const [armed,setArmed]=useState(false); const [gpsAcc,setGpsAcc]=useState(null); const timerRef=useRef(null); const finishTimeoutRef=useRef(null);
   const countRef=useRef(null);
   const gpsRef=useRef(null);
   const startTimeRef=useRef(0);
+  const startMarginRef=useRef(null);
   const prevGpsRef=useRef(null);
   const traceRef=useRef([]);
     const [introDist,setIntroDist]=useState(null);
@@ -4526,30 +4646,42 @@ function RaceScreen({course,stages,user,onFinish,onActivity}){
     return()=>navigator.geolocation.clearWatch(id);
   },[phase]);
 
+  useEffect(()=>{
+    if(phase!=="transfer"||armed||!navigator.geolocation)return;
+    const id=navigator.geolocation.watchPosition(pos=>setGpsAcc(pos.coords.accuracy),()=>{},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
+    return()=>navigator.geolocation.clearWatch(id);
+  },[phase,armed]);
+
   // Simulate GPS toward gate
         useEffect(()=>{
-if(phase!=="transfer"||!armed)return;
-if(!navigator.geolocation)return;
-const gate=currentStage.start;
-prevGpsRef.current=null;
-const id=navigator.geolocation.watchPosition(pos=>{
-const loc={lat:pos.coords.latitude,lng:pos.coords.longitude,ts:pos.timestamp};
-const dist=haversine(loc,gate);
-setDistToGate(Math.round(dist));
-const prev=prevGpsRef.current;
-const crossed=segmentCrossesGate(prev,loc,gate,FAT_GATE_RADIUS)&&gateCrossT(prev,loc,gate)<0.999;
-prevGpsRef.current=loc;
-if(crossed){
-navigator.geolocation.clearWatch(id);
-setGateStatus("entered");
-const t=prev?gateCrossT(prev,loc,gate):0;
-const crossTs=prev?prev.ts+t*(loc.ts-prev.ts):loc.ts;
-setTimeout(()=>startCountdown(crossTs),300);
-}
-else if(dist<=50)setGateStatus("near");
-else setGateStatus("waiting");
-},err=>{console.log(err);logEvent(user?.id,"gps_error_transfer",err.message||String(err),currentStage?.id,{code:err.code});},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
-return()=>navigator.geolocation.clearWatch(id);
+  if(phase!=="transfer"||!armed)return;
+  if(!navigator.geolocation)return;
+  const gate=currentStage.start;
+  const line=currentStage.line_coords||currentStage.lineCoords||null;
+  const tracker=makeGateTracker(gate,START_GATE_RADIUS,lineDirAt(line,gate),START_FIT_M,true);
+  let prev=null,done=false,id=null;
+  const gpsOk=makeGpsFilter();
+  prevGpsRef.current=null;
+  id=navigator.geolocation.watchPosition(pos=>{
+    if(done)return;
+    const loc={lat:pos.coords.latitude,lng:pos.coords.longitude,ts:pos.timestamp,acc:pos.coords.accuracy};
+    if(prev&&loc.ts<=prev.ts)return; // same fix delivered twice
+    const good=gpsOk(loc);
+    if(good){prev=loc;prevGpsRef.current=loc;}
+    const dist=haversine(loc,gate);
+    setDistToGate(Math.round(dist));
+    setGpsAcc(loc.acc);
+    const hit=good?tracker(loc):null;
+    if(hit){
+      done=true;navigator.geolocation.clearWatch(id);
+      setGateStatus("entered");
+      startMarginRef.current=typeof hit.marginMs==="number"?hit.marginMs:null;
+      setTimeout(()=>startCountdown(hit.ts),300);
+    }
+    else if(dist<=50)setGateStatus("near");
+    else setGateStatus("waiting");
+  },err=>{console.log(err);logEvent(user?.id,"gps_error_transfer",err.message||String(err),currentStage?.id,{code:err.code});},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
+  return()=>{done=true;navigator.geolocation.clearWatch(id);};
 },[phase,stageIndex,armed]);
 
 const armCheckRef=useRef(false);
@@ -4566,11 +4698,11 @@ const tryArm=()=>{
   },()=>{armCheckRef.current=false;go();},{enableHighAccuracy:true,maximumAge:0,timeout:8000});
 };
 const startCountdown=(crossTs=null)=>{playBeep(880,150);setGateStatus("waiting");startTimeRef.current=crossTs||Date.now();timerMsRef.current=Date.now()-startTimeRef.current;setTimerMs(timerMsRef.current);setPhase("racing");timerRef.current=setInterval(()=>{timerMsRef.current=Date.now()-startTimeRef.current;setTimerMs(timerMsRef.current);},10);clearTimeout(finishTimeoutRef.current);finishTimeoutRef.current=setTimeout(()=>{finishTimeoutRef.current=null;if(timerRef.current){clearInterval(timerRef.current);setPhase("transfer");setTimerMs(0);logEvent(user?.id,"finish_timeout","Finish gate not reached within 10 minutes",currentStage?.id);alert("Run cancelled — finish gate not reached in time");}},600000);};    
-  const stopStage=(saveTime=false,crossTs=null)=>{
+  const stopStage=(saveTime=false,crossTs=null,marginMs=null)=>{
 playBeep(440,250);
 clearInterval(timerRef.current);clearTimeout(finishTimeoutRef.current);finishTimeoutRef.current=null;
 const finalTime=Math.round(crossTs?Math.max(0,crossTs-startTimeRef.current):timerMsRef.current);  
-const newSplit={stageId:currentStage.id,name:currentStage.name,time:finalTime};
+const newSplit={stageId:currentStage.id,name:currentStage.name,time:finalTime,gpsMarginMs:marginMs};
 setSplits(prev=>[...prev,newSplit]);
 // Mashup: update best per stage
 if(isMashup){
@@ -4581,32 +4713,51 @@ return{...prev,[currentStage.id]:(!current||finalTime<current)?finalTime:current
 }
 setPhase("split");
 if(saveTime&&!isPractice){
-  const entry={stage_id:currentStage.id,stage_name:currentStage.name,user_id:user.id,time_ms:finalTime,created_at:new Date(crossTs||Date.now()).toISOString(),bike_id:ACTIVE_BIKE_ID,trace:compactTrace(traceRef.current)};
+  const entry={stage_id:currentStage.id,stage_name:currentStage.name,user_id:user.id,time_ms:finalTime,created_at:new Date(crossTs||Date.now()).toISOString(),bike_id:ACTIVE_BIKE_ID,gps_margin_ms:marginMs!=null?Math.round(marginMs):null,trace:compactTrace(traceRef.current)};
   saveStageTime(entry).then(()=>onActivity&&onActivity()).catch(err=>{console.log('save failed, storing offline',err);queueOfflineTime(entry);onActivity&&onActivity();});
 }
 };
 
              useEffect(()=>{
-    if(phase!=="racing")return;
-    if(!navigator.geolocation)return;
-    const gate=currentStage.finish;
-    prevGpsRef.current=null;
-    traceRef.current=[{t:0,lat:currentStage.start.lat,lng:currentStage.start.lng}];
-    const id=navigator.geolocation.watchPosition(pos=>{
-      const loc={lat:pos.coords.latitude,lng:pos.coords.longitude,ts:pos.timestamp};
-      const prev=prevGpsRef.current;
-      const crossed=segmentCrossesGate(prev,loc,gate,FINISH_GATE_RADIUS)&&gateCrossT(prev,loc,gate)<0.999;
-      prevGpsRef.current=loc;
-      if(!crossed&&loc.ts>startTimeRef.current)traceRef.current.push({t:loc.ts-startTimeRef.current,lat:loc.lat,lng:loc.lng});
-      if(crossed){
-navigator.geolocation.clearWatch(id);
-const t=prev?gateCrossT(prev,loc,gate):0;
-const crossTs=prev?prev.ts+t*(loc.ts-prev.ts):loc.ts;
-traceRef.current.push({t:Math.max(0,crossTs-startTimeRef.current),lat:gate.lat,lng:gate.lng});
-stopStage(true,crossTs);
-}
-},err=>{console.log(err);logEvent(user?.id,"gps_error_racing",err.message||String(err),currentStage?.id,{code:err.code});},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
-return()=>navigator.geolocation.clearWatch(id);
+  if(phase!=="racing")return;
+  if(!navigator.geolocation)return;
+  const gate=currentStage.finish;
+  const line=currentStage.line_coords||currentStage.lineCoords||null;
+  const tracker=makeGateTracker(gate,FINISH_GATE_RADIUS,lineDirAt(line,gate));
+  let prev=null,near=null,done=false,id=null;
+  const gpsOk=makeGpsFilter();
+  prevGpsRef.current=null;
+  traceRef.current=[{t:0,lat:currentStage.start.lat,lng:currentStage.start.lng}];
+  const finish=(ts,how,extra,finMs)=>{
+    if(done)return;done=true;
+    if(id!==null)navigator.geolocation.clearWatch(id);
+    if(how!=="fit")logEvent(user?.id,"finish_"+how,`Finish timed by ${how}`,currentStage?.id,extra||null);
+    const sm=startMarginRef.current;
+    const margin=(typeof sm==="number"&&typeof finMs==="number")?Math.sqrt(sm*sm+finMs*finMs):null;
+    const endTs=Math.max(ts,startTimeRef.current+1000);
+    const gt=endTs-startTimeRef.current;
+    traceRef.current=traceRef.current.filter(p=>p.t<gt);
+    traceRef.current.push({t:gt,lat:gate.lat,lng:gate.lng});
+    stopStage(true,endTs,margin);
+  };
+  id=navigator.geolocation.watchPosition(pos=>{
+    if(done)return;
+    const loc={lat:pos.coords.latitude,lng:pos.coords.longitude,ts:pos.timestamp,acc:pos.coords.accuracy};
+    if(!gpsOk(loc))return; // skip repeated, junk or impossible fixes
+    if(loc.ts>startTimeRef.current)traceRef.current.push({t:loc.ts-startTimeRef.current,lat:loc.lat,lng:loc.lng});
+    const hit=tracker(loc);
+    if(hit){finish(hit.ts,hit.how,null,hit.marginMs);return;}
+    // safety net: never got inside the finish gate, but came close at the end of the stage, then rode away
+    const c=segClosest(prev,loc,gate);
+    if(c.d<=FINISH_NEAR_M&&c.ts-startTimeRef.current>=FINISH_MIN_MS){
+      const rem=stageRemainingM(line,loc);
+      if((rem===null||rem<=FINISH_END_M)&&(!near||c.d<near.d))near=c;
+    }
+    const spd=prev?haversine(prev,loc)/Math.max(0.001,(loc.ts-prev.ts)/1000):0;
+    prev=loc;prevGpsRef.current=loc;
+    if(near&&haversine(loc,gate)>=near.d+FINISH_LEAVE_M)finish(near.ts,"safety_net",{closest_m:Math.round(near.d)},gpsMarginMs([Math.max(loc.acc||0,near.d)],spd));
+  },err=>{console.log(err);logEvent(user?.id,"gps_error_racing",err.message||String(err),currentStage?.id,{code:err.code});},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
+  return()=>{done=true;if(id!==null)navigator.geolocation.clearWatch(id);};
 },[phase,stageIndex]);
            
 
@@ -4769,6 +4920,7 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
 </div>
 <div style={{fontSize:20,fontWeight:700,color:C.text,marginBottom:8}}>{stageIndex===0?`Head to Stage 1`:`Transfer to Stage ${stageIndex+1}`}</div>
 <div style={{fontSize:14,color:C.muted,marginBottom:20,maxWidth:260}}>Gate detection is off. Tap below once you're ready — the app will start watching for the start gate.</div>
+<GpsPill acc={gpsAcc}/>
 <button className="tap" onClick={tryArm} style={{background:C.blue,border:"none",borderRadius:14,padding:"14px 28px",color:"#fff",fontSize:15,fontWeight:700}}>Arm Start Gate</button>
 </>
 ):(
@@ -4779,6 +4931,7 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
 <div style={{fontSize:20,fontWeight:700,color:C.text,marginBottom:8}}>{stageIndex===0?`Head to Stage 1`:`Transfer to Stage ${stageIndex+1}`}</div>
 <div style={{fontSize:24,fontWeight:800,color:gateColors[gateStatus],marginBottom:8,transition:"all 0.3s"}}>{gateMsg[gateStatus]}</div>
 <div style={{fontSize:13,color:C.muted,marginBottom:16}}>{isPractice?"Timer won't start — just ride it for feel":"Timer starts automatically when you enter the gate"}</div>
+<GpsPill acc={gpsAcc}/>
 <button className="tap" onClick={()=>{setArmed(false);setGateStatus("waiting");setDistToGate(null);}} style={{marginTop:16,background:"none",border:"none",color:C.muted,fontSize:12,textDecoration:"underline"}}>Disarm</button>
 </>
 )}
@@ -5454,10 +5607,28 @@ export default function App(){
   useEffect(()=>{if(!navigator.geolocation)return;let centered=false;const id=navigator.geolocation.watchPosition(pos=>{const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};setUserPos(loc);if(typeof pos.coords.heading==='number'&&!isNaN(pos.coords.heading))setUserHeading(pos.coords.heading);if(!centered){setMapCenter(loc);centered=true;}},err=>console.log(err),{enableHighAccuracy:true,maximumAge:2000,timeout:10000});return()=>navigator.geolocation.clearWatch(id);},[]);
 
 useEffect(()=>{
-  if(activeRace&&'wakeLock'in navigator){
-    navigator.wakeLock.request('screen').then(lock=>{wakeLockRef.current=lock;}).catch(err=>console.log(err));
-  }
-  return()=>{if(wakeLockRef.current){wakeLockRef.current.release();wakeLockRef.current=null;}};
+  if(!activeRace)return;
+  let stopped=false;
+  const grab=async()=>{
+    if(stopped||!('wakeLock' in navigator)||document.visibilityState!=="visible")return;
+    if(wakeLockRef.current&&!wakeLockRef.current.released)return;
+    try{
+      const lock=await navigator.wakeLock.request('screen');
+      if(stopped){lock.release().catch(()=>{});return;}
+      wakeLockRef.current=lock;
+    }catch(err){console.log(err);}
+  };
+  const onVis=()=>{
+    if(document.visibilityState==="visible")grab(); // the phone drops the lock when you leave the app, so take it back
+    else logEvent(user?.id,"race_backgrounded","GATE left the screen during a run",null);
+  };
+  grab();
+  document.addEventListener("visibilitychange",onVis);
+  return()=>{
+    stopped=true;
+    document.removeEventListener("visibilitychange",onVis);
+    if(wakeLockRef.current){wakeLockRef.current.release().catch(()=>{});wakeLockRef.current=null;}
+  };
 },[activeRace]);
   
   useEffect(()=>{const el=containerRef.current;if(!el)return;const ro=new ResizeObserver(e=>setMapSize({w:e[0].contentRect.width,h:e[0].contentRect.height}));ro.observe(el);setMapSize({w:el.clientWidth,h:el.clientHeight});return()=>ro.disconnect();},[]);
