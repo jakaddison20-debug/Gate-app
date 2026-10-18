@@ -27,6 +27,13 @@ const START_GATE_RADIUS=20; // start gate detection radius (timing no longer dep
 const GPS_MAX_ACC_M=50;    // ignore fixes the phone says are worse than 50 m (guesses from wifi/phone masts)
 const GPS_MAX_SPEED_MS=30; // ignore jumps faster than 30 m/s (67 mph)...
 const GPS_MAX_REJECTS=3;   // ...unless it keeps happening, then trust the new position
+// GPS margin for one gate, in ms: average accuracy (m) ÷ speed (m/s). null if unknown.
+const GPS_WEAK_S=1.5; // runs with a bigger margin than this show "weak signal"
+function gpsMarginMs(accs,speedMs){
+  const a=accs.filter(x=>typeof x==="number"&&x>0);
+  if(!a.length||!(speedMs>0.5))return null;
+  return a.reduce((x,y)=>x+y,0)/a.length/speedMs*1000;
+}
 function segClosest(prevPos,currPos,gate){
   if(!prevPos)return{d:haversine(currPos,gate),ts:currPos.ts};
   const t=gateCrossT(prevPos,currPos,gate);
@@ -86,8 +93,8 @@ function makeGateTracker(gate,radius,dir,fitM=GATE_FIT_M,strict=false){
       const q=buf[i-1],dt=(p.ts-q.ts)/1000;
       if(!(dt>0)||haversine(p,q)/dt<GATE_MOVING_MS)return; // skip fixes where you weren't moving
       const s=along(p);
-      if(s<=0){if(s>=-fitM&&!post.length)pre.push({t:p.ts,s});}
-      else if(post.length<GATE_AFTER_FIXES&&s<=fitM)post.push({t:p.ts,s});
+      if(s<=0){if(s>=-fitM&&!post.length)pre.push({t:p.ts,s,acc:p.acc});}
+      else if(post.length<GATE_AFTER_FIXES&&s<=fitM)post.push({t:p.ts,s,acc:p.acc});
     });
     const leaving=haversine(loc,gate)>=closest.d+15;
     if(post.length<GATE_AFTER_FIXES&&sinceDet<10&&!leaving)return null;
@@ -98,18 +105,27 @@ function makeGateTracker(gate,radius,dir,fitM=GATE_FIT_M,strict=false){
       let sxy=0,sxx=0;pts.forEach(p=>{sxy+=(p.t-mt)*(p.s-ms);sxx+=(p.t-mt)**2;});
       const v=sxx?sxy/sxx:0; // metres per ms
       const ts=mt-ms/v;
-      if(v>0.0005&&ts>=pts[0].t-1000&&ts<=pts[n-1].t+1000)return{ts,how:'fit'};
+      if(v>0.0005&&ts>=pts[0].t-1000&&ts<=pts[n-1].t+1000)return{ts,how:'fit',marginMs:gpsMarginMs(pts.map(p=>p.acc),v*1000)};
     }
     if(strict)return reset();
-    return{ts:closest.ts,how:'closest'};
+    const q=buf[buf.length-2],sp=haversine(q,loc)/Math.max(0.001,(loc.ts-q.ts)/1000);
+    return{ts:closest.ts,how:'closest',marginMs:gpsMarginMs([loc.acc],sp)};
   };
+}
+
+// Helper for the finish screen: combines every stage's margin into one ±, or null if any is unknown
+function gpsMarginLabel(splits){
+  const m=(splits||[]).map(s=>s.gpsMarginMs);
+  if(!m.length||m.some(x=>typeof x!=="number"))return null;
+  const sec=Math.sqrt(m.reduce((a,x)=>a+x*x,0))/1000;
+  return{text:`GPS ±${sec.toFixed(1)}s`,weak:sec>GPS_WEAK_S};
 }
 function formatTime(ms){if(!ms)return"—";const m=Math.floor(ms/60000),s=Math.floor((ms%60000)/1000),cs=Math.floor((ms%1000)/10);return`${m}:${String(s).padStart(2,"0")}.${String(cs).padStart(2,"0")}`;}
 function formatDist(m){return m>=1000?`${(m/1000).toFixed(1)}km`:`${Math.round(m)}m`;}
 function timeAgo(iso){const s=(Date.now()-new Date(iso).getTime())/1000;if(s<60)return'just now';if(s<3600)return`${Math.floor(s/60)}m ago`;if(s<86400)return`${Math.floor(s/3600)}h ago`;if(s<604800)return`${Math.floor(s/86400)}d ago`;return new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short'});}
 function playBeep(freq=880,duration=150){try{const ctx=new(window.AudioContext||window.webkitAudioContext)();const osc=ctx.createOscillator();const gain=ctx.createGain();osc.connect(gain);gain.connect(ctx.destination);osc.frequency.value=freq;osc.type='sine';gain.gain.setValueAtTime(0.3,ctx.currentTime);gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+duration/1000);osc.start();osc.stop(ctx.currentTime+duration/1000);}catch(e){console.log(e);}}
 function logEvent(userId,type,message,stageId=null,context=null){if(!userId)return Promise.resolve();return supabase.from('app_events').insert({user_id:userId,event_type:type,message,stage_id:stageId?String(stageId):null,context}).then(()=>{}).catch(err=>console.log('logEvent failed:',err?.message||err));}
-async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,bike_id,trace}){
+async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,bike_id,gps_margin_ms,trace}){
   const overallRes=await supabase.from('stage_times').select('time_ms').eq('stage_id',stage_id).order('time_ms',{ascending:true}).limit(1);
   const ownRes=await supabase.from('stage_times').select('time_ms').eq('stage_id',stage_id).eq('user_id',user_id).order('time_ms',{ascending:true}).limit(1);
   const prevBest=overallRes.data&&overallRes.data[0]?overallRes.data[0].time_ms:null;
@@ -117,6 +133,7 @@ async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,bik
   const payload={stage_id,user_id,time_ms};
   if(created_at)payload.created_at=created_at;
   if(bike_id)payload.bike_id=bike_id;
+  if(gps_margin_ms!=null)payload.gps_margin_ms=gps_margin_ms;
   const{error}=await supabase.from('stage_times').insert(payload);
   if(error)throw error;
   // Keep the GPS path of your best run on this stage (powers the speed/gap charts). Never fails the save.
@@ -4555,6 +4572,7 @@ function RaceComplete({base,course,splits,courseStages,totalStages,onSave,user})
   const kind=anyRecord?'record':(delta!==null&&delta<0?'pb':null);
   const col=delta===null?C.text:(delta<0?C.green:C.red);
   const dist=formatDist(courseStages.reduce((a,s)=>a+haversine(s.start,s.finish),0));
+  const gm=gpsMarginLabel(splits);
   return(
     <div style={{position:"fixed",inset:0,background:"#fff",zIndex:100,display:"flex",flexDirection:"column"}}>
       <div style={{padding:`${kind?56:92}px 20px 24px`,textAlign:"center"}}>
@@ -4566,7 +4584,7 @@ function RaceComplete({base,course,splits,courseStages,totalStages,onSave,user})
         <div style={{fontSize:12,color:C.muted,fontWeight:600,letterSpacing:1,marginBottom:6}}>TOTAL TIME</div>
         <div style={{fontSize:52,fontWeight:800,color:col,fontVariantNumeric:"tabular-nums",lineHeight:1.1}}>{formatTime(total)}</div>
         <RaceDeltaPill delta={delta} vs={prevTotal===null?"First run on this course":`vs your best ${formatTime(prevTotal)}`}/>
-        <div style={{fontSize:13,color:C.muted,margin:"14px 0 20px"}}>{dist} timed</div>
+        <div style={{fontSize:13,color:C.muted,margin:"14px 0 20px"}}>{dist} timed{gm&&<> · <span style={gm.weak?{color:"#D97706",fontWeight:600}:undefined}>{gm.text}{gm.weak?" · weak signal":""}</span></>}</div>
       </div>
       <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
         <div style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:12}}>Stage Breakdown</div>
@@ -4600,6 +4618,7 @@ function RaceScreen({course,stages,user,onFinish,onActivity}){
   const countRef=useRef(null);
   const gpsRef=useRef(null);
   const startTimeRef=useRef(0);
+  const startMarginRef=useRef(null);
   const prevGpsRef=useRef(null);
   const traceRef=useRef([]);
     const [introDist,setIntroDist]=useState(null);
@@ -4656,6 +4675,7 @@ function RaceScreen({course,stages,user,onFinish,onActivity}){
     if(hit){
       done=true;navigator.geolocation.clearWatch(id);
       setGateStatus("entered");
+      startMarginRef.current=typeof hit.marginMs==="number"?hit.marginMs:null;
       setTimeout(()=>startCountdown(hit.ts),300);
     }
     else if(dist<=50)setGateStatus("near");
@@ -4678,11 +4698,11 @@ const tryArm=()=>{
   },()=>{armCheckRef.current=false;go();},{enableHighAccuracy:true,maximumAge:0,timeout:8000});
 };
 const startCountdown=(crossTs=null)=>{playBeep(880,150);setGateStatus("waiting");startTimeRef.current=crossTs||Date.now();timerMsRef.current=Date.now()-startTimeRef.current;setTimerMs(timerMsRef.current);setPhase("racing");timerRef.current=setInterval(()=>{timerMsRef.current=Date.now()-startTimeRef.current;setTimerMs(timerMsRef.current);},10);clearTimeout(finishTimeoutRef.current);finishTimeoutRef.current=setTimeout(()=>{finishTimeoutRef.current=null;if(timerRef.current){clearInterval(timerRef.current);setPhase("transfer");setTimerMs(0);logEvent(user?.id,"finish_timeout","Finish gate not reached within 10 minutes",currentStage?.id);alert("Run cancelled — finish gate not reached in time");}},600000);};    
-  const stopStage=(saveTime=false,crossTs=null)=>{
+  const stopStage=(saveTime=false,crossTs=null,marginMs=null)=>{
 playBeep(440,250);
 clearInterval(timerRef.current);clearTimeout(finishTimeoutRef.current);finishTimeoutRef.current=null;
 const finalTime=Math.round(crossTs?Math.max(0,crossTs-startTimeRef.current):timerMsRef.current);  
-const newSplit={stageId:currentStage.id,name:currentStage.name,time:finalTime};
+const newSplit={stageId:currentStage.id,name:currentStage.name,time:finalTime,gpsMarginMs:marginMs};
 setSplits(prev=>[...prev,newSplit]);
 // Mashup: update best per stage
 if(isMashup){
@@ -4693,7 +4713,7 @@ return{...prev,[currentStage.id]:(!current||finalTime<current)?finalTime:current
 }
 setPhase("split");
 if(saveTime&&!isPractice){
-  const entry={stage_id:currentStage.id,stage_name:currentStage.name,user_id:user.id,time_ms:finalTime,created_at:new Date(crossTs||Date.now()).toISOString(),bike_id:ACTIVE_BIKE_ID,trace:compactTrace(traceRef.current)};
+  const entry={stage_id:currentStage.id,stage_name:currentStage.name,user_id:user.id,time_ms:finalTime,created_at:new Date(crossTs||Date.now()).toISOString(),bike_id:ACTIVE_BIKE_ID,gps_margin_ms:marginMs!=null?Math.round(marginMs):null,trace:compactTrace(traceRef.current)};
   saveStageTime(entry).then(()=>onActivity&&onActivity()).catch(err=>{console.log('save failed, storing offline',err);queueOfflineTime(entry);onActivity&&onActivity();});
 }
 };
@@ -4708,15 +4728,17 @@ if(saveTime&&!isPractice){
   const gpsOk=makeGpsFilter();
   prevGpsRef.current=null;
   traceRef.current=[{t:0,lat:currentStage.start.lat,lng:currentStage.start.lng}];
-  const finish=(ts,how,extra)=>{
+  const finish=(ts,how,extra,finMs)=>{
     if(done)return;done=true;
     if(id!==null)navigator.geolocation.clearWatch(id);
     if(how!=="fit")logEvent(user?.id,"finish_"+how,`Finish timed by ${how}`,currentStage?.id,extra||null);
+    const sm=startMarginRef.current;
+    const margin=(typeof sm==="number"&&typeof finMs==="number")?Math.sqrt(sm*sm+finMs*finMs):null;
     const endTs=Math.max(ts,startTimeRef.current+1000);
     const gt=endTs-startTimeRef.current;
     traceRef.current=traceRef.current.filter(p=>p.t<gt);
     traceRef.current.push({t:gt,lat:gate.lat,lng:gate.lng});
-    stopStage(true,endTs);
+    stopStage(true,endTs,margin);
   };
   id=navigator.geolocation.watchPosition(pos=>{
     if(done)return;
@@ -4724,15 +4746,16 @@ if(saveTime&&!isPractice){
     if(!gpsOk(loc))return; // skip repeated, junk or impossible fixes
     if(loc.ts>startTimeRef.current)traceRef.current.push({t:loc.ts-startTimeRef.current,lat:loc.lat,lng:loc.lng});
     const hit=tracker(loc);
-    if(hit){finish(hit.ts,hit.how);return;}
+    if(hit){finish(hit.ts,hit.how,null,hit.marginMs);return;}
     // safety net: never got inside the finish gate, but came close at the end of the stage, then rode away
     const c=segClosest(prev,loc,gate);
     if(c.d<=FINISH_NEAR_M&&c.ts-startTimeRef.current>=FINISH_MIN_MS){
       const rem=stageRemainingM(line,loc);
       if((rem===null||rem<=FINISH_END_M)&&(!near||c.d<near.d))near=c;
     }
+    const spd=prev?haversine(prev,loc)/Math.max(0.001,(loc.ts-prev.ts)/1000):0;
     prev=loc;prevGpsRef.current=loc;
-    if(near&&haversine(loc,gate)>=near.d+FINISH_LEAVE_M)finish(near.ts,"safety_net",{closest_m:Math.round(near.d)});
+    if(near&&haversine(loc,gate)>=near.d+FINISH_LEAVE_M)finish(near.ts,"safety_net",{closest_m:Math.round(near.d)},gpsMarginMs([Math.max(loc.acc||0,near.d)],spd));
   },err=>{console.log(err);logEvent(user?.id,"gps_error_racing",err.message||String(err),currentStage?.id,{code:err.code});},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
   return()=>{done=true;if(id!==null)navigator.geolocation.clearWatch(id);};
 },[phase,stageIndex]);
