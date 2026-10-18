@@ -6035,7 +6035,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
 
           {/* Share stage to feed */}
           {pendingShareStage&&(
-            <><div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:45}} onClick={()=>setPendingShareStage(null)}/><div className="slide-up" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:46,maxHeight:"82vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><ShareStageSheet stage={pendingShareStage} onDismiss={()=>setPendingShareStage(null)} onShare={()=>{logEvent(user.id,'stage_created',`created a new stage: ${pendingShareStage.name}`,pendingShareStage.id).then(()=>setRefreshTick(t=>t+1));setPendingShareStage(null);}}/></div></>
+            <><div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:59}} onClick={()=>setPendingShareStage(null)}/><div className="slide-up" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:60,maxHeight:"82vh",overflowY:"auto",paddingBottom:"env(safe-area-inset-bottom)"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><ShareStageSheet stage={pendingShareStage} onDismiss={()=>setPendingShareStage(null)} onShare={()=>{logEvent(user.id,'stage_created',`created a new stage: ${pendingShareStage.name}`,pendingShareStage.id).then(()=>setRefreshTick(t=>t+1));setPendingShareStage(null);}}/></div></>
           )}
 
              
