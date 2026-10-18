@@ -21,6 +21,9 @@ const FINISH_NEAR_M=40;     // safety net: came within 40 m of the finish pin...
 const FINISH_LEAVE_M=25;    // ...then got 25 m further away than the closest point...
 const FINISH_END_M=60;      // ...while in the last 60 m of the stage line...
 const FINISH_MIN_MS=10000;  // ...and at least 10 s after the start
+const GATE_MOVING_MS=2;     // ignore fixes slower than 2 m/s (standing waiting at the start)
+const START_FIT_M=20;       // shorter window at the start, where you're still speeding up
+const START_GATE_RADIUS=20; // start gate detection radius (timing no longer depends on it)
 function segClosest(prevPos,currPos,gate){
   if(!prevPos)return{d:haversine(currPos,gate),ts:currPos.ts};
   const t=gateCrossT(prevPos,currPos,gate);
@@ -45,8 +48,9 @@ function stageRemainingM(line,pos){
   return rem;
 }
 // Feed it every GPS fix {lat,lng,ts}. Returns null until it has decided, then {ts,how}.
-// Times the moment you pass the gate by fitting a straight line through the fixes either side of it.
-function makeGateTracker(gate,radius,dir){
+// Times the moment you pass the gate by fitting a straight line through the moving fixes either side of it.
+// strict=true (start): never guesses; if it can't fit a clean pass it resets and keeps watching.
+function makeGateTracker(gate,radius,dir,fitM=GATE_FIT_M,strict=false){
   const buf=[];let detected=false,closest=null,sinceDet=0;
   return function push(loc){
     buf.push(loc);
@@ -56,15 +60,24 @@ function makeGateTracker(gate,radius,dir){
       if(c.d>radius){if(buf.length>12)buf.shift();return null;}
       detected=true;
     }
-    sinceDet++;
+    const q0=buf[buf.length-2],dt0=(loc.ts-q0.ts)/1000;
+    if(dt0>0&&haversine(loc,q0)/dt0>=GATE_MOVING_MS)sinceDet++;
     if(!closest||c.d<closest.d)closest=c;
     const u=dir||unitVec(buf[0],loc)||{x:0,y:1};
     const along=p=>{const o=metersOffset(gate,p);return o.x*u.x+o.y*u.y;};
     const pre=[],post=[];
-    buf.forEach(p=>{const s=along(p);if(s<=0){if(s>=-GATE_FIT_M&&!post.length)pre.push({t:p.ts,s});}else if(post.length<GATE_AFTER_FIXES&&s<=GATE_FIT_M)post.push({t:p.ts,s});});
+    buf.forEach((p,i)=>{
+      if(i===0)return;
+      const q=buf[i-1],dt=(p.ts-q.ts)/1000;
+      if(!(dt>0)||haversine(p,q)/dt<GATE_MOVING_MS)return; // skip fixes where you weren't moving
+      const s=along(p);
+      if(s<=0){if(s>=-fitM&&!post.length)pre.push({t:p.ts,s});}
+      else if(post.length<GATE_AFTER_FIXES&&s<=fitM)post.push({t:p.ts,s});
+    });
     const leaving=haversine(loc,gate)>=closest.d+15;
     if(post.length<GATE_AFTER_FIXES&&sinceDet<10&&!leaving)return null;
     const pts=pre.concat(post);
+    const reset=()=>{detected=false;closest=null;sinceDet=0;while(buf.length>12)buf.shift();return null;};
     if(pts.length>=3&&post.length){
       const n=pts.length,mt=pts.reduce((a,p)=>a+p.t,0)/n,ms=pts.reduce((a,p)=>a+p.s,0)/n;
       let sxy=0,sxx=0;pts.forEach(p=>{sxy+=(p.t-mt)*(p.s-ms);sxx+=(p.t-mt)**2;});
@@ -72,6 +85,7 @@ function makeGateTracker(gate,radius,dir){
       const ts=mt-ms/v;
       if(v>0.0005&&ts>=pts[0].t-1000&&ts<=pts[n-1].t+1000)return{ts,how:'fit'};
     }
+    if(strict)return reset();
     return{ts:closest.ts,how:'closest'};
   };
 }
@@ -4588,28 +4602,30 @@ function RaceScreen({course,stages,user,onFinish,onActivity}){
 
   // Simulate GPS toward gate
         useEffect(()=>{
-if(phase!=="transfer"||!armed)return;
-if(!navigator.geolocation)return;
-const gate=currentStage.start;
-prevGpsRef.current=null;
-const id=navigator.geolocation.watchPosition(pos=>{
-const loc={lat:pos.coords.latitude,lng:pos.coords.longitude,ts:pos.timestamp};
-const dist=haversine(loc,gate);
-setDistToGate(Math.round(dist));
-const prev=prevGpsRef.current;
-const crossed=segmentCrossesGate(prev,loc,gate,FAT_GATE_RADIUS)&&gateCrossT(prev,loc,gate)<0.999;
-prevGpsRef.current=loc;
-if(crossed){
-navigator.geolocation.clearWatch(id);
-setGateStatus("entered");
-const t=prev?gateCrossT(prev,loc,gate):0;
-const crossTs=prev?prev.ts+t*(loc.ts-prev.ts):loc.ts;
-setTimeout(()=>startCountdown(crossTs),300);
-}
-else if(dist<=50)setGateStatus("near");
-else setGateStatus("waiting");
-},err=>{console.log(err);logEvent(user?.id,"gps_error_transfer",err.message||String(err),currentStage?.id,{code:err.code});},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
-return()=>navigator.geolocation.clearWatch(id);
+  if(phase!=="transfer"||!armed)return;
+  if(!navigator.geolocation)return;
+  const gate=currentStage.start;
+  const line=currentStage.line_coords||currentStage.lineCoords||null;
+  const tracker=makeGateTracker(gate,START_GATE_RADIUS,lineDirAt(line,gate),START_FIT_M,true);
+  let prev=null,done=false,id=null;
+  prevGpsRef.current=null;
+  id=navigator.geolocation.watchPosition(pos=>{
+    if(done)return;
+    const loc={lat:pos.coords.latitude,lng:pos.coords.longitude,ts:pos.timestamp};
+    if(prev&&loc.ts<=prev.ts)return; // same fix delivered twice
+    prev=loc;prevGpsRef.current=loc;
+    const dist=haversine(loc,gate);
+    setDistToGate(Math.round(dist));
+    const hit=tracker(loc);
+    if(hit){
+      done=true;navigator.geolocation.clearWatch(id);
+      setGateStatus("entered");
+      setTimeout(()=>startCountdown(hit.ts),300);
+    }
+    else if(dist<=50)setGateStatus("near");
+    else setGateStatus("waiting");
+  },err=>{console.log(err);logEvent(user?.id,"gps_error_transfer",err.message||String(err),currentStage?.id,{code:err.code});},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
+  return()=>{done=true;navigator.geolocation.clearWatch(id);};
 },[phase,stageIndex,armed]);
 
 const armCheckRef=useRef(false);
