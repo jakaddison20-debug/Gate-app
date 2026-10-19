@@ -939,177 +939,306 @@ function niceCeil(v,steps){
   const ticks=[];for(let x=step;x<=max+1e-9;x+=step)ticks.push(Math.round(x*100)/100);
   return{max,ticks};
 }
-function RunCompareCharts({mine,theirs,name,units}){
+// ── Terrain under a stage: elevation (m) and gradient (%) at PROFILE_N+1 points along the line ──
+const elevProfCache={};
+async function stageElevProfile(stage){
+  const line=stage.line_coords&&stage.line_coords.length>1?stage.line_coords:[stage.start,stage.finish];
+  if(!line||line.length<2||!line[0]||!line[line.length-1])return null;
+  const cum=[0];for(let i=1;i<line.length;i++)cum.push(cum[i-1]+haversine(line[i-1],line[i]));
+  const total=cum[cum.length-1];
+  if(total<20)return null;
+  const key=`${stage.id}:${line.length}:${Math.round(total)}`;
+  if(elevProfCache[key])return elevProfCache[key];
+  const N=PROFILE_N,raw=[];
+  for(let k=0,seg=0;k<=N;k++){
+    const d=total*k/N;
+    while(seg<line.length-2&&cum[seg+1]<d)seg++;
+    const span=cum[seg+1]-cum[seg],u=span>0?Math.min(1,(d-cum[seg])/span):0;
+    const e=await elevationAt(line[seg].lat+(line[seg+1].lat-line[seg].lat)*u,line[seg].lng+(line[seg+1].lng-line[seg].lng)*u);
+    if(e===null)return null;
+    raw.push(e);
+  }
+  const elev=raw.map((_,i)=>{const a=Math.max(0,i-2),b=Math.min(N,i+2);let s=0;for(let j=a;j<=b;j++)s+=raw[j];return s/(b-a+1);});
+  const step=total/N,w=3;
+  const grade=elev.map((_,i)=>{const a=Math.max(0,i-w),b=Math.min(N,i+w);return(elev[b]-elev[a])/((b-a)*step)*100;}); // negative = downhill
+  return(elevProfCache[key]={elev,grade});
+}
+
+// One row in the "compare with" lists
+function DeltaPickRow({title,time,pos,on,pb,onClick}){
+  const col=on?C.blue:C.text;
+  return(
+    <button className="tap" onClick={onClick} style={{width:"100%",height:46,flexShrink:0,display:"flex",alignItems:"center",gap:10,padding:"0 12px",marginBottom:6,borderRadius:10,textAlign:"left",scrollSnapAlign:"start",border:`1px solid ${on?C.blue:pb?"#F0CF8F":C.border}`,background:on?"#EFF4FF":pb?"#FFFBF2":"#fff"}}>
+      <span style={{flex:1,minWidth:0,fontSize:14,fontWeight:700,color:col,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{title}{pos&&<span style={{fontSize:12,fontWeight:600,color:on?C.blue:C.muted,marginLeft:6}}>{pos}</span>}</span>
+      <span style={{fontSize:14,fontWeight:800,color:col}}>{time}</span>
+      {pb&&<span style={{fontSize:10,fontWeight:800,color:"#B45309",background:"#FFF1D6",border:"1px solid #F0CF8F",borderRadius:5,padding:"2px 6px",letterSpacing:0.5}}>PB</span>}
+      {on&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="5 12 10 17 19 7"/></svg>}
+    </button>
+  );
+}
+
+// Stacked charts (speed, terrain, gap) with one draggable bar through all of them
+function RunStackCharts({mine,theirs,name,units,heightUnit,terrain}){
   const [idx,setIdx]=useState(null);
+  const drag=useRef(false);
   const N=PROFILE_N;
   const imperial=units==="imperial";
   const spd=v=>v*(imperial?2.23694:3.6);
   const spdUnit=imperial?"mph":"km/h",distUnit=imperial?"ft":"m";
+  const hu=heightUnit==="m"?"m":"ft",hk=hu==="ft"?M_TO_FT:1;
   const L=mine.total*(imperial?3.28084:1);
-  const mySp=mine.speeds.map(spd),thSp=theirs.speeds.map(spd);
-  const gap=mine.times.map((t,k)=>theirs.times[k]-t); // ms, + = you're ahead
-  const W=320,H=112,PL=28,PR=6,PT=8,PB=18;
+  const mySp=mine.speeds.map(spd),thSp=theirs?theirs.speeds.map(spd):null;
+  const gap=theirs?mine.times.map((t,k)=>theirs.times[k]-t):null; // ms, + = you're ahead
+  const W=320,PL=30,PR=8,PH=54,TH=14,SP=8;
   const x=k=>PL+k/N*(W-PL-PR);
-  const spdScale=niceCeil(Math.max(...mySp,...thSp,1),3);
-  const ys=v=>PT+(1-v/spdScale.max)*(H-PT-PB);
-  const gapM=Math.max(1,Math.ceil(Math.max(...gap.map(g=>Math.abs(g)))/1000));
-  const yg=v=>PT+(1-(v+gapM)/(2*gapM))*(H-PT-PB);
-  const yZero=yg(0);
-  const line=(arr,fy)=>arr.map((v,k)=>`${k?"L":"M"}${x(k).toFixed(1)},${fy(v).toFixed(1)}`).join(" ");
-  const gapSecs=gap.map(g=>g/1000);
-  const gapLine=line(gapSecs,yg);
-  const gapArea=`${gapLine} L${x(N).toFixed(1)},${yZero.toFixed(1)} L${x(0).toFixed(1)},${yZero.toFixed(1)} Z`;
-  const finalAhead=gap[N]>=0;
-  const gapColor=finalAhead?C.green:C.red;
-  const xLabels=[0,1/3,2/3,1].map(f=>({f,t:(f===1?Math.round(L):Math.round(L*f/(L>1000?100:50))*(L>1000?100:50)).toLocaleString()+(f===1?" "+distUnit:"")}));
+  const panels=[];
+  const sc=niceCeil(Math.max(...mySp,...(thSp||[]),1),3);
+  panels.push({key:"speed",title:`SPEED (${spdUnit.toUpperCase()})`,min:0,max:sc.max,ticks:[0,...sc.ticks]});
+  if(terrain){
+    const el=terrain.elev.map(v=>v*hk);
+    const lo0=Math.min(...el),hi0=Math.max(...el),range=Math.max(hi0-lo0,hu==="ft"?20:6);
+    const rw=range/3,mag=Math.pow(10,Math.floor(Math.log10(rw))),nn=rw/mag,stp=(nn<=1?1:nn<=2?2:nn<=5?5:10)*mag;
+    const lo=Math.floor(lo0/stp)*stp,hi=Math.max(Math.ceil(hi0/stp)*stp,lo+stp);
+    panels.push({key:"terrain",title:`TERRAIN (${hu.toUpperCase()})`,min:lo,max:hi,ticks:[lo,(lo+hi)/2,hi],vals:el});
+  }
+  let gapM=1;
+  if(gap){
+    gapM=Math.max(1,Math.ceil(Math.max(...gap.map(g=>Math.abs(g)))/1000));
+    panels.push({key:"gap",title:`GAP TO ${name.toUpperCase()}`,sub:"up = you're ahead",min:-gapM,max:gapM,ticks:[-gapM,0,gapM],vals:gap.map(g=>g/1000)});
+  }
+  let yy=0;
+  panels.forEach(p=>{p.y0=yy+TH;p.y1=p.y0+PH;p.ys=v=>p.y1-(v-p.min)/(p.max-p.min)*PH;yy=p.y1+SP;});
+  const axY=yy-SP+12,HY=axY+22,totalH=HY+14;
+  const path=(p,arr)=>arr.map((v,k)=>`${k?"L":"M"}${x(k).toFixed(1)},${p.ys(v).toFixed(1)}`).join(" ");
+  const step=L>1000?100:50;
+  const xLabels=[0,1/3,2/3,1].map(f=>({f,t:(f===1?Math.round(L):Math.round(L*f/step)*step).toLocaleString()+(f===1?" "+distUnit:"")}));
   const pick=e=>{
     const r=e.currentTarget.getBoundingClientRect();
     const px=(e.clientX-r.left)/r.width*W;
     setIdx(Math.max(0,Math.min(N,Math.round((px-PL)/(W-PL-PR)*N))));
   };
-  const handlers={onPointerDown:pick,onPointerMove:e=>{if(e.pointerType==="mouse"&&e.buttons===0)return;pick(e);}};
-  const win=Math.round(N*0.15);
-  let bestK=0,bestChange=0;
-  for(let k=0;k+win<=N;k++){const ch=gap[k+win]-gap[k];if(Math.abs(ch)>Math.abs(bestChange)){bestChange=ch;bestK=k;}}
-  const rd=d=>{const step=L>1000?100:50;return Math.round(d/step)*step;};
-  const d1=rd(L*bestK/N),d2=rd(L*(bestK+win)/N);
-  const insight=Math.abs(bestChange)<300
-    ?"Your runs are almost identical, with no single section that stands out."
-    :bestChange<0
-      ?`${name} pulls away by ${(Math.abs(bestChange)/1000).toFixed(1)}s between ${d1.toLocaleString()} and ${d2.toLocaleString()} ${distUnit}. Look there first.`
+  // where the gap changes most (only when comparing)
+  let insight=null;
+  if(gap){
+    const win=Math.round(N*0.15);let bestK=0,bestChange=0;
+    for(let k=0;k+win<=N;k++){const ch=gap[k+win]-gap[k];if(Math.abs(ch)>Math.abs(bestChange)){bestChange=ch;bestK=k;}}
+    const rd=d=>Math.round(d/step)*step;
+    const d1=rd(L*bestK/N),d2=rd(L*(bestK+win)/N);
+    insight=Math.abs(bestChange)<300?"Your runs are almost identical, with no single section that stands out."
+      :bestChange<0?`${name} pulls away by ${(Math.abs(bestChange)/1000).toFixed(1)}s between ${d1.toLocaleString()} and ${d2.toLocaleString()} ${distUnit}. Look there first.`
       :`You pull away by ${(bestChange/1000).toFixed(1)}s between ${d1.toLocaleString()} and ${d2.toLocaleString()} ${distUnit}. That's where you gain.`;
-  const Cursor=({fy,a,b,ca,cb})=>idx===null?null:(
-    <g>
-      <line x1={x(idx)} x2={x(idx)} y1={PT} y2={H-PB} stroke="#BDBDBD" strokeWidth="1"/>
-      {a!==undefined&&<circle cx={x(idx)} cy={fy(a)} r="3.5" fill={ca} stroke="#fff" strokeWidth="1.2"/>}
-      {b!==undefined&&<circle cx={x(idx)} cy={fy(b)} r="3.5" fill={cb} stroke="#fff" strokeWidth="1.2"/>}
-    </g>
-  );
+  }
   const lbl={fontSize:9,fill:C.mutedL};
-  const hdr={fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8};
+  const hx=x(idx===null?Math.round(N/2):idx);
+  const g=idx!==null&&terrain?terrain.grade[idx]:null;
+  const cell=(label,a,b)=>(
+    <div style={{flex:1,textAlign:"center"}}>
+      <div style={{fontSize:10,fontWeight:600,color:C.muted,letterSpacing:0.6}}>{label}</div>
+      <div style={{marginTop:3,fontSize:14,fontWeight:800,color:C.blue}}>{a}</div>
+      {b!==null&&<div style={{fontSize:13,fontWeight:700,color:C.text}}>{b}</div>}
+    </div>
+  );
   return(
     <div>
       <div style={{display:"flex",gap:16,marginTop:12,fontSize:13,fontWeight:700,color:C.text}}>
         <span style={{display:"flex",alignItems:"center",gap:6}}><span style={{width:16,height:3,borderRadius:2,background:C.blue}}/>You</span>
-        <span style={{display:"flex",alignItems:"center",gap:6}}><span style={{width:16,height:3,borderRadius:2,background:"#1A1A1A"}}/>{name}</span>
+        {theirs&&<span style={{display:"flex",alignItems:"center",gap:6}}><span style={{width:16,height:3,borderRadius:2,background:"#1A1A1A"}}/>{name}</span>}
       </div>
-      <div style={{display:"flex",justifyContent:"space-between",marginTop:14}}><span style={hdr}>SPEED ({spdUnit.toUpperCase()})</span><span style={{fontSize:11,color:C.muted}}>tap to read</span></div>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{display:"block",touchAction:"pan-y",marginTop:4}} {...handlers}>
-        {spdScale.ticks.map(t=><g key={t}><line x1={PL} x2={W-PR} y1={ys(t)} y2={ys(t)} stroke="#E6E6E6" strokeDasharray="2 3"/><text x={PL-5} y={ys(t)+3} textAnchor="end" {...lbl}>{t}</text></g>)}
-        <line x1={PL} x2={W-PR} y1={ys(0)} y2={ys(0)} stroke="#CFCFCF"/>
-        {xLabels.map(l=><text key={l.f} x={l.f===0?PL:l.f===1?W-PR:x(l.f*N)} y={H-4} textAnchor={l.f===0?"start":l.f===1?"end":"middle"} {...lbl}>{l.t}</text>)}
-        <path d={line(thSp,ys)} fill="none" stroke="#1A1A1A" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/>
-        <path d={line(mySp,ys)} fill="none" stroke={C.blue} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/>
-        <Cursor fy={ys} a={idx===null?undefined:thSp[idx]} b={idx===null?undefined:mySp[idx]} ca="#1A1A1A" cb={C.blue}/>
-      </svg>
-      <div style={{marginTop:8,padding:"10px 12px",background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,fontSize:13,color:idx===null?C.mutedL:C.text,lineHeight:1.5}}>
-        {idx===null?"Tap or drag a chart to compare at any point":<>{Math.round(L*idx/N).toLocaleString()} {distUnit} · You <b style={{color:C.blue}}>{mySp[idx].toFixed(1)} {spdUnit}</b> · {name} <b>{thSp[idx].toFixed(1)} {spdUnit}</b> · <b style={{color:gap[idx]>=0?C.green:C.red}}>{(Math.abs(gap[idx])/1000).toFixed(2)}s {gap[idx]>=0?"ahead":"behind"}</b></>}
+      <div style={{marginTop:10,padding:"10px 12px",background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,minHeight:theirs?96:80}}>
+        {idx===null?<div style={{fontSize:13,color:C.mutedL,lineHeight:1.5}}>Drag the bar along the track to read your run{theirs?` against ${name}`:""}</div>:<>
+          <div style={{fontSize:11,fontWeight:600,color:C.muted,marginBottom:6}}>{Math.round(L*idx/N).toLocaleString()} {distUnit}{g!==null&&<> · gradient <b style={{color:C.text}}>{g>0?"+":""}{Math.round(g)}%</b></>}</div>
+          <div style={{display:"flex"}}>
+            {cell(spdUnit.toUpperCase(),mySp[idx].toFixed(1),thSp?thSp[idx].toFixed(1):null)}
+            {gap&&cell("GAP S",(gap[idx]>=0?"+":"-")+(Math.abs(gap[idx])/1000).toFixed(2),"")}
+          </div>
+        </>}
       </div>
-      <div style={{display:"flex",justifyContent:"space-between",marginTop:16}}><span style={hdr}>GAP TO {name.toUpperCase()}</span><span style={{fontSize:11,color:C.muted}}>up = you're ahead</span></div>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{display:"block",touchAction:"pan-y",marginTop:4}} {...handlers}>
-        <defs>
-          <clipPath id="gapAboveClip"><rect x={PL} y={0} width={W-PL-PR} height={yZero}/></clipPath>
-          <clipPath id="gapBelowClip"><rect x={PL} y={yZero} width={W-PL-PR} height={H-yZero}/></clipPath>
-        </defs>
-        {[gapM,0,-gapM].map(t=><g key={t}><line x1={PL} x2={W-PR} y1={yg(t)} y2={yg(t)} stroke={t===0?"#CFCFCF":"#E6E6E6"} strokeDasharray={t===0?undefined:"2 3"}/><text x={PL-5} y={yg(t)+3} textAnchor="end" {...lbl}>{t>0?"+"+t:t}s</text></g>)}
-        {xLabels.map(l=><text key={l.f} x={l.f===0?PL:l.f===1?W-PR:x(l.f*N)} y={H-4} textAnchor={l.f===0?"start":l.f===1?"end":"middle"} {...lbl}>{l.t}</text>)}
-        <path d={gapArea} fill={`${C.green}30`} clipPath="url(#gapAboveClip)"/>
-        <path d={gapArea} fill={`${C.red}30`} clipPath="url(#gapBelowClip)"/>
-        <path d={gapLine} fill="none" stroke={gapColor} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/>
-        <Cursor fy={yg} a={idx===null?undefined:gapSecs[idx]} ca={gapColor}/>
+      <svg viewBox={`0 0 ${W} ${totalH}`} width="100%" style={{display:"block",marginTop:12,touchAction:"pan-y",userSelect:"none",WebkitUserSelect:"none"}}
+        onPointerDown={e=>{drag.current=true;try{e.currentTarget.setPointerCapture(e.pointerId);}catch(_){}pick(e);}}
+        onPointerMove={e=>{if(drag.current)pick(e);}}
+        onPointerUp={()=>{drag.current=false;}} onPointerCancel={()=>{drag.current=false;}}>
+        {panels.map(p=>(
+          <g key={p.key}>
+            <text x={PL} y={p.y0-5} style={{fontSize:10,fontWeight:600,fill:C.muted,letterSpacing:0.8}}>{p.title}</text>
+            {p.sub&&<text x={W-PR} y={p.y0-5} textAnchor="end" style={{fontSize:10,fill:C.muted}}>{p.sub}</text>}
+            {p.ticks.map(t=>{const base=t===p.min||(p.key==="gap"&&t===0);return<g key={t}><line x1={PL} x2={W-PR} y1={p.ys(t)} y2={p.ys(t)} stroke={base?"#CFCFCF":"#E6E6E6"} strokeDasharray={base?undefined:"2 3"}/><text x={PL-5} y={p.ys(t)+3} textAnchor="end" style={lbl}>{Math.round(t*10)/10}</text></g>;})}
+            {p.key==="speed"&&<>
+              {thSp&&<path d={path(p,thSp)} fill="none" stroke="#1A1A1A" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/>}
+              <path d={path(p,mySp)} fill="none" stroke={C.blue} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/>
+            </>}
+            {p.key==="terrain"&&<>
+              <path d={`${path(p,p.vals)} L${x(N)},${p.y1} L${x(0)},${p.y1} Z`} fill="#C9C8C3"/>
+              <path d={path(p,p.vals)} fill="none" stroke="#9A9993" strokeWidth="1.2"/>
+            </>}
+            {p.key==="gap"&&(()=>{
+              const z=p.ys(0),col=gap[N]>=0?C.green:C.red,l=path(p,p.vals),area=`${l} L${x(N)},${z} L${x(0)},${z} Z`;
+              return<>
+                <defs><clipPath id="gapUpClip"><rect x={PL} y={p.y0} width={W-PL-PR} height={Math.max(0,z-p.y0)}/></clipPath><clipPath id="gapDownClip"><rect x={PL} y={z} width={W-PL-PR} height={Math.max(0,p.y1-z)}/></clipPath></defs>
+                <path d={area} fill={`${C.green}30`} clipPath="url(#gapUpClip)"/><path d={area} fill={`${C.red}30`} clipPath="url(#gapDownClip)"/>
+                <path d={l} fill="none" stroke={col} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/>
+              </>;
+            })()}
+          </g>
+        ))}
+        {xLabels.map(l=><text key={l.f} x={l.f===0?PL:l.f===1?W-PR:x(l.f*N)} y={axY} textAnchor={l.f===0?"start":l.f===1?"end":"middle"} style={lbl}>{l.t}</text>)}
+        {idx!==null&&<>
+          <line x1={x(idx)} x2={x(idx)} y1={TH} y2={HY-10} stroke="#1A1A1A" strokeWidth="1.2"/>
+          {panels.map(p=>{
+            if(p.key==="speed")return<g key={p.key}>{thSp&&<circle cx={x(idx)} cy={p.ys(thSp[idx])} r="3.3" fill="#1A1A1A" stroke="#fff" strokeWidth="1.2"/>}<circle cx={x(idx)} cy={p.ys(mySp[idx])} r="3.3" fill={C.blue} stroke="#fff" strokeWidth="1.2"/></g>;
+            return<circle key={p.key} cx={x(idx)} cy={p.ys(p.vals[idx])} r="3.3" fill={p.key==="gap"?(gap[N]>=0?C.green:C.red):C.muted} stroke="#fff" strokeWidth="1.2"/>;
+          })}
+        </>}
+        <g style={{cursor:"grab",touchAction:"none"}} opacity={idx===null?0.55:1}>
+          <rect x={hx-18} y={HY-14} width="36" height="30" fill="transparent"/>
+          <rect x={hx-11} y={HY-9} width="22" height="18" rx="9" fill="#1A1A1A"/>
+          <g stroke="#fff" strokeWidth="1.4" strokeLinecap="round"><line x1={hx-4} y1={HY-3} x2={hx-4} y2={HY+3}/><line x1={hx} y1={HY-3} x2={hx} y2={HY+3}/><line x1={hx+4} y1={HY-3} x2={hx+4} y2={HY+3}/></g>
+        </g>
       </svg>
-      <div style={{marginTop:8,padding:"10px 12px",background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,fontSize:13,color:C.text,lineHeight:1.5}}>{insight}</div>
+      {insight&&<div style={{marginTop:8,padding:"10px 12px",background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,fontSize:13,color:C.text,lineHeight:1.5}}>{insight}</div>}
     </div>
   );
 }
-function StageTimeDeltaCard({stage,lb,all,myAttempts,user,units}){
+
+function StageTimeDeltaCard({stage,lb,all,myAttempts,user,units,heightUnit}){
   const [open,setOpen]=useState(false);
-  const [traces,setTraces]=useState(undefined); // undefined = loading, null = unavailable
-  const [pickId,setPickId]=useState(null);       // rider you picked to compare with (null = the default)
-  const [picking,setPicking]=useState(false);
-  const [query,setQuery]=useState("");
-  const haveRuns=!!(user&&myAttempts&&myAttempts.length>0&&lb&&lb.length>0);
-  const pool=all&&all.length?all:(lb||[]);       // everyone on the stage (falls back to the top 10)
-  const defTarget=haveRuns?(lb[0].user_id===user.id?lb[1]:lb[0]):null;
-  const picked=pickId?pool.find(e=>e.user_id===pickId&&(!user||e.user_id!==user.id)):null;
-  const target=picked||defTarget;
-  const targetId=target?target.user_id:null;
+  const [mode,setMode]=useState("me");           // "me" = your own runs, "lb" = the leaderboard
+  const [runSel,setRunSel]=useState(null);        // created_at of the past run you picked (null = none)
+  const [lbSel,setLbSel]=useState(undefined);     // rider you picked (undefined = the leader, null = cleared)
+  const [ownTr,setOwnTr]=useState(null);          // {key, map:{time_ms:points}} traces of your own runs
+  const [riderTr,setRiderTr]=useState(null);      // {id, time_ms, points} best-run trace of the rider
+  const [terrain,setTerrain]=useState(undefined); // undefined = loading, null = unavailable
+  const runs=myAttempts||[];
   const myId=user?user.id:null;
+  const have=!!(myId&&runs.length>0);
+  const latest=have?runs[runs.length-1]:null;
+  const pbRun=have?runs.reduce((m,a)=>a.time_ms<m.time_ms?a:m,runs[0]):null;
+  const pbIsLatest=have&&latest===pbRun;
+  const pool=((all&&all.length?all:lb)||[]).filter(e=>e.user_id!==myId);
+  const target=mode==="lb"?(lbSel===null?null:(lbSel===undefined?pool[0]||null:pool.find(e=>e.user_id===lbSel)||null)):null;
+  const targetId=target?target.user_id:null;
+  const youRun=mode==="lb"?pbRun:latest;
+  const selRun=mode==="me"&&runSel?runs.find(a=>a.created_at===runSel)||null:null;
+  const ownTimes=have?[youRun.time_ms,...(selRun?[selRun.time_ms]:[])]:[];
+  const ownKey=ownTimes.join(",");
+
   useEffect(()=>{
-    if(!open||!myId||!targetId)return;
-    let cancelled=false;
-    setTraces(undefined);
-    supabase.from('run_traces').select('user_id,time_ms,points').eq('stage_id',String(stage.id)).in('user_id',[myId,targetId]).then(({data,error})=>{
-      if(cancelled)return;
-      if(error||!data){setTraces(null);return;}
-      const by={};data.forEach(r=>{by[r.user_id]=r;});
-      setTraces(by);
-    });
-    return()=>{cancelled=true;};
-  },[open,stage.id,myId,targetId]);
-  if(!haveRuns||!target)return null;
-  const myBest=Math.min(...myAttempts.map(a=>a.time_ms));
-  const delta=target.time-myBest; // + = you're ahead
+    if(!open||!myId||!ownKey)return;
+    let off=false;
+    const times=ownKey.split(",").map(Number);
+    (async()=>{
+      const map={};
+      try{
+        const{data}=await supabase.from('run_trace_history').select('time_ms,created_at,points').eq('user_id',myId).eq('stage_id',String(stage.id)).in('time_ms',times).order('created_at',{ascending:true});
+        (data||[]).forEach(r=>{map[r.time_ms]=r.points;});
+      }catch(e){}
+      try{   // your best run's trace from before every run was saved
+        const{data}=await supabase.from('run_traces').select('time_ms,points').eq('user_id',myId).eq('stage_id',String(stage.id)).maybeSingle();
+        if(data&&times.includes(data.time_ms)&&!map[data.time_ms])map[data.time_ms]=data.points;
+      }catch(e){}
+      if(!off)setOwnTr({key:ownKey,map});
+    })();
+    return()=>{off=true;};
+  },[open,myId,stage.id,ownKey]);
+
+  useEffect(()=>{
+    if(!open||mode!=="lb"||!targetId)return;
+    let off=false;
+    (async()=>{
+      let row=null;
+      try{const{data}=await supabase.from('run_traces').select('time_ms,points').eq('user_id',targetId).eq('stage_id',String(stage.id)).maybeSingle();row=data;}catch(e){}
+      if(!off)setRiderTr({id:targetId,time_ms:row?row.time_ms:null,points:row?row.points:null});
+    })();
+    return()=>{off=true;};
+  },[open,mode,targetId,stage.id]);
+
+  useEffect(()=>{
+    if(!open)return;
+    let off=false;
+    stageElevProfile(stage).then(p=>{if(!off)setTerrain(p||null);}).catch(()=>{if(!off)setTerrain(null);});
+    return()=>{off=true;};
+  },[open,stage.id]);
+
+  if(!have)return null;
+  const dateOf=a=>new Date(a.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+  const runLabel=a=>{const d=dateOf(a);const dup=runs.filter(r=>dateOf(r)===d).length>1;return dup?`${d} · ${new Date(a.created_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`:d;};
+  const youTime=youRun.time_ms;
+  const otherTime=mode==="lb"?(target?target.time:null):(selRun?selRun.time_ms:null);
+  const shortName=mode==="lb"?(target?target.name:""):(selRun?(selRun===pbRun?"PB":runLabel(selRun)):"");
+  const phrase=mode==="lb"?(target?target.name:""):(selRun?(selRun===pbRun?"your PB":`your ${runLabel(selRun)} run`):"");
+  const delta=otherTime!==null?otherTime-youTime:null; // + = you're ahead
   const ahead=delta>0,level=delta===0;
-  const color=level?C.muted:ahead?C.green:C.red;
-  const fraction=Math.abs(delta)/target.time/0.10;
-  const text=level?"0.00":(ahead?"+":"-")+fmtDelta(delta);
-  // only use a trace if it belongs to that rider's current best run
-  const prof=(row,best)=>row&&Math.abs(row.time_ms-best)<=1?traceProfile(row.points):null;
-  const mineProf=traces?prof(traces[myId],myBest):null;
-  const theirProf=traces?prof(traces[targetId],target.time):null;
-  const q=query.trim().toLowerCase();
-  const rows=pool.filter(e=>e.user_id!==myId&&(!q||(e.name||"").toLowerCase().includes(q)));
+  const color=delta===null?C.blue:level?C.muted:ahead?C.green:C.red;
+  const ringText=delta===null?`${Math.floor(youTime/60000)}:${String(Math.floor((youTime%60000)/1000)).padStart(2,"0")}`:level?"0.00":(ahead?"+":"-")+fmtDelta(delta);
+  const ringFrac=delta===null||level?0:Math.abs(delta)/otherTime/0.10;
+  const sub=mode==="me"
+    ?(selRun?(selRun===pbRun?`vs your PB · ${runLabel(selRun)}`:`vs your ${runLabel(selRun)} run`):`Latest run · ${runLabel(latest)} · ${formatTime(latest.time_ms)}`)
+    :(target?`vs ${target.name} · P${target.pos}`:`Personal best · ${formatTime(pbRun.time_ms)}`);
+
+  const ownReady=!!(ownTr&&ownTr.key===ownKey);
+  const riderReady=mode!=="lb"||!target||!!(riderTr&&riderTr.id===targetId);
+  const mineProf=ownReady&&ownTr.map[youTime]?traceProfile(ownTr.map[youTime]):null;
+  let theirProf=null;
+  if(ownReady&&riderReady){
+    if(mode==="me"&&selRun&&ownTr.map[selRun.time_ms])theirProf=traceProfile(ownTr.map[selRun.time_ms]);
+    if(mode==="lb"&&target&&riderTr.points&&riderTr.time_ms!==null&&Math.abs(riderTr.time_ms-target.time)<=1)theirProf=traceProfile(riderTr.points);
+  }
+  const note=t=><div style={{fontSize:12,color:C.muted,marginTop:14,padding:"10px 12px",background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,lineHeight:1.5}}>{t}</div>;
+  let chart;
+  if(!ownReady||!riderReady)chart=<div style={{fontSize:12,color:C.mutedL,marginTop:14}}>Loading speed data…</div>;
+  else if(!mineProf)chart=note(mode==="me"?"No speed data was saved for this run. Runs you record from now on will have it.":"No speed data saved for your best run yet. Beat it to record one.");
+  else chart=<>
+    <RunStackCharts mine={mineProf} theirs={theirProf} name={shortName} units={units} heightUnit={heightUnit} terrain={terrain||null}/>
+    {otherTime!==null&&!theirProf&&note(mode==="me"?"No speed data was saved for that run, so only yours is shown.":`No speed data for ${target.name}'s best run yet, so only yours is shown.`)}
+  </>;
+
+  const others=runs.slice().reverse().filter(a=>a!==latest&&a!==pbRun);
+  const scrollBox=(count,children)=>(
+    <div style={{position:"relative",marginTop:8}}>
+      <div style={{maxHeight:5*52-6,overflowY:"auto",scrollSnapType:"y mandatory",scrollbarWidth:"none",WebkitOverflowScrolling:"touch"}}>{children}</div>
+      {count>5&&<div style={{position:"absolute",left:0,right:0,bottom:0,height:22,background:"linear-gradient(rgba(245,245,245,0),#F5F5F5)",pointerEvents:"none"}}/>}
+    </div>
+  );
+  const hdr=(t,right)=><div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginTop:14}}><span style={{fontSize:10,fontWeight:600,color:C.muted,letterSpacing:0.8}}>{t}</span>{right&&<span style={{fontSize:11,color:C.muted}}>{right}</span>}</div>;
+  const toggleRun=a=>setRunSel(runSel===a.created_at?null:a.created_at);
+  let picker;
+  if(mode==="me"){
+    picker=<>
+      {!pbIsLatest&&<>{hdr("PERSONAL BEST")}<div style={{marginTop:8}}><DeltaPickRow pb title={`Personal best · ${runLabel(pbRun)}`} time={formatTime(pbRun.time_ms)} on={runSel===pbRun.created_at} onClick={()=>toggleRun(pbRun)}/></div></>}
+      {others.length>0&&<>{hdr("OTHER RUNS · NEWEST FIRST",others.length)}{scrollBox(others.length,others.map(a=><DeltaPickRow key={a.created_at} title={`Your run · ${runLabel(a)}`} time={formatTime(a.time_ms)} on={runSel===a.created_at} onClick={()=>toggleRun(a)}/>))}</>}
+    </>;
+  }else if(pool.length===0){
+    picker=<div style={{fontSize:12,color:C.muted,marginTop:14,lineHeight:1.45}}>No other riders have a time on this stage yet.</div>;
+  }else{
+    picker=<>{hdr("COMPARE WITH A RIDER",`Fastest first · ${pool.length}`)}{scrollBox(pool.length,pool.map(e=><DeltaPickRow key={e.user_id} title={e.name} pos={`P${e.pos}`} time={formatTime(e.time)} on={e.user_id===targetId} onClick={()=>setLbSel(e.user_id===targetId?null:e.user_id)}/>))}</>;
+  }
+  const headline=delta===null
+    ?<div style={{fontSize:18,fontWeight:800,color:C.text,marginTop:14}}>{mode==="me"?`Latest run · ${runLabel(latest)}${pbIsLatest?" · PB":""}`:"Your personal best"} · {formatTime(youTime)}</div>
+    :<div style={{fontSize:18,fontWeight:800,color,marginTop:14}}>{level?`Level with ${phrase}`:`${fmtDelta(delta)}s ${ahead?"ahead of":"behind"} ${phrase}`}</div>;
+  const onlyRun=mode==="me"&&pbIsLatest&&others.length===0;
+  const blurb=delta===null
+    ?onlyRun?"Your only run on this stage so far.":`Tap a time below to compare it with ${mode==="me"?"this run":"your best"}. Tap it again to clear.`
+    :mode==="me"?`Your latest run compared with ${phrase}.`:`Your personal best compared with ${target.name}'s fastest time on this stage.`;
   return(
     <div style={{margin:"16px 16px 0",background:C.surface,borderRadius:14,border:`1px solid ${C.border}`,overflow:"hidden"}}>
       <button className="tap" onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:14,padding:"14px 16px",background:"none",border:"none",textAlign:"left"}}>
-        <DeltaRing fraction={level?0:fraction} color={color} text={text}/>
+        <DeltaRing fraction={ringFrac} color={color} text={ringText}/>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontSize:15,fontWeight:700,color:C.text}}>Time delta</div>
-          <div style={{fontSize:12,color:C.muted,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>vs {target.name} · P{target.pos}</div>
+          <div style={{fontSize:12,color:C.muted,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sub}</div>
         </div>
         <div style={{transform:open?"rotate(180deg)":"none",transition:"transform 0.15s",display:"flex"}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.mutedL} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
       </button>
       {open&&(
         <div style={{padding:"0 16px 14px"}}>
-          <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,marginBottom:8}}>COMPARING WITH</div>
-          <button className="tap" onClick={()=>{setPicking(p=>!p);setQuery("");}} style={{width:"100%",display:"flex",alignItems:"center",gap:10,background:"#fff",border:`1px solid ${picking?C.blue:C.border}`,borderRadius:10,padding:"11px 14px",textAlign:"left"}}>
-            <span style={{flex:1,fontSize:14,fontWeight:700,color:C.text}}>{target.name}<span style={{fontSize:12,fontWeight:600,color:C.muted,marginLeft:6}}>P{target.pos}</span></span>
-            <span style={{fontSize:15,fontWeight:800,color:C.text}}>{formatTime(target.time)}</span>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.mutedL} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{transform:picking?"rotate(180deg)":"none",transition:"transform 0.15s"}}><polyline points="6 9 12 15 18 9"/></svg>
-          </button>
-          {picking&&(
-            <div style={{marginTop:8,border:`1px solid ${C.border}`,borderRadius:10,overflow:"hidden",background:"#fff"}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",borderBottom:`1px solid ${C.border}`,background:"#FAFAFA"}}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.mutedL} strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
-                <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Find a rider" style={{flex:1,minWidth:0,border:"none",outline:"none",background:"transparent",fontSize:16,color:C.text}}/>
-              </div>
-              <div style={{maxHeight:300,overflowY:"auto"}}>
-                {rows.length===0&&<div style={{padding:"16px 12px",fontSize:13,color:C.muted,textAlign:"center"}}>No riders found</div>}
-                {rows.map((e,i)=>{
-                  const d=e.time-myBest,sel=e.user_id===targetId;
-                  return(
-                    <button key={e.user_id} className="tap" onClick={()=>{setPickId(e.user_id);setPicking(false);setQuery("");}} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"11px 12px",background:sel?"#EFF4FF":"#fff",border:"none",borderBottom:i===rows.length-1?"none":`1px solid ${C.border}`,textAlign:"left"}}>
-                      <span style={{fontSize:13,fontWeight:800,color:C.text,width:30}}>P{e.pos}</span>
-                      <span style={{flex:1,minWidth:0,fontSize:14,fontWeight:sel?700:500,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.name}</span>
-                      <span style={{fontSize:14,fontWeight:800,color:C.text}}>{formatTime(e.time)}</span>
-                      <span style={{fontSize:12,fontWeight:700,color:d>0?C.green:C.red,minWidth:46,textAlign:"right"}}>{d>0?"+":"−"}{fmtDelta(d)}</span>
-                      <span style={{width:16,display:"flex"}}>{sel&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="5 12 10 17 19 7"/></svg>}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-          <div style={{fontSize:18,fontWeight:800,color,marginTop:14}}>{level?`Level with ${target.name}`:`${fmtDelta(delta)}s ${ahead?"ahead of":"behind"} ${target.name}`}</div>
-          <div style={{fontSize:12,color:C.muted,marginTop:4,lineHeight:1.45}}>Your best run compared with {target.name}'s fastest time on this stage.</div>
-          {traces===undefined?<div style={{fontSize:12,color:C.mutedL,marginTop:14}}>Loading speed data…</div>
-            :mineProf&&theirProf?<RunCompareCharts mine={mineProf} theirs={theirProf} name={target.name} units={units}/>
-            :<div style={{fontSize:12,color:C.muted,marginTop:14,padding:"10px 12px",background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,lineHeight:1.5}}>
-              {!mineProf&&!theirProf?`Speed and gap charts appear once you and ${target.name} have both set a best on this stage with GPS recording. Beat your best to record yours.`
-                :!mineProf?"Beat your best time on this stage to record your speed data and unlock the charts."
-                :`No speed data for ${target.name}'s best run yet. The charts appear once they set a new best.`}
-            </div>}
+          <div style={{display:"flex",background:"#E9E9E9",borderRadius:8,padding:2,gap:2}}>
+            {[["me","My time"],["lb","Leaderboard"]].map(([v,l])=>(
+              <button key={v} className="tap" onClick={()=>setMode(v)} style={{flex:1,padding:"6px 10px",borderRadius:6,background:mode===v?"#fff":"none",border:"none",fontSize:12,fontWeight:mode===v?600:400,color:mode===v?C.text:C.muted,boxShadow:mode===v?"0 1px 3px rgba(0,0,0,0.1)":"none"}}>{l}</button>
+            ))}
+          </div>
+          {headline}
+          <div style={{fontSize:12,color:C.muted,marginTop:4,lineHeight:1.45}}>{blurb}</div>
+          {picker}
+          {chart}
         </div>
       )}
     </div>
@@ -1837,7 +1966,7 @@ if(lbFiltered){
             <StageLeaderboardCard lb={lbView.lb} rank={lbView.rank} user={user} stage={stage} period={lbPeriod} onPeriod={setLbPeriod} cat={lbCat} onCat={setLbCat}/>
             <StageProgressCard stage={stage} user={user} lb={lb} myAttempts={myAttempts}/>
 <StageConsistencyCard runs={myAttempts}/>
-<StageTimeDeltaCard stage={stage} lb={lb} all={lbAll} myAttempts={myAttempts} user={user} units={units}/>
+<StageTimeDeltaCard stage={stage} lb={lb} all={lbAll} myAttempts={myAttempts} user={user} units={units} heightUnit={heightUnit}/>
 <StageSpeedCard stage={stage} user={user}/>
 <StageImprovementCard myAttempts={myAttempts}/>
 <div style={{padding:"16px 16px 0"}}>
