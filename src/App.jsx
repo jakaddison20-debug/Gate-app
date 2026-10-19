@@ -959,7 +959,7 @@ async function stageElevProfile(stage){
     raw.push(e);
   }
   const elev=raw.map((_,i)=>{const a=Math.max(0,i-2),b=Math.min(N,i+2);let s=0;for(let j=a;j<=b;j++)s+=raw[j];return s/(b-a+1);});
-  const step=total/N,w=3;
+  const step=total/N,w=5;
   const grade=elev.map((_,i)=>{const a=Math.max(0,i-w),b=Math.min(N,i+w);return(elev[b]-elev[a])/((b-a)*step)*100;}); // negative = downhill
   return(elevProfCache[key]={elev,grade});
 }
@@ -1001,6 +1001,8 @@ function RunStackCharts({mine,theirs,name,units,heightUnit,terrain}){
     const lo=Math.floor(lo0/stp)*stp,hi=Math.max(Math.ceil(hi0/stp)*stp,lo+stp);
     panels.push({key:"terrain",title:`TERRAIN (${hu.toUpperCase()})`,min:lo,max:hi,ticks:[lo,(lo+hi)/2,hi],vals:el});
   }
+  panels.push({key:"pwr",title:"POWER (W)",min:0,max:500,ticks:[0,250,500],nodata:true});
+  panels.push({key:"hr",title:"HEART RATE (BPM)",min:100,max:200,ticks:[100,150,200],nodata:true});
   let gapM=1;
   if(gap){
     gapM=Math.max(1,Math.ceil(Math.max(...gap.map(g=>Math.abs(g)))/1000));
@@ -1049,6 +1051,8 @@ function RunStackCharts({mine,theirs,name,units,heightUnit,terrain}){
           <div style={{fontSize:11,fontWeight:600,color:C.muted,marginBottom:6}}>{Math.round(L*idx/N).toLocaleString()} {distUnit}{g!==null&&<> · gradient <b style={{color:C.text}}>{g>0?"+":""}{Math.round(g)}%</b></>}</div>
           <div style={{display:"flex"}}>
             {cell(spdUnit.toUpperCase(),mySp[idx].toFixed(1),thSp?thSp[idx].toFixed(1):null)}
+            {cell("WATTS","–",thSp?"–":null)}
+            {cell("BPM","–",thSp?"–":null)}
             {gap&&cell("GAP S",(gap[idx]>=0?"+":"-")+(Math.abs(gap[idx])/1000).toFixed(2),"")}
           </div>
         </>}
@@ -1070,6 +1074,11 @@ function RunStackCharts({mine,theirs,name,units,heightUnit,terrain}){
               <path d={`${path(p,p.vals)} L${x(N)},${p.y1} L${x(0)},${p.y1} Z`} fill="#C9C8C3"/>
               <path d={path(p,p.vals)} fill="none" stroke="#9A9993" strokeWidth="1.2"/>
             </>}
+            {p.nodata&&<>
+              {thSp&&<line x1={PL} x2={W-PR} y1={p.y1-6} y2={p.y1-6} stroke="#1A1A1A" strokeWidth="2" strokeDasharray="1 4" strokeLinecap="round" opacity="0.55"/>}
+              <line x1={PL} x2={W-PR} y1={p.y1-2} y2={p.y1-2} stroke={C.blue} strokeWidth="2" strokeDasharray="1 4" strokeLinecap="round" opacity="0.55"/>
+              <text x={W-PR} y={p.y0-5} textAnchor="end" style={{fontSize:10,fill:C.muted}}>No data yet</text>
+            </>}
             {p.key==="gap"&&(()=>{
               const z=p.ys(0),col=gap[N]>=0?C.green:C.red,l=path(p,p.vals),area=`${l} L${x(N)},${z} L${x(0)},${z} Z`;
               return<>
@@ -1085,6 +1094,7 @@ function RunStackCharts({mine,theirs,name,units,heightUnit,terrain}){
           <line x1={x(idx)} x2={x(idx)} y1={TH} y2={HY-10} stroke="#1A1A1A" strokeWidth="1.2"/>
           {panels.map(p=>{
             if(p.key==="speed")return<g key={p.key}>{thSp&&<circle cx={x(idx)} cy={p.ys(thSp[idx])} r="3.3" fill="#1A1A1A" stroke="#fff" strokeWidth="1.2"/>}<circle cx={x(idx)} cy={p.ys(mySp[idx])} r="3.3" fill={C.blue} stroke="#fff" strokeWidth="1.2"/></g>;
+            if(p.nodata)return null;
             return<circle key={p.key} cx={x(idx)} cy={p.ys(p.vals[idx])} r="3.3" fill={p.key==="gap"?(gap[N]>=0?C.green:C.red):C.muted} stroke="#fff" strokeWidth="1.2"/>;
           })}
         </>}
