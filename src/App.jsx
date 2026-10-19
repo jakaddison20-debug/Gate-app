@@ -213,6 +213,7 @@ const DEFAULT_SETTINGS={
   displayName:"Your Name",
   avatarUrl:null,
   units:"metric",
+  heightUnit:"ft",
   gpsAccuracy:"high",
   notifications:{newLeaderboard:true,sessionInvite:true,courseRecord:true,weeklyDigest:false},
   privacy:{defaultStagePrivacy:"private",showOnLeaderboard:true,shareActivity:true},
@@ -425,6 +426,9 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
         <Section title="Units & Display">
           <Row label="Distance & Speed" right={
             <SegControl options={[{val:"metric",label:"km"},{val:"imperial",label:"mi"}]} value={s.units} onChange={v=>update("units",v)}/>
+          }/>
+          <Row label="Height" sub="Descent on stages" right={
+            <SegControl options={[{val:"m",label:"m"},{val:"ft",label:"ft"}]} value={s.heightUnit||"ft"} onChange={v=>update("heightUnit",v)}/>
           }/>
           <Row label="GPS Accuracy" sub={s.gpsAccuracy==="high"?"Best accuracy, more battery":"Balanced accuracy and battery"} noBorder right={
             <SegControl options={[{val:"high",label:"High"},{val:"balanced",label:"Balanced"}]} value={s.gpsAccuracy} onChange={v=>update("gpsAccuracy",v)}/>
@@ -1620,7 +1624,41 @@ function StageSpeedCard({stage,user,defaultOpen=false}){
   );
 }
 
-    function StageDetailSheet({stage,onClose,onRace,onOpenSections,user,onRename,units,onDelete}){
+// Slim row: distance (along the stage line), descent, gradient (steepest 50 m).
+function StageInfoRow({stage,units,heightUnit}){
+  const [descFt,setDescFt]=useState(undefined); // undefined = loading, null = unavailable
+  const [steep,setSteep]=useState(undefined);
+  useEffect(()=>{
+    let off=false;
+    setDescFt(undefined);setSteep(undefined);
+    stageDescentFt(stage).then(v=>{if(!off)setDescFt(v||null);}).catch(()=>{if(!off)setDescFt(null);});
+    stageSteepPct(stage).then(v=>{if(!off)setSteep(v);}).catch(()=>{if(!off)setSteep(null);});
+    return()=>{off=true;};
+  },[stage.id]);
+  const len=stageLengthM(stage);
+  const imperial=units==="imperial";
+  const miles=len/1609.34;
+  const distVal=len<=0?"—":imperial?miles.toFixed(miles<1?2:1):(len<1000?String(Math.round(len)):(len/1000).toFixed(1));
+  const distUnit=len<=0?"":imperial?"mi":(len<1000?"m":"km");
+  const useFt=heightUnit!=="m";
+  const descVal=typeof descFt!=="number"?"—":(useFt?fatCommas(descFt):String(Math.round(descFt/M_TO_FT)));
+  const steepVal=typeof steep!=="number"?"—":String(steep);
+  const cell=(label,val,unit,first)=>(
+    <div style={{display:"flex",alignItems:"baseline",justifyContent:"center",gap:5,padding:"10px 4px",borderLeft:first?"none":`1px solid ${C.border}`}}>
+      <span style={{fontSize:10,fontWeight:600,color:C.muted,letterSpacing:0.6}}>{label}</span>
+      <span style={{fontSize:14,fontWeight:800,color:C.text,letterSpacing:-0.3}}>{val}{unit&&val!=="—"&&<span style={{fontSize:11,fontWeight:600,color:C.muted,marginLeft:1}}>{unit}</span>}</span>
+    </div>
+  );
+  return(
+    <div style={{margin:"12px 16px 0",background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",overflow:"hidden"}}>
+      {cell("DISTANCE",distVal,distUnit,true)}
+      {cell("DESCENT",descVal,useFt?"ft":"m")}
+      {cell("GRADIENT",steepVal,"%")}
+    </div>
+  );
+}
+
+    function StageDetailSheet({stage,onClose,onRace,onOpenSections,user,onRename,units,heightUnit,onDelete}){
     const [lb,setLb]=useState([]);
 const [rank,setRank]=useState({total:0,myPos:0});
 const [myAttempts,setMyAttempts]=useState([]);
@@ -1672,8 +1710,6 @@ const myEntry=lb.find(e=>user&&e.user_id===user.id);
 </div>
 )}
 <div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
-  <span style={{fontSize:12,color:C.muted}}>{formatDist(dist)}</span>
-  <span style={{fontSize:12,color:C.muted}}>·</span>
   <span style={{fontSize:12,color:C.muted}}>{stage.privacy}</span>
   <span style={{fontSize:12,color:C.muted}}>·</span>
   {isCreator?(
@@ -1721,6 +1757,7 @@ const myEntry=lb.find(e=>user&&e.user_id===user.id);
 </div>
 
     
+            <StageInfoRow stage={stage} units={units} heightUnit={heightUnit}/>
             <StageLeaderboardCard lb={lb} rank={rank} user={user} stage={stage}/>
             <StageProgressCard stage={stage} user={user} lb={lb} myAttempts={myAttempts}/>
 <StageConsistencyCard runs={myAttempts}/>
@@ -3369,6 +3406,43 @@ async function stageDescentFt(stage){
   const ft=Math.round(descentFromProfile(elev)*M_TO_FT/10)*10;
   cache[stage.id]={ft,sig};writeDescCache(cache);
   return ft;
+}
+
+const STEEP_WINDOW_M=50; // "gradient" = the steepest stretch of this length
+const STEEP_KEY='gate_steep_pct_v1';
+const readSteepCache=()=>{try{return JSON.parse(localStorage.getItem(STEEP_KEY)||'{}');}catch(e){return {};}};
+const writeSteepCache=o=>{try{localStorage.setItem(STEEP_KEY,JSON.stringify(o));}catch(e){}};
+// Steepest downhill gradient (%) over any 50 m stretch of the stage line. null if it can't be worked out.
+async function stageSteepPct(stage){
+  const line=stage.line_coords&&stage.line_coords.length>1?stage.line_coords:[stage.start,stage.finish];
+  if(!line||line.length<2||!line[0]||!line[line.length-1])return null;
+  const cum=[0];for(let i=1;i<line.length;i++)cum.push(cum[i-1]+haversine(line[i-1],line[i]));
+  const total=cum[cum.length-1];
+  if(total<STEEP_WINDOW_M)return null;
+  const sig=`${line.length}:${Math.round(total)}`;
+  const cache=readSteepCache(),hit=cache[stage.id];
+  if(hit&&hit.sig===sig)return hit.pct;
+  const step=Math.max(10,total/500),pts=[];
+  for(let d=0,seg=0;d<=total;d+=step){
+    while(seg<line.length-2&&cum[seg+1]<d)seg++;
+    const span=cum[seg+1]-cum[seg],u=span>0?(d-cum[seg])/span:0;
+    pts.push({d,lat:line[seg].lat+(line[seg+1].lat-line[seg].lat)*u,lng:line[seg].lng+(line[seg+1].lng-line[seg].lng)*u});
+  }
+  const elev=[];
+  for(const p of pts){const e=await elevationAt(p.lat,p.lng);if(e===null)return null;elev.push(e);}
+  const sm=elev.map((_,i)=>{const a=Math.max(0,i-1),b=Math.min(elev.length-1,i+1);let s=0;for(let k=a;k<=b;k++)s+=elev[k];return s/(b-a+1);});
+  let best=0;
+  for(let i=0,j=0;i<pts.length;i++){
+    if(j<i)j=i;
+    while(j<pts.length-1&&pts[j].d-pts[i].d<STEEP_WINDOW_M)j++;
+    const run=pts[j].d-pts[i].d;
+    if(run<STEEP_WINDOW_M*0.9)break;
+    const g=(sm[i]-sm[j])/run*100;
+    if(g>best)best=g;
+  }
+  const pct=Math.round(best);
+  cache[stage.id]={pct,sig};writeSteepCache(cache);
+  return pct;
 }
 
 function useStageDescents(grouped,stages){
@@ -5540,7 +5614,7 @@ export default function App(){
   const [pickingExistingIds,setPickingExistingIds]=useState([]);
   const [showBikeSetup,setShowBikeSetup]=useState(false);
   const [settings,setSettings]=useState(DEFAULT_SETTINGS);
-  const saveSettings=async(s)=>{setSettings(s);if(!user)return;await supabase.from('profiles').update({app_settings:{units:s.units,gpsAccuracy:s.gpsAccuracy,notifications:s.notifications,privacy:s.privacy}}).eq('id',user.id);};
+  const saveSettings=async(s)=>{setSettings(s);if(!user)return;await supabase.from('profiles').update({app_settings:{units:s.units,heightUnit:s.heightUnit,gpsAccuracy:s.gpsAccuracy,notifications:s.notifications,privacy:s.privacy}}).eq('id',user.id);};
   const [user,setUser]=useState(null);
     const goToStage=(stageId)=>{
   const stage=stages.find(s=>String(s.id)===String(stageId));
@@ -6102,7 +6176,7 @@ if(showBikeSetup)return(
             ))}
           </div>
                     {selectedStage&&sheet!=='sections'&&(
-            <><div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.3)",zIndex:39}} onClick={()=>setSelectedStage(null)}/><div className="slide-up" style={{position:"absolute",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:40,maxHeight:"88vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><StageDetailSheet stage={selectedStage} units={settings.units} onClose={()=>setSelectedStage(null)}onRace={()=>{setActiveRace({id:Date.now(),name:selectedStage.name,stageIds:[selectedStage.id],mode:'race',times:{},bestPerStage:{}});setSelectedStage(null);}}
+            <><div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.3)",zIndex:39}} onClick={()=>setSelectedStage(null)}/><div className="slide-up" style={{position:"absolute",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:40,maxHeight:"88vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><StageDetailSheet stage={selectedStage} units={settings.units} heightUnit={settings.heightUnit} onClose={()=>setSelectedStage(null)}onRace={()=>{setActiveRace({id:Date.now(),name:selectedStage.name,stageIds:[selectedStage.id],mode:'race',times:{},bestPerStage:{}});setSelectedStage(null);}}
 onDelete={deleteStage} onOpenSections={()=>setSheet('sections')}
 user={user}
 onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newName}:s));setSelectedStage(prev=>prev&&prev.id===id?{...prev,name:newName}:prev);}}/></div></>
@@ -6192,7 +6266,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
 
       {/* Stage detail (from stages tab) */}
       {selectedStage&&tab!=="map"&&sheet!=='sections'&&(
-      <><div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:45}} onClick={()=>setSelectedStage(null)}/><div className="slide-up" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:46,maxHeight:"88vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><StageDetailSheet stage={selectedStage} units={settings.units} onClose={()=>setSelectedStage(null)} onRace={()=>{setActiveRace({id:Date.now(),name:selectedStage.name,stageIds:[selectedStage.id],mode:'race',times:{},bestPerStage:{}});setSelectedStage(null);}} onDelete={deleteStage} onOpenSections={()=>setSheet('sections')} user={user} onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newName}:s));setSelectedStage(prev=>prev&&prev.id===id?{...prev,name:newName}:prev);}}/></div></>
+      <><div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:45}} onClick={()=>setSelectedStage(null)}/><div className="slide-up" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:46,maxHeight:"88vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><StageDetailSheet stage={selectedStage} units={settings.units} heightUnit={settings.heightUnit} onClose={()=>setSelectedStage(null)} onRace={()=>{setActiveRace({id:Date.now(),name:selectedStage.name,stageIds:[selectedStage.id],mode:'race',times:{},bestPerStage:{}});setSelectedStage(null);}} onDelete={deleteStage} onOpenSections={()=>setSheet('sections')} user={user} onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newName}:s));setSelectedStage(prev=>prev&&prev.id===id?{...prev,name:newName}:prev);}}/></div></>
       )}    
 
 
