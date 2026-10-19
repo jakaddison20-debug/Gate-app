@@ -1011,16 +1011,23 @@ function RunCompareCharts({mine,theirs,name,units}){
     </div>
   );
 }
-function StageTimeDeltaCard({stage,lb,myAttempts,user,units}){
+function StageTimeDeltaCard({stage,lb,all,myAttempts,user,units}){
   const [open,setOpen]=useState(false);
   const [traces,setTraces]=useState(undefined); // undefined = loading, null = unavailable
+  const [pickId,setPickId]=useState(null);       // rider you picked to compare with (null = the default)
+  const [picking,setPicking]=useState(false);
+  const [query,setQuery]=useState("");
   const haveRuns=!!(user&&myAttempts&&myAttempts.length>0&&lb&&lb.length>0);
-  const target=haveRuns?(lb[0].user_id===user.id?lb[1]:lb[0]):null;
+  const pool=all&&all.length?all:(lb||[]);       // everyone on the stage (falls back to the top 10)
+  const defTarget=haveRuns?(lb[0].user_id===user.id?lb[1]:lb[0]):null;
+  const picked=pickId?pool.find(e=>e.user_id===pickId&&(!user||e.user_id!==user.id)):null;
+  const target=picked||defTarget;
   const targetId=target?target.user_id:null;
   const myId=user?user.id:null;
   useEffect(()=>{
     if(!open||!myId||!targetId)return;
     let cancelled=false;
+    setTraces(undefined);
     supabase.from('run_traces').select('user_id,time_ms,points').eq('stage_id',String(stage.id)).in('user_id',[myId,targetId]).then(({data,error})=>{
       if(cancelled)return;
       if(error||!data){setTraces(null);return;}
@@ -1040,6 +1047,8 @@ function StageTimeDeltaCard({stage,lb,myAttempts,user,units}){
   const prof=(row,best)=>row&&Math.abs(row.time_ms-best)<=1?traceProfile(row.points):null;
   const mineProf=traces?prof(traces[myId],myBest):null;
   const theirProf=traces?prof(traces[targetId],target.time):null;
+  const q=query.trim().toLowerCase();
+  const rows=pool.filter(e=>e.user_id!==myId&&(!q||(e.name||"").toLowerCase().includes(q)));
   return(
     <div style={{margin:"16px 16px 0",background:C.surface,borderRadius:14,border:`1px solid ${C.border}`,overflow:"hidden"}}>
       <button className="tap" onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:14,padding:"14px 16px",background:"none",border:"none",textAlign:"left"}}>
@@ -1053,10 +1062,34 @@ function StageTimeDeltaCard({stage,lb,myAttempts,user,units}){
       {open&&(
         <div style={{padding:"0 16px 14px"}}>
           <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,marginBottom:8}}>COMPARING WITH</div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 14px"}}>
-            <span style={{fontSize:14,fontWeight:700,color:C.text}}>{target.name}</span>
+          <button className="tap" onClick={()=>{setPicking(p=>!p);setQuery("");}} style={{width:"100%",display:"flex",alignItems:"center",gap:10,background:"#fff",border:`1px solid ${picking?C.blue:C.border}`,borderRadius:10,padding:"11px 14px",textAlign:"left"}}>
+            <span style={{flex:1,fontSize:14,fontWeight:700,color:C.text}}>{target.name}<span style={{fontSize:12,fontWeight:600,color:C.muted,marginLeft:6}}>P{target.pos}</span></span>
             <span style={{fontSize:15,fontWeight:800,color:C.text}}>{formatTime(target.time)}</span>
-          </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.mutedL} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{transform:picking?"rotate(180deg)":"none",transition:"transform 0.15s"}}><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          {picking&&(
+            <div style={{marginTop:8,border:`1px solid ${C.border}`,borderRadius:10,overflow:"hidden",background:"#fff"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",borderBottom:`1px solid ${C.border}`,background:"#FAFAFA"}}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.mutedL} strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+                <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Find a rider" style={{flex:1,minWidth:0,border:"none",outline:"none",background:"transparent",fontSize:16,color:C.text}}/>
+              </div>
+              <div style={{maxHeight:300,overflowY:"auto"}}>
+                {rows.length===0&&<div style={{padding:"16px 12px",fontSize:13,color:C.muted,textAlign:"center"}}>No riders found</div>}
+                {rows.map((e,i)=>{
+                  const d=e.time-myBest,sel=e.user_id===targetId;
+                  return(
+                    <button key={e.user_id} className="tap" onClick={()=>{setPickId(e.user_id);setPicking(false);setQuery("");}} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"11px 12px",background:sel?"#EFF4FF":"#fff",border:"none",borderBottom:i===rows.length-1?"none":`1px solid ${C.border}`,textAlign:"left"}}>
+                      <span style={{fontSize:13,fontWeight:800,color:C.text,width:30}}>P{e.pos}</span>
+                      <span style={{flex:1,minWidth:0,fontSize:14,fontWeight:sel?700:500,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.name}</span>
+                      <span style={{fontSize:14,fontWeight:800,color:C.text}}>{formatTime(e.time)}</span>
+                      <span style={{fontSize:12,fontWeight:700,color:d>0?C.green:C.red,minWidth:46,textAlign:"right"}}>{d>0?"+":"−"}{fmtDelta(d)}</span>
+                      <span style={{width:16,display:"flex"}}>{sel&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="5 12 10 17 19 7"/></svg>}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div style={{fontSize:18,fontWeight:800,color,marginTop:14}}>{level?`Level with ${target.name}`:`${fmtDelta(delta)}s ${ahead?"ahead of":"behind"} ${target.name}`}</div>
           <div style={{fontSize:12,color:C.muted,marginTop:4,lineHeight:1.45}}>Your best run compared with {target.name}'s fastest time on this stage.</div>
           {traces===undefined?<div style={{fontSize:12,color:C.mutedL,marginTop:14}}>Loading speed data…</div>
@@ -1660,6 +1693,7 @@ function StageInfoRow({stage,units,heightUnit}){
 
     function StageDetailSheet({stage,onClose,onRace,onOpenSections,user,onRename,units,heightUnit,onDelete}){
     const [lb,setLb]=useState([]);
+    const [lbAll,setLbAll]=useState([]);
 const [rank,setRank]=useState({total:0,myPos:0});
 const [myAttempts,setMyAttempts]=useState([]);
 const [editingName,setEditingName]=useState(false);
@@ -1683,7 +1717,7 @@ const saveDifficulty=async(val)=>{
   if(error)alert(error.message);
 };
  
-    useEffect(()=>{supabase.from('stage_times').select('time_ms,user_id,created_at,profiles(display_name,avatar_url)').eq('stage_id',stage.id).order('time_ms',{ascending:true}).then(({data})=>{if(data){const seen={};const best=data.filter(t=>{const id=t.user_id;if(seen[id])return false;seen[id]=true;return true;});setLb(best.slice(0,10).map((t,i)=>({pos:i+1,name:t.profiles?.display_name||'Rider',avatarUrl:t.profiles?.avatar_url||null,time:t.time_ms,date:new Date(t.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}),user_id:t.user_id})));setRank({total:best.length,myPos:user?(best.findIndex(t=>t.user_id===user.id)+1):0});}});},[stage.id,user]);
+    useEffect(()=>{supabase.from('stage_times').select('time_ms,user_id,created_at,profiles(display_name,avatar_url)').eq('stage_id',stage.id).order('time_ms',{ascending:true}).then(({data})=>{if(data){const seen={};const best=data.filter(t=>{const id=t.user_id;if(seen[id])return false;seen[id]=true;return true;});setLb(best.slice(0,10).map((t,i)=>({pos:i+1,name:t.profiles?.display_name||'Rider',avatarUrl:t.profiles?.avatar_url||null,time:t.time_ms,date:new Date(t.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}),user_id:t.user_id})));setLbAll(best.map((t,i)=>({pos:i+1,name:t.profiles?.display_name||'Rider',time:t.time_ms,user_id:t.user_id})));setRank({total:best.length,myPos:user?(best.findIndex(t=>t.user_id===user.id)+1):0});}});},[stage.id,user]);
 
  useEffect(()=>{if(!user)return;supabase.from('stage_times').select('time_ms,created_at').eq('stage_id',stage.id).eq('user_id',user.id).order('created_at',{ascending:true}).then(({data})=>{if(data)setMyAttempts(data);});},[stage.id,user]);
 const isCreator=!!(user&&stage.created_by&&stage.created_by===user.id);
@@ -1761,7 +1795,7 @@ const myEntry=lb.find(e=>user&&e.user_id===user.id);
             <StageLeaderboardCard lb={lb} rank={rank} user={user} stage={stage}/>
             <StageProgressCard stage={stage} user={user} lb={lb} myAttempts={myAttempts}/>
 <StageConsistencyCard runs={myAttempts}/>
-<StageTimeDeltaCard stage={stage} lb={lb} myAttempts={myAttempts} user={user} units={units}/>
+<StageTimeDeltaCard stage={stage} lb={lb} all={lbAll} myAttempts={myAttempts} user={user} units={units}/>
 <StageSpeedCard stage={stage} user={user}/>
 <StageImprovementCard myAttempts={myAttempts}/>
 <div style={{padding:"16px 16px 0"}}>
