@@ -211,6 +211,7 @@ const SAMPLE_FEED=[];
 // Default settings
 const DEFAULT_SETTINGS={
   displayName:"Your Name",
+  category:"none",
   avatarUrl:null,
   units:"metric",
   heightUnit:"ft",
@@ -405,6 +406,9 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
           <Row label="Display Name" sub="Shown on leaderboards and in sessions" right={
             <input value={s.displayName} onChange={e=>update("displayName",e.target.value)}
               style={{border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 10px",fontSize:14,color:C.text,width:140,textAlign:"right",background:C.surface}}/>
+          }/>
+          <Row label="Category" sub="Used for the Men and Women leaderboards. Optional." right={
+            <SegControl options={[{val:"men",label:"Men"},{val:"women",label:"Women"},{val:"none",label:"None"}]} value={s.category||"none"} onChange={v=>update("category",v)}/>
           }/>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px"}}>
           <div style={{flex:1,marginRight:12}}>
@@ -1480,13 +1484,23 @@ function ImprovementScreen({rows}){
 }
 
 // ── Leaderboard wedge (stage sheet) ───────────────────────────────────────────
-function StageLeaderboardCard({lb,rank,user,stage}){
+function LbSeg({options,value,onChange,full}){
+  return(
+    <div style={{display:"flex",background:C.surface,borderRadius:8,padding:2,gap:2,...(full?{width:"100%",boxSizing:"border-box"}:{})}}>
+      {options.map(o=>(
+        <button key={o.val} className="tap" onClick={()=>onChange(o.val)} style={{flex:full?1:"none",padding:"5px 10px",borderRadius:6,background:value===o.val?"white":"none",border:"none",fontSize:12,fontWeight:value===o.val?600:400,color:value===o.val?C.text:C.muted,boxShadow:value===o.val?"0 1px 3px rgba(0,0,0,0.1)":"none",whiteSpace:"nowrap"}}>{o.label}</button>
+      ))}
+    </div>
+  );
+}
+function StageLeaderboardCard({lb,rank,user,stage,period="all",onPeriod,cat="all",onCat}){
   const [open,setOpen]=useState(false);
   const r=22,circ=2*Math.PI*r;
+  const filtered=period!=="all"||cat!=="all";
   const frac=rank.myPos&&rank.total?Math.max(0,Math.min(1,(rank.total-rank.myPos+1)/rank.total)):0;
   const lead=lb[0];
   const leadMe=!!(lead&&user&&lead.user_id===user.id);
-  const sub=lead?`${leadMe?"You lead":lead.name+" leads"} · ${formatTime(lead.time)}`:"No times yet";
+  const sub=lead?`${leadMe?"You lead":lead.name+" leads"} · ${formatTime(lead.time)}`:(filtered?"No times for this filter":"No times yet");
   const centre=rank.myPos?`P${rank.myPos}`:"–";
   return(
     <div style={{margin:"16px 16px 0",background:C.surface,borderRadius:16,border:`1px solid ${C.border}`,overflow:"hidden"}}>
@@ -1506,10 +1520,12 @@ function StageLeaderboardCard({lb,rank,user,stage}){
       </button>
       {open&&(
         <div style={{padding:"14px 14px 8px",borderTop:`1px solid ${C.border}`,background:"#fff"}}>
-          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:10}}>
+          {onPeriod&&<div style={{marginBottom:8}}><LbSeg full value={period} onChange={onPeriod} options={[{val:"all",label:"All time"},{val:"year",label:"Past year"},{val:"2m",label:"Past 2 months"}]}/></div>}
+          <div style={{display:"flex",alignItems:"center",justifyContent:onCat?"space-between":"flex-end",marginBottom:onCat?12:10}}>
+            {onCat&&<LbSeg value={cat} onChange={onCat} options={[{val:"all",label:"All"},{val:"men",label:"Men"},{val:"women",label:"Women"}]}/>}
             <div style={{fontSize:11,color:C.muted,background:C.surface,borderRadius:6,padding:"3px 8px",border:`1px solid ${C.border}`}}>Free · Top 10</div>
           </div>
-          {lb.length===0?<div style={{textAlign:"center",padding:"20px",color:C.muted,fontSize:13}}>No times yet — be the first!</div>:lb.map((entry,i)=>{
+          {lb.length===0?<div style={{textAlign:"center",padding:"20px",color:C.muted,fontSize:13}}>{filtered?"No riders in this filter yet.":"No times yet — be the first!"}</div>:lb.map((entry,i)=>{
             const isMe=!!(user&&entry.user_id===user.id);
             const gap=i===0?0:entry.time-lb[0].time;
             const mph=avgMph(stage,entry.time);
@@ -1695,6 +1711,9 @@ function StageInfoRow({stage,units,heightUnit}){
     const [lb,setLb]=useState([]);
     const [lbAll,setLbAll]=useState([]);
 const [rank,setRank]=useState({total:0,myPos:0});
+    const [lbRaw,setLbRaw]=useState([]);
+    const [lbPeriod,setLbPeriod]=useState("all");
+    const [lbCat,setLbCat]=useState("all");
 const [myAttempts,setMyAttempts]=useState([]);
 const [editingName,setEditingName]=useState(false);
 const [nameVal,setNameVal]=useState(stage.name);
@@ -1717,13 +1736,29 @@ const saveDifficulty=async(val)=>{
   if(error)alert(error.message);
 };
  
-    useEffect(()=>{supabase.from('stage_times').select('time_ms,user_id,created_at,profiles(display_name,avatar_url)').eq('stage_id',stage.id).order('time_ms',{ascending:true}).then(({data})=>{if(data){const seen={};const best=data.filter(t=>{const id=t.user_id;if(seen[id])return false;seen[id]=true;return true;});setLb(best.slice(0,10).map((t,i)=>({pos:i+1,name:t.profiles?.display_name||'Rider',avatarUrl:t.profiles?.avatar_url||null,time:t.time_ms,date:new Date(t.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}),user_id:t.user_id})));setLbAll(best.map((t,i)=>({pos:i+1,name:t.profiles?.display_name||'Rider',time:t.time_ms,user_id:t.user_id})));setRank({total:best.length,myPos:user?(best.findIndex(t=>t.user_id===user.id)+1):0});}});},[stage.id,user]);
+    useEffect(()=>{supabase.from('stage_times').select('time_ms,user_id,created_at,profiles(display_name,avatar_url,category)').eq('stage_id',stage.id).order('time_ms',{ascending:true}).then(({data})=>{if(data){setLbRaw(data);const seen={};const best=data.filter(t=>{const id=t.user_id;if(seen[id])return false;seen[id]=true;return true;});setLb(best.slice(0,10).map((t,i)=>({pos:i+1,name:t.profiles?.display_name||'Rider',avatarUrl:t.profiles?.avatar_url||null,time:t.time_ms,date:new Date(t.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}),user_id:t.user_id})));setLbAll(best.map((t,i)=>({pos:i+1,name:t.profiles?.display_name||'Rider',time:t.time_ms,user_id:t.user_id})));setRank({total:best.length,myPos:user?(best.findIndex(t=>t.user_id===user.id)+1):0});}});},[stage.id,user]);
 
  useEffect(()=>{if(!user)return;supabase.from('stage_times').select('time_ms,created_at').eq('stage_id',stage.id).eq('user_id',user.id).order('created_at',{ascending:true}).then(({data})=>{if(data)setMyAttempts(data);});},[stage.id,user]);
 const isCreator=!!(user&&stage.created_by&&stage.created_by===user.id);
 const saveName=async()=>{const trimmed=nameVal.trim();if(!trimmed||trimmed===stage.name){setEditingName(false);setNameVal(stage.name);return;}setSavingName(true);const{error}=await supabase.from('stages').update({name:trimmed}).eq('id',stage.id);setSavingName(false);if(error){alert(error.message);return;}onRename&&onRename(stage.id,trimmed);setEditingName(false);};
 const dist=haversine(stage.start,stage.finish);
 const myEntry=lb.find(e=>user&&e.user_id===user.id);
+
+const lbFiltered=lbPeriod!=="all"||lbCat!=="all";
+let lbView={lb,rank};
+if(lbFiltered){
+  const cutoff=lbPeriod==="year"?Date.now()-365*86400000:lbPeriod==="2m"?Date.now()-61*86400000:0;
+  const seenV={};
+  const bestV=lbRaw.filter(t=>{
+    if(cutoff&&new Date(t.created_at).getTime()<cutoff)return false;
+    if(lbCat!=="all"&&(t.profiles&&t.profiles.category)!==lbCat)return false;
+    if(seenV[t.user_id])return false;seenV[t.user_id]=true;return true;
+  });
+  lbView={
+    lb:bestV.slice(0,10).map((t,i)=>({pos:i+1,name:t.profiles?.display_name||'Rider',avatarUrl:t.profiles?.avatar_url||null,time:t.time_ms,date:new Date(t.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}),user_id:t.user_id})),
+    rank:{total:bestV.length,myPos:user?(bestV.findIndex(t=>t.user_id===user.id)+1):0}
+  };
+}
   const myPos=rank.myPos||null;
   const medalColor=pos=>pos===1?"#FFD700":pos===2?"#C0C0C0":pos===3?"#CD7F32":null;
   return(
@@ -1792,7 +1827,7 @@ const myEntry=lb.find(e=>user&&e.user_id===user.id);
 
     
             <StageInfoRow stage={stage} units={units} heightUnit={heightUnit}/>
-            <StageLeaderboardCard lb={lb} rank={rank} user={user} stage={stage}/>
+            <StageLeaderboardCard lb={lbView.lb} rank={lbView.rank} user={user} stage={stage} period={lbPeriod} onPeriod={setLbPeriod} cat={lbCat} onCat={setLbCat}/>
             <StageProgressCard stage={stage} user={user} lb={lb} myAttempts={myAttempts}/>
 <StageConsistencyCard runs={myAttempts}/>
 <StageTimeDeltaCard stage={stage} lb={lb} all={lbAll} myAttempts={myAttempts} user={user} units={units}/>
@@ -5648,7 +5683,7 @@ export default function App(){
   const [pickingExistingIds,setPickingExistingIds]=useState([]);
   const [showBikeSetup,setShowBikeSetup]=useState(false);
   const [settings,setSettings]=useState(DEFAULT_SETTINGS);
-  const saveSettings=async(s)=>{setSettings(s);if(!user)return;await supabase.from('profiles').update({app_settings:{units:s.units,heightUnit:s.heightUnit,gpsAccuracy:s.gpsAccuracy,notifications:s.notifications,privacy:s.privacy}}).eq('id',user.id);};
+  const saveSettings=async(s)=>{setSettings(s);if(!user)return;await supabase.from('profiles').update({category:(s.category==="men"||s.category==="women")?s.category:null,app_settings:{units:s.units,heightUnit:s.heightUnit,gpsAccuracy:s.gpsAccuracy,notifications:s.notifications,privacy:s.privacy}}).eq('id',user.id);};
   const [user,setUser]=useState(null);
     const goToStage=(stageId)=>{
   const stage=stages.find(s=>String(s.id)===String(stageId));
@@ -5685,7 +5720,7 @@ export default function App(){
   return()=>{document.removeEventListener('visibilitychange',onVisible);window.removeEventListener('pageshow',onVisible);window.removeEventListener('online',onVisible);};
   },[]);
 
-  useEffect(()=>{if(!user)return;supabase.from('profiles').select('display_name,avatar_url,app_settings,bike_name,rider_weight,tire_dry_front,tire_dry_rear,tire_wet_front,tire_wet_rear,shock_mode,shock_psi,shock_spring_rate,shock_lsc,shock_hsc,shock_lsr,shock_hsr,shock_hsb,shock_tokens,shock_sag,fork_mode,fork_psi,fork_spring_rate,fork_lsc,fork_hsc,fork_lsr,fork_hsr,fork_hsb,fork_tokens,fork_sag,bike_notes,fork_notes,shock_notes').eq('id',user.id).single().then(({data})=>{if(data)setSettings(prev=>({...prev,displayName:data.display_name||prev.displayName,avatarUrl:data.avatar_url||null,...(data.app_settings||{}),bikeName:data.bike_name??prev.bikeName,riderWeight:data.rider_weight??prev.riderWeight,tireDryFront:data.tire_dry_front??prev.tireDryFront,tireDryRear:data.tire_dry_rear??prev.tireDryRear,tireWetFront:data.tire_wet_front??prev.tireWetFront,tireWetRear:data.tire_wet_rear??prev.tireWetRear,shockMode:data.shock_mode??prev.shockMode,shockPsi:data.shock_psi??prev.shockPsi,shockSpringRate:data.shock_spring_rate??prev.shockSpringRate,shockLsc:data.shock_lsc??prev.shockLsc,shockHsc:data.shock_hsc??prev.shockHsc,shockLsr:data.shock_lsr??prev.shockLsr,shockHsr:data.shock_hsr??prev.shockHsr,shockHsb:data.shock_hsb??prev.shockHsb,shockTokens:data.shock_tokens??prev.shockTokens,shockSag:data.shock_sag??prev.shockSag,forkMode:data.fork_mode??prev.forkMode,forkPsi:data.fork_psi??prev.forkPsi,forkSpringRate:data.fork_spring_rate??prev.forkSpringRate,forkLsc:data.fork_lsc??prev.forkLsc,forkHsc:data.fork_hsc??prev.forkHsc,forkLsr:data.fork_lsr??prev.forkLsr,forkHsr:data.fork_hsr??prev.forkHsr,forkHsb:data.fork_hsb??prev.forkHsb,forkTokens:data.fork_tokens??prev.forkTokens,forkSag:data.fork_sag??prev.forkSag,bikeNotes:data.bike_notes??prev.bikeNotes,forkNotes:data.fork_notes??prev.forkNotes,shockNotes:data.shock_notes??prev.shockNotes}));});},[user,refreshTick]);
+  useEffect(()=>{if(!user)return;supabase.from('profiles').select('display_name,avatar_url,category,app_settings,bike_name,rider_weight,tire_dry_front,tire_dry_rear,tire_wet_front,tire_wet_rear,shock_mode,shock_psi,shock_spring_rate,shock_lsc,shock_hsc,shock_lsr,shock_hsr,shock_hsb,shock_tokens,shock_sag,fork_mode,fork_psi,fork_spring_rate,fork_lsc,fork_hsc,fork_lsr,fork_hsr,fork_hsb,fork_tokens,fork_sag,bike_notes,fork_notes,shock_notes').eq('id',user.id).single().then(({data})=>{if(data)setSettings(prev=>({...prev,displayName:data.display_name||prev.displayName,category:data.category||"none",avatarUrl:data.avatar_url||null,...(data.app_settings||{}),bikeName:data.bike_name??prev.bikeName,riderWeight:data.rider_weight??prev.riderWeight,tireDryFront:data.tire_dry_front??prev.tireDryFront,tireDryRear:data.tire_dry_rear??prev.tireDryRear,tireWetFront:data.tire_wet_front??prev.tireWetFront,tireWetRear:data.tire_wet_rear??prev.tireWetRear,shockMode:data.shock_mode??prev.shockMode,shockPsi:data.shock_psi??prev.shockPsi,shockSpringRate:data.shock_spring_rate??prev.shockSpringRate,shockLsc:data.shock_lsc??prev.shockLsc,shockHsc:data.shock_hsc??prev.shockHsc,shockLsr:data.shock_lsr??prev.shockLsr,shockHsr:data.shock_hsr??prev.shockHsr,shockHsb:data.shock_hsb??prev.shockHsb,shockTokens:data.shock_tokens??prev.shockTokens,shockSag:data.shock_sag??prev.shockSag,forkMode:data.fork_mode??prev.forkMode,forkPsi:data.fork_psi??prev.forkPsi,forkSpringRate:data.fork_spring_rate??prev.forkSpringRate,forkLsc:data.fork_lsc??prev.forkLsc,forkHsc:data.fork_hsc??prev.forkHsc,forkLsr:data.fork_lsr??prev.forkLsr,forkHsr:data.fork_hsr??prev.forkHsr,forkHsb:data.fork_hsb??prev.forkHsb,forkTokens:data.fork_tokens??prev.forkTokens,forkSag:data.fork_sag??prev.forkSag,bikeNotes:data.bike_notes??prev.bikeNotes,forkNotes:data.fork_notes??prev.forkNotes,shockNotes:data.shock_notes??prev.shockNotes}));});},[user,refreshTick]);
   const [bikes,setBikes]=useState([]);
   const [activeBikeId,setActiveBikeId]=useState(null);
   useEffect(()=>{ACTIVE_BIKE_ID=activeBikeId;},[activeBikeId]);
