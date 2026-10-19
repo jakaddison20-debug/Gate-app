@@ -147,7 +147,7 @@ async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,bik
   if(trace&&trace.length>=3){
     try{
       const{error:histErr}=await supabase.from('run_trace_history').insert({user_id,stage_id:String(stage_id),time_ms,created_at:created_at||undefined,points:trace});
-      if(histErr)console.log('trace history save failed',histErr.message);
+      if(histErr){console.log('trace history save failed',histErr.message);logEvent(user_id,'trace_error',histErr.message,String(stage_id),{code:histErr.code});}
     }catch(e){console.log('trace history save failed',e);}
   }
   if(prevBest===null||time_ms<prevBest){
