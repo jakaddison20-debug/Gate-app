@@ -143,6 +143,13 @@ async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,bik
       if(traceErr)console.log('trace save failed',traceErr.message);
     }catch(e){console.log('trace save failed',e);}
   }
+  // Keep a trace of every run (your own only) so any past run can be compared later. Never fails the save.
+  if(trace&&trace.length>=3){
+    try{
+      const{error:histErr}=await supabase.from('run_trace_history').insert({user_id,stage_id:String(stage_id),time_ms,created_at:created_at||undefined,points:trace});
+      if(histErr)console.log('trace history save failed',histErr.message);
+    }catch(e){console.log('trace history save failed',e);}
+  }
   if(prevBest===null||time_ms<prevBest){
     logEvent(user_id,'stage_record',`set a new record on ${stage_name} · ${formatTime(time_ms)}`,stage_id,{time_ms});
   } else if(ownPrevBest!==null&&time_ms<ownPrevBest){
@@ -211,8 +218,10 @@ const SAMPLE_FEED=[];
 // Default settings
 const DEFAULT_SETTINGS={
   displayName:"Your Name",
+  category:"none",
   avatarUrl:null,
   units:"metric",
+  heightUnit:"ft",
   gpsAccuracy:"high",
   notifications:{newLeaderboard:true,sessionInvite:true,courseRecord:true,weeklyDigest:false},
   privacy:{defaultStagePrivacy:"private",showOnLeaderboard:true,shareActivity:true},
@@ -405,6 +414,9 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
             <input value={s.displayName} onChange={e=>update("displayName",e.target.value)}
               style={{border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 10px",fontSize:14,color:C.text,width:140,textAlign:"right",background:C.surface}}/>
           }/>
+          <Row label="Category" sub="Used for the Men and Women leaderboards. Optional." right={
+            <SegControl options={[{val:"men",label:"Men"},{val:"women",label:"Women"},{val:"none",label:"None"}]} value={s.category||"none"} onChange={v=>update("category",v)}/>
+          }/>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px"}}>
           <div style={{flex:1,marginRight:12}}>
             <div style={{fontSize:14,fontWeight:500,color:C.text}}>Profile Photo</div>
@@ -425,6 +437,9 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
         <Section title="Units & Display">
           <Row label="Distance & Speed" right={
             <SegControl options={[{val:"metric",label:"km"},{val:"imperial",label:"mi"}]} value={s.units} onChange={v=>update("units",v)}/>
+          }/>
+          <Row label="Height" sub="Descent on stages" right={
+            <SegControl options={[{val:"m",label:"m"},{val:"ft",label:"ft"}]} value={s.heightUnit||"ft"} onChange={v=>update("heightUnit",v)}/>
           }/>
           <Row label="GPS Accuracy" sub={s.gpsAccuracy==="high"?"Best accuracy, more battery":"Balanced accuracy and battery"} noBorder right={
             <SegControl options={[{val:"high",label:"High"},{val:"balanced",label:"Balanced"}]} value={s.gpsAccuracy} onChange={v=>update("gpsAccuracy",v)}/>
@@ -1007,16 +1022,23 @@ function RunCompareCharts({mine,theirs,name,units}){
     </div>
   );
 }
-function StageTimeDeltaCard({stage,lb,myAttempts,user,units}){
+function StageTimeDeltaCard({stage,lb,all,myAttempts,user,units}){
   const [open,setOpen]=useState(false);
   const [traces,setTraces]=useState(undefined); // undefined = loading, null = unavailable
+  const [pickId,setPickId]=useState(null);       // rider you picked to compare with (null = the default)
+  const [picking,setPicking]=useState(false);
+  const [query,setQuery]=useState("");
   const haveRuns=!!(user&&myAttempts&&myAttempts.length>0&&lb&&lb.length>0);
-  const target=haveRuns?(lb[0].user_id===user.id?lb[1]:lb[0]):null;
+  const pool=all&&all.length?all:(lb||[]);       // everyone on the stage (falls back to the top 10)
+  const defTarget=haveRuns?(lb[0].user_id===user.id?lb[1]:lb[0]):null;
+  const picked=pickId?pool.find(e=>e.user_id===pickId&&(!user||e.user_id!==user.id)):null;
+  const target=picked||defTarget;
   const targetId=target?target.user_id:null;
   const myId=user?user.id:null;
   useEffect(()=>{
     if(!open||!myId||!targetId)return;
     let cancelled=false;
+    setTraces(undefined);
     supabase.from('run_traces').select('user_id,time_ms,points').eq('stage_id',String(stage.id)).in('user_id',[myId,targetId]).then(({data,error})=>{
       if(cancelled)return;
       if(error||!data){setTraces(null);return;}
@@ -1036,6 +1058,8 @@ function StageTimeDeltaCard({stage,lb,myAttempts,user,units}){
   const prof=(row,best)=>row&&Math.abs(row.time_ms-best)<=1?traceProfile(row.points):null;
   const mineProf=traces?prof(traces[myId],myBest):null;
   const theirProf=traces?prof(traces[targetId],target.time):null;
+  const q=query.trim().toLowerCase();
+  const rows=pool.filter(e=>e.user_id!==myId&&(!q||(e.name||"").toLowerCase().includes(q)));
   return(
     <div style={{margin:"16px 16px 0",background:C.surface,borderRadius:14,border:`1px solid ${C.border}`,overflow:"hidden"}}>
       <button className="tap" onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:14,padding:"14px 16px",background:"none",border:"none",textAlign:"left"}}>
@@ -1049,10 +1073,34 @@ function StageTimeDeltaCard({stage,lb,myAttempts,user,units}){
       {open&&(
         <div style={{padding:"0 16px 14px"}}>
           <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,marginBottom:8}}>COMPARING WITH</div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 14px"}}>
-            <span style={{fontSize:14,fontWeight:700,color:C.text}}>{target.name}</span>
+          <button className="tap" onClick={()=>{setPicking(p=>!p);setQuery("");}} style={{width:"100%",display:"flex",alignItems:"center",gap:10,background:"#fff",border:`1px solid ${picking?C.blue:C.border}`,borderRadius:10,padding:"11px 14px",textAlign:"left"}}>
+            <span style={{flex:1,fontSize:14,fontWeight:700,color:C.text}}>{target.name}<span style={{fontSize:12,fontWeight:600,color:C.muted,marginLeft:6}}>P{target.pos}</span></span>
             <span style={{fontSize:15,fontWeight:800,color:C.text}}>{formatTime(target.time)}</span>
-          </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.mutedL} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{transform:picking?"rotate(180deg)":"none",transition:"transform 0.15s"}}><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          {picking&&(
+            <div style={{marginTop:8,border:`1px solid ${C.border}`,borderRadius:10,overflow:"hidden",background:"#fff"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",borderBottom:`1px solid ${C.border}`,background:"#FAFAFA"}}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.mutedL} strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+                <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Find a rider" style={{flex:1,minWidth:0,border:"none",outline:"none",background:"transparent",fontSize:16,color:C.text}}/>
+              </div>
+              <div style={{maxHeight:300,overflowY:"auto"}}>
+                {rows.length===0&&<div style={{padding:"16px 12px",fontSize:13,color:C.muted,textAlign:"center"}}>No riders found</div>}
+                {rows.map((e,i)=>{
+                  const d=e.time-myBest,sel=e.user_id===targetId;
+                  return(
+                    <button key={e.user_id} className="tap" onClick={()=>{setPickId(e.user_id);setPicking(false);setQuery("");}} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"11px 12px",background:sel?"#EFF4FF":"#fff",border:"none",borderBottom:i===rows.length-1?"none":`1px solid ${C.border}`,textAlign:"left"}}>
+                      <span style={{fontSize:13,fontWeight:800,color:C.text,width:30}}>P{e.pos}</span>
+                      <span style={{flex:1,minWidth:0,fontSize:14,fontWeight:sel?700:500,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.name}</span>
+                      <span style={{fontSize:14,fontWeight:800,color:C.text}}>{formatTime(e.time)}</span>
+                      <span style={{fontSize:12,fontWeight:700,color:d>0?C.green:C.red,minWidth:46,textAlign:"right"}}>{d>0?"+":"−"}{fmtDelta(d)}</span>
+                      <span style={{width:16,display:"flex"}}>{sel&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="5 12 10 17 19 7"/></svg>}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div style={{fontSize:18,fontWeight:800,color,marginTop:14}}>{level?`Level with ${target.name}`:`${fmtDelta(delta)}s ${ahead?"ahead of":"behind"} ${target.name}`}</div>
           <div style={{fontSize:12,color:C.muted,marginTop:4,lineHeight:1.45}}>Your best run compared with {target.name}'s fastest time on this stage.</div>
           {traces===undefined?<div style={{fontSize:12,color:C.mutedL,marginTop:14}}>Loading speed data…</div>
@@ -1443,13 +1491,23 @@ function ImprovementScreen({rows}){
 }
 
 // ── Leaderboard wedge (stage sheet) ───────────────────────────────────────────
-function StageLeaderboardCard({lb,rank,user,stage}){
+function LbSeg({options,value,onChange,full}){
+  return(
+    <div style={{display:"flex",background:C.surface,borderRadius:8,padding:2,gap:2,...(full?{width:"100%",boxSizing:"border-box"}:{})}}>
+      {options.map(o=>(
+        <button key={o.val} className="tap" onClick={()=>onChange(o.val)} style={{flex:full?1:"none",padding:"5px 10px",borderRadius:6,background:value===o.val?"white":"none",border:"none",fontSize:12,fontWeight:value===o.val?600:400,color:value===o.val?C.text:C.muted,boxShadow:value===o.val?"0 1px 3px rgba(0,0,0,0.1)":"none",whiteSpace:"nowrap"}}>{o.label}</button>
+      ))}
+    </div>
+  );
+}
+function StageLeaderboardCard({lb,rank,user,stage,period="all",onPeriod,cat="all",onCat}){
   const [open,setOpen]=useState(false);
   const r=22,circ=2*Math.PI*r;
+  const filtered=period!=="all"||cat!=="all";
   const frac=rank.myPos&&rank.total?Math.max(0,Math.min(1,(rank.total-rank.myPos+1)/rank.total)):0;
   const lead=lb[0];
   const leadMe=!!(lead&&user&&lead.user_id===user.id);
-  const sub=lead?`${leadMe?"You lead":lead.name+" leads"} · ${formatTime(lead.time)}`:"No times yet";
+  const sub=lead?`${leadMe?"You lead":lead.name+" leads"} · ${formatTime(lead.time)}`:(filtered?"No times for this filter":"No times yet");
   const centre=rank.myPos?`P${rank.myPos}`:"–";
   return(
     <div style={{margin:"16px 16px 0",background:C.surface,borderRadius:16,border:`1px solid ${C.border}`,overflow:"hidden"}}>
@@ -1469,10 +1527,12 @@ function StageLeaderboardCard({lb,rank,user,stage}){
       </button>
       {open&&(
         <div style={{padding:"14px 14px 8px",borderTop:`1px solid ${C.border}`,background:"#fff"}}>
-          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:10}}>
+          {onPeriod&&<div style={{marginBottom:8}}><LbSeg full value={period} onChange={onPeriod} options={[{val:"all",label:"All time"},{val:"year",label:"Past year"},{val:"2m",label:"Past 2 months"}]}/></div>}
+          <div style={{display:"flex",alignItems:"center",justifyContent:onCat?"space-between":"flex-end",marginBottom:onCat?12:10}}>
+            {onCat&&<LbSeg value={cat} onChange={onCat} options={[{val:"all",label:"All"},{val:"men",label:"Men"},{val:"women",label:"Women"}]}/>}
             <div style={{fontSize:11,color:C.muted,background:C.surface,borderRadius:6,padding:"3px 8px",border:`1px solid ${C.border}`}}>Free · Top 10</div>
           </div>
-          {lb.length===0?<div style={{textAlign:"center",padding:"20px",color:C.muted,fontSize:13}}>No times yet — be the first!</div>:lb.map((entry,i)=>{
+          {lb.length===0?<div style={{textAlign:"center",padding:"20px",color:C.muted,fontSize:13}}>{filtered?"No riders in this filter yet.":"No times yet — be the first!"}</div>:lb.map((entry,i)=>{
             const isMe=!!(user&&entry.user_id===user.id);
             const gap=i===0?0:entry.time-lb[0].time;
             const mph=avgMph(stage,entry.time);
@@ -1620,9 +1680,47 @@ function StageSpeedCard({stage,user,defaultOpen=false}){
   );
 }
 
-    function StageDetailSheet({stage,onClose,onRace,onOpenSections,user,onRename,units,onDelete}){
+// Slim row: distance (along the stage line), descent, gradient (steepest 50 m).
+function StageInfoRow({stage,units,heightUnit}){
+  const [descFt,setDescFt]=useState(undefined); // undefined = loading, null = unavailable
+  const [steep,setSteep]=useState(undefined);
+  useEffect(()=>{
+    let off=false;
+    setDescFt(undefined);setSteep(undefined);
+    stageDescentFt(stage).then(v=>{if(!off)setDescFt(v||null);}).catch(()=>{if(!off)setDescFt(null);});
+    stageSteepPct(stage).then(v=>{if(!off)setSteep(v);}).catch(()=>{if(!off)setSteep(null);});
+    return()=>{off=true;};
+  },[stage.id]);
+  const len=stageLengthM(stage);
+  const imperial=units==="imperial";
+  const miles=len/1609.34;
+  const distVal=len<=0?"—":imperial?miles.toFixed(miles<1?2:1):(len<1000?String(Math.round(len)):(len/1000).toFixed(1));
+  const distUnit=len<=0?"":imperial?"mi":(len<1000?"m":"km");
+  const useFt=heightUnit!=="m";
+  const descVal=typeof descFt!=="number"?"—":(useFt?fatCommas(descFt):String(Math.round(descFt/M_TO_FT)));
+  const steepVal=typeof steep!=="number"?"—":String(steep);
+  const cell=(label,val,unit,first)=>(
+    <div style={{display:"flex",alignItems:"baseline",justifyContent:"center",gap:5,padding:"10px 4px",borderLeft:first?"none":`1px solid ${C.border}`}}>
+      <span style={{fontSize:10,fontWeight:600,color:C.muted,letterSpacing:0.6}}>{label}</span>
+      <span style={{fontSize:14,fontWeight:800,color:C.text,letterSpacing:-0.3}}>{val}{unit&&val!=="—"&&<span style={{fontSize:11,fontWeight:600,color:C.muted,marginLeft:1}}>{unit}</span>}</span>
+    </div>
+  );
+  return(
+    <div style={{margin:"12px 16px 0",background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",overflow:"hidden"}}>
+      {cell("DISTANCE",distVal,distUnit,true)}
+      {cell("DESCENT",descVal,useFt?"ft":"m")}
+      {cell("GRADIENT",steepVal,"%")}
+    </div>
+  );
+}
+
+    function StageDetailSheet({stage,onClose,onRace,onOpenSections,user,onRename,units,heightUnit,onDelete}){
     const [lb,setLb]=useState([]);
+    const [lbAll,setLbAll]=useState([]);
 const [rank,setRank]=useState({total:0,myPos:0});
+    const [lbRaw,setLbRaw]=useState([]);
+    const [lbPeriod,setLbPeriod]=useState("all");
+    const [lbCat,setLbCat]=useState("all");
 const [myAttempts,setMyAttempts]=useState([]);
 const [editingName,setEditingName]=useState(false);
 const [nameVal,setNameVal]=useState(stage.name);
@@ -1645,13 +1743,29 @@ const saveDifficulty=async(val)=>{
   if(error)alert(error.message);
 };
  
-    useEffect(()=>{supabase.from('stage_times').select('time_ms,user_id,created_at,profiles(display_name,avatar_url)').eq('stage_id',stage.id).order('time_ms',{ascending:true}).then(({data})=>{if(data){const seen={};const best=data.filter(t=>{const id=t.user_id;if(seen[id])return false;seen[id]=true;return true;});setLb(best.slice(0,10).map((t,i)=>({pos:i+1,name:t.profiles?.display_name||'Rider',avatarUrl:t.profiles?.avatar_url||null,time:t.time_ms,date:new Date(t.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}),user_id:t.user_id})));setRank({total:best.length,myPos:user?(best.findIndex(t=>t.user_id===user.id)+1):0});}});},[stage.id,user]);
+    useEffect(()=>{supabase.from('stage_times').select('time_ms,user_id,created_at,profiles(display_name,avatar_url,category)').eq('stage_id',stage.id).order('time_ms',{ascending:true}).then(({data})=>{if(data){setLbRaw(data);const seen={};const best=data.filter(t=>{const id=t.user_id;if(seen[id])return false;seen[id]=true;return true;});setLb(best.slice(0,10).map((t,i)=>({pos:i+1,name:t.profiles?.display_name||'Rider',avatarUrl:t.profiles?.avatar_url||null,time:t.time_ms,date:new Date(t.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}),user_id:t.user_id})));setLbAll(best.map((t,i)=>({pos:i+1,name:t.profiles?.display_name||'Rider',time:t.time_ms,user_id:t.user_id})));setRank({total:best.length,myPos:user?(best.findIndex(t=>t.user_id===user.id)+1):0});}});},[stage.id,user]);
 
  useEffect(()=>{if(!user)return;supabase.from('stage_times').select('time_ms,created_at').eq('stage_id',stage.id).eq('user_id',user.id).order('created_at',{ascending:true}).then(({data})=>{if(data)setMyAttempts(data);});},[stage.id,user]);
 const isCreator=!!(user&&stage.created_by&&stage.created_by===user.id);
 const saveName=async()=>{const trimmed=nameVal.trim();if(!trimmed||trimmed===stage.name){setEditingName(false);setNameVal(stage.name);return;}setSavingName(true);const{error}=await supabase.from('stages').update({name:trimmed}).eq('id',stage.id);setSavingName(false);if(error){alert(error.message);return;}onRename&&onRename(stage.id,trimmed);setEditingName(false);};
 const dist=haversine(stage.start,stage.finish);
 const myEntry=lb.find(e=>user&&e.user_id===user.id);
+
+const lbFiltered=lbPeriod!=="all"||lbCat!=="all";
+let lbView={lb,rank};
+if(lbFiltered){
+  const cutoff=lbPeriod==="year"?Date.now()-365*86400000:lbPeriod==="2m"?Date.now()-61*86400000:0;
+  const seenV={};
+  const bestV=lbRaw.filter(t=>{
+    if(cutoff&&new Date(t.created_at).getTime()<cutoff)return false;
+    if(lbCat!=="all"&&(t.profiles&&t.profiles.category)!==lbCat)return false;
+    if(seenV[t.user_id])return false;seenV[t.user_id]=true;return true;
+  });
+  lbView={
+    lb:bestV.slice(0,10).map((t,i)=>({pos:i+1,name:t.profiles?.display_name||'Rider',avatarUrl:t.profiles?.avatar_url||null,time:t.time_ms,date:new Date(t.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}),user_id:t.user_id})),
+    rank:{total:bestV.length,myPos:user?(bestV.findIndex(t=>t.user_id===user.id)+1):0}
+  };
+}
   const myPos=rank.myPos||null;
   const medalColor=pos=>pos===1?"#FFD700":pos===2?"#C0C0C0":pos===3?"#CD7F32":null;
   return(
@@ -1672,8 +1786,6 @@ const myEntry=lb.find(e=>user&&e.user_id===user.id);
 </div>
 )}
 <div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
-  <span style={{fontSize:12,color:C.muted}}>{formatDist(dist)}</span>
-  <span style={{fontSize:12,color:C.muted}}>·</span>
   <span style={{fontSize:12,color:C.muted}}>{stage.privacy}</span>
   <span style={{fontSize:12,color:C.muted}}>·</span>
   {isCreator?(
@@ -1721,10 +1833,11 @@ const myEntry=lb.find(e=>user&&e.user_id===user.id);
 </div>
 
     
-            <StageLeaderboardCard lb={lb} rank={rank} user={user} stage={stage}/>
+            <StageInfoRow stage={stage} units={units} heightUnit={heightUnit}/>
+            <StageLeaderboardCard lb={lbView.lb} rank={lbView.rank} user={user} stage={stage} period={lbPeriod} onPeriod={setLbPeriod} cat={lbCat} onCat={setLbCat}/>
             <StageProgressCard stage={stage} user={user} lb={lb} myAttempts={myAttempts}/>
 <StageConsistencyCard runs={myAttempts}/>
-<StageTimeDeltaCard stage={stage} lb={lb} myAttempts={myAttempts} user={user} units={units}/>
+<StageTimeDeltaCard stage={stage} lb={lb} all={lbAll} myAttempts={myAttempts} user={user} units={units}/>
 <StageSpeedCard stage={stage} user={user}/>
 <StageImprovementCard myAttempts={myAttempts}/>
 <div style={{padding:"16px 16px 0"}}>
@@ -3369,6 +3482,43 @@ async function stageDescentFt(stage){
   const ft=Math.round(descentFromProfile(elev)*M_TO_FT/10)*10;
   cache[stage.id]={ft,sig};writeDescCache(cache);
   return ft;
+}
+
+const STEEP_WINDOW_M=50; // "gradient" = the steepest stretch of this length
+const STEEP_KEY='gate_steep_pct_v1';
+const readSteepCache=()=>{try{return JSON.parse(localStorage.getItem(STEEP_KEY)||'{}');}catch(e){return {};}};
+const writeSteepCache=o=>{try{localStorage.setItem(STEEP_KEY,JSON.stringify(o));}catch(e){}};
+// Steepest downhill gradient (%) over any 50 m stretch of the stage line. null if it can't be worked out.
+async function stageSteepPct(stage){
+  const line=stage.line_coords&&stage.line_coords.length>1?stage.line_coords:[stage.start,stage.finish];
+  if(!line||line.length<2||!line[0]||!line[line.length-1])return null;
+  const cum=[0];for(let i=1;i<line.length;i++)cum.push(cum[i-1]+haversine(line[i-1],line[i]));
+  const total=cum[cum.length-1];
+  if(total<STEEP_WINDOW_M)return null;
+  const sig=`${line.length}:${Math.round(total)}`;
+  const cache=readSteepCache(),hit=cache[stage.id];
+  if(hit&&hit.sig===sig)return hit.pct;
+  const step=Math.max(10,total/500),pts=[];
+  for(let d=0,seg=0;d<=total;d+=step){
+    while(seg<line.length-2&&cum[seg+1]<d)seg++;
+    const span=cum[seg+1]-cum[seg],u=span>0?(d-cum[seg])/span:0;
+    pts.push({d,lat:line[seg].lat+(line[seg+1].lat-line[seg].lat)*u,lng:line[seg].lng+(line[seg+1].lng-line[seg].lng)*u});
+  }
+  const elev=[];
+  for(const p of pts){const e=await elevationAt(p.lat,p.lng);if(e===null)return null;elev.push(e);}
+  const sm=elev.map((_,i)=>{const a=Math.max(0,i-1),b=Math.min(elev.length-1,i+1);let s=0;for(let k=a;k<=b;k++)s+=elev[k];return s/(b-a+1);});
+  let best=0;
+  for(let i=0,j=0;i<pts.length;i++){
+    if(j<i)j=i;
+    while(j<pts.length-1&&pts[j].d-pts[i].d<STEEP_WINDOW_M)j++;
+    const run=pts[j].d-pts[i].d;
+    if(run<STEEP_WINDOW_M*0.9)break;
+    const g=(sm[i]-sm[j])/run*100;
+    if(g>best)best=g;
+  }
+  const pct=Math.round(best);
+  cache[stage.id]={pct,sig};writeSteepCache(cache);
+  return pct;
 }
 
 function useStageDescents(grouped,stages){
@@ -5540,7 +5690,7 @@ export default function App(){
   const [pickingExistingIds,setPickingExistingIds]=useState([]);
   const [showBikeSetup,setShowBikeSetup]=useState(false);
   const [settings,setSettings]=useState(DEFAULT_SETTINGS);
-  const saveSettings=async(s)=>{setSettings(s);if(!user)return;await supabase.from('profiles').update({app_settings:{units:s.units,gpsAccuracy:s.gpsAccuracy,notifications:s.notifications,privacy:s.privacy}}).eq('id',user.id);};
+  const saveSettings=async(s)=>{setSettings(s);if(!user)return;await supabase.from('profiles').update({category:(s.category==="men"||s.category==="women")?s.category:null,app_settings:{units:s.units,heightUnit:s.heightUnit,gpsAccuracy:s.gpsAccuracy,notifications:s.notifications,privacy:s.privacy}}).eq('id',user.id);};
   const [user,setUser]=useState(null);
     const goToStage=(stageId)=>{
   const stage=stages.find(s=>String(s.id)===String(stageId));
@@ -5577,7 +5727,7 @@ export default function App(){
   return()=>{document.removeEventListener('visibilitychange',onVisible);window.removeEventListener('pageshow',onVisible);window.removeEventListener('online',onVisible);};
   },[]);
 
-  useEffect(()=>{if(!user)return;supabase.from('profiles').select('display_name,avatar_url,app_settings,bike_name,rider_weight,tire_dry_front,tire_dry_rear,tire_wet_front,tire_wet_rear,shock_mode,shock_psi,shock_spring_rate,shock_lsc,shock_hsc,shock_lsr,shock_hsr,shock_hsb,shock_tokens,shock_sag,fork_mode,fork_psi,fork_spring_rate,fork_lsc,fork_hsc,fork_lsr,fork_hsr,fork_hsb,fork_tokens,fork_sag,bike_notes,fork_notes,shock_notes').eq('id',user.id).single().then(({data})=>{if(data)setSettings(prev=>({...prev,displayName:data.display_name||prev.displayName,avatarUrl:data.avatar_url||null,...(data.app_settings||{}),bikeName:data.bike_name??prev.bikeName,riderWeight:data.rider_weight??prev.riderWeight,tireDryFront:data.tire_dry_front??prev.tireDryFront,tireDryRear:data.tire_dry_rear??prev.tireDryRear,tireWetFront:data.tire_wet_front??prev.tireWetFront,tireWetRear:data.tire_wet_rear??prev.tireWetRear,shockMode:data.shock_mode??prev.shockMode,shockPsi:data.shock_psi??prev.shockPsi,shockSpringRate:data.shock_spring_rate??prev.shockSpringRate,shockLsc:data.shock_lsc??prev.shockLsc,shockHsc:data.shock_hsc??prev.shockHsc,shockLsr:data.shock_lsr??prev.shockLsr,shockHsr:data.shock_hsr??prev.shockHsr,shockHsb:data.shock_hsb??prev.shockHsb,shockTokens:data.shock_tokens??prev.shockTokens,shockSag:data.shock_sag??prev.shockSag,forkMode:data.fork_mode??prev.forkMode,forkPsi:data.fork_psi??prev.forkPsi,forkSpringRate:data.fork_spring_rate??prev.forkSpringRate,forkLsc:data.fork_lsc??prev.forkLsc,forkHsc:data.fork_hsc??prev.forkHsc,forkLsr:data.fork_lsr??prev.forkLsr,forkHsr:data.fork_hsr??prev.forkHsr,forkHsb:data.fork_hsb??prev.forkHsb,forkTokens:data.fork_tokens??prev.forkTokens,forkSag:data.fork_sag??prev.forkSag,bikeNotes:data.bike_notes??prev.bikeNotes,forkNotes:data.fork_notes??prev.forkNotes,shockNotes:data.shock_notes??prev.shockNotes}));});},[user,refreshTick]);
+  useEffect(()=>{if(!user)return;supabase.from('profiles').select('display_name,avatar_url,category,app_settings,bike_name,rider_weight,tire_dry_front,tire_dry_rear,tire_wet_front,tire_wet_rear,shock_mode,shock_psi,shock_spring_rate,shock_lsc,shock_hsc,shock_lsr,shock_hsr,shock_hsb,shock_tokens,shock_sag,fork_mode,fork_psi,fork_spring_rate,fork_lsc,fork_hsc,fork_lsr,fork_hsr,fork_hsb,fork_tokens,fork_sag,bike_notes,fork_notes,shock_notes').eq('id',user.id).single().then(({data})=>{if(data)setSettings(prev=>({...prev,displayName:data.display_name||prev.displayName,category:data.category||"none",avatarUrl:data.avatar_url||null,...(data.app_settings||{}),bikeName:data.bike_name??prev.bikeName,riderWeight:data.rider_weight??prev.riderWeight,tireDryFront:data.tire_dry_front??prev.tireDryFront,tireDryRear:data.tire_dry_rear??prev.tireDryRear,tireWetFront:data.tire_wet_front??prev.tireWetFront,tireWetRear:data.tire_wet_rear??prev.tireWetRear,shockMode:data.shock_mode??prev.shockMode,shockPsi:data.shock_psi??prev.shockPsi,shockSpringRate:data.shock_spring_rate??prev.shockSpringRate,shockLsc:data.shock_lsc??prev.shockLsc,shockHsc:data.shock_hsc??prev.shockHsc,shockLsr:data.shock_lsr??prev.shockLsr,shockHsr:data.shock_hsr??prev.shockHsr,shockHsb:data.shock_hsb??prev.shockHsb,shockTokens:data.shock_tokens??prev.shockTokens,shockSag:data.shock_sag??prev.shockSag,forkMode:data.fork_mode??prev.forkMode,forkPsi:data.fork_psi??prev.forkPsi,forkSpringRate:data.fork_spring_rate??prev.forkSpringRate,forkLsc:data.fork_lsc??prev.forkLsc,forkHsc:data.fork_hsc??prev.forkHsc,forkLsr:data.fork_lsr??prev.forkLsr,forkHsr:data.fork_hsr??prev.forkHsr,forkHsb:data.fork_hsb??prev.forkHsb,forkTokens:data.fork_tokens??prev.forkTokens,forkSag:data.fork_sag??prev.forkSag,bikeNotes:data.bike_notes??prev.bikeNotes,forkNotes:data.fork_notes??prev.forkNotes,shockNotes:data.shock_notes??prev.shockNotes}));});},[user,refreshTick]);
   const [bikes,setBikes]=useState([]);
   const [activeBikeId,setActiveBikeId]=useState(null);
   useEffect(()=>{ACTIVE_BIKE_ID=activeBikeId;},[activeBikeId]);
@@ -6102,7 +6252,7 @@ if(showBikeSetup)return(
             ))}
           </div>
                     {selectedStage&&sheet!=='sections'&&(
-            <><div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.3)",zIndex:39}} onClick={()=>setSelectedStage(null)}/><div className="slide-up" style={{position:"absolute",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:40,maxHeight:"88vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><StageDetailSheet stage={selectedStage} units={settings.units} onClose={()=>setSelectedStage(null)}onRace={()=>{setActiveRace({id:Date.now(),name:selectedStage.name,stageIds:[selectedStage.id],mode:'race',times:{},bestPerStage:{}});setSelectedStage(null);}}
+            <><div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.3)",zIndex:39}} onClick={()=>setSelectedStage(null)}/><div className="slide-up" style={{position:"absolute",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:40,maxHeight:"88vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><StageDetailSheet stage={selectedStage} units={settings.units} heightUnit={settings.heightUnit} onClose={()=>setSelectedStage(null)}onRace={()=>{setActiveRace({id:Date.now(),name:selectedStage.name,stageIds:[selectedStage.id],mode:'race',times:{},bestPerStage:{}});setSelectedStage(null);}}
 onDelete={deleteStage} onOpenSections={()=>setSheet('sections')}
 user={user}
 onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newName}:s));setSelectedStage(prev=>prev&&prev.id===id?{...prev,name:newName}:prev);}}/></div></>
@@ -6192,7 +6342,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
 
       {/* Stage detail (from stages tab) */}
       {selectedStage&&tab!=="map"&&sheet!=='sections'&&(
-      <><div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:45}} onClick={()=>setSelectedStage(null)}/><div className="slide-up" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:46,maxHeight:"88vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><StageDetailSheet stage={selectedStage} units={settings.units} onClose={()=>setSelectedStage(null)} onRace={()=>{setActiveRace({id:Date.now(),name:selectedStage.name,stageIds:[selectedStage.id],mode:'race',times:{},bestPerStage:{}});setSelectedStage(null);}} onDelete={deleteStage} onOpenSections={()=>setSheet('sections')} user={user} onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newName}:s));setSelectedStage(prev=>prev&&prev.id===id?{...prev,name:newName}:prev);}}/></div></>
+      <><div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:45}} onClick={()=>setSelectedStage(null)}/><div className="slide-up" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:46,maxHeight:"88vh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><StageDetailSheet stage={selectedStage} units={settings.units} heightUnit={settings.heightUnit} onClose={()=>setSelectedStage(null)} onRace={()=>{setActiveRace({id:Date.now(),name:selectedStage.name,stageIds:[selectedStage.id],mode:'race',times:{},bestPerStage:{}});setSelectedStage(null);}} onDelete={deleteStage} onOpenSections={()=>setSheet('sections')} user={user} onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newName}:s));setSelectedStage(prev=>prev&&prev.id===id?{...prev,name:newName}:prev);}}/></div></>
       )}    
 
 
