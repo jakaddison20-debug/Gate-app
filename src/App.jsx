@@ -4296,7 +4296,30 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
 }
 
 // ── Profile ───────────────────────────────────────────────────────────────────
-function ProfileScreen({stages,settings,courseResults,pastWeeks,weekByType,onSettingsPress,onGoToStages,onGoToCourses,onOpenProgress,onOpenBikeSetup,followerCount,onOpenFollowers,onOpenTrophies}){
+function SparkBolt({color,size=38}){
+  return <svg width={size} height={size} viewBox="0 0 36 36" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z" transform="translate(7,4) scale(1.05)"/><path d="M5 9l3 2M3 17h4M6 25l3-2M31 9l-3 2M33 17h-4M30 25l-3-2"/></svg>;
+}
+function StreakCard({streak}){
+  const cur=streak.cur||0,best=streak.best||0,rode=!!streak.rode;
+  const wk=n=>`${n} week${n===1?"":"s"}`;
+  const title=cur>0?`${cur} week streak`:(best>0?"No streak":"No streak yet");
+  const sub=rode
+    ?(cur>1&&cur>=best?"Your longest yet":best>cur?`Best ${wk(best)}`:"Keep it going")
+    :(cur>0?`Ride this week to make it ${cur+1}`:(best>0?`Best ${wk(best)} · ride this week to start one`:"Ride this week to start one"));
+  return(
+    <div style={{padding:"18px 16px 0"}}>
+      <div style={{border:`1px solid ${C.border}`,borderRadius:14,padding:14,display:"flex",alignItems:"center",gap:12}}>
+        <div style={{width:38,height:38,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><SparkBolt color={rode?C.blue:C.mutedL}/></div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:15,fontWeight:800,color:cur>0?C.text:C.muted}}>{title}</div>
+          <div style={{fontSize:12,color:C.muted,marginTop:1}}>{sub}</div>
+        </div>
+        {!rode&&cur>0&&<div style={{padding:"4px 9px",borderRadius:999,background:"#FFFBEB",color:"#92400E",fontSize:11,fontWeight:800,whiteSpace:"nowrap"}}>Ride by Sunday</div>}
+      </div>
+    </div>
+  );
+}
+function ProfileScreen({streak,stages,settings,courseResults,pastWeeks,weekByType,onSettingsPress,onGoToStages,onGoToCourses,onOpenProgress,onOpenBikeSetup,followerCount,onOpenFollowers,onOpenTrophies}){
   const [selectedWeek,setSelectedWeek]=useState(pastWeeks.length-1);
   const stagesRidden=stages.filter(s=>s.time).length;
   const coursesComplete=courseResults.length;
@@ -4327,7 +4350,8 @@ function ProfileScreen({stages,settings,courseResults,pastWeeks,weekByType,onSet
         </div>
       </div>
 
-      <div style={{padding:"18px 16px 0"}}>
+      {streak&&<StreakCard streak={streak}/>}
+      <div style={{padding:streak?"14px 16px 0":"18px 16px 0"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
           <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase"}}>Your week</div>
           <div style={{fontSize:12,color:C.muted}}>{weekLabel}</div>
@@ -6225,6 +6249,8 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
   useEffect(()=>{if(!user)return;supabase.from('course_results').select('id,total_time_ms,mode,completed_at,courses(name,stage_ids)').eq('user_id',user.id).order('completed_at',{ascending:false}).then(({data})=>{if(data)setCourseResults(data.map(r=>({id:r.id,name:r.courses?.name||'Course',date:new Date(r.completed_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}),stages:r.courses?.stage_ids?.length||0,mode:r.mode,totalTime:r.total_time_ms,pos:null})));});},[user]);
 
     const [recentStageTimes,setRecentStageTimes]=useState([]);
+    const [streak,setStreak]=useState(null);
+    useEffect(()=>{if(!user)return;supabase.rpc('my_weekly_streak',{p_tz:Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'}).then(({data,error})=>{if(error){console.log('streak failed',error.message);return;}const r=Array.isArray(data)?data[0]:data;if(r)setStreak({cur:r.current_streak,best:r.best_streak,rode:r.rode_this_week});});},[user,refreshTick]);
 const [feed,setFeed]=useState([]);
 useEffect(()=>{if(!user)return;const loadFeed=cols=>supabase.from('app_events').select(cols).in('event_type',FEED_TYPES).order('created_at',{ascending:false}).limit(50);loadFeed('id,event_type,message,created_at,stage_id,context,profiles(display_name,avatar_url)').then(async({data,error})=>{let rows=data;if(error){console.log('feed query failed, retrying without the rider name lookup',error);logEvent(user.id,'feed_error',error.message||String(error),null,{code:error.code});const r=await supabase.from('app_events').select('id,event_type,message,created_at,stage_id,user_id').in('event_type',FEED_TYPES).order('created_at',{ascending:false}).limit(50);rows=r.data;if(r.error)logEvent(user.id,'feed_error_retry',r.error.message||String(r.error),null,{code:r.error.code});}if(rows)setFeed(rows.map(e=>({id:e.id,event_type:e.event_type,message:e.message,stage_id:e.stage_id,userName:e.profiles?.display_name||'Rider',avatarUrl:e.profiles?.avatar_url||null,context:e.context,ago:timeAgo(e.created_at)})));});},[user,refreshTick]);
   const [pushState,setPushState]=useState('hidden');
@@ -6740,7 +6766,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
       {/* PROFILE */}
       {tab==="profile"&&(
         <div style={{height:"calc(var(--app-h) - 44px - 83px)",overflowY:"auto"}}>
-            <ProfileScreen stages={stages} settings={settings} courseResults={courseResults} weeklyActivity={weeklyActivity} pastWeeks={weekStats} weekByType={weekStatsByType} courseCRCount={courseCRCount} onSettingsPress={()=>setShowSettings(true)} onStatPress={key=>setSheet('stat-'+key)} onGoToStages={()=>{setCoursesFilter('stages');setTab('stages');}} onGoToCourses={()=>{setCoursesFilter('courses');setTab('stages');}}onOpenProgress={()=>setShowProgress(true)} onOpenBikeSetup={()=>setShowBikeSetup(true)} followerCount={followerCount} onOpenFollowers={()=>setShowFollow(true)} onOpenTrophies={()=>setShowTrophies(true)}/>
+            <ProfileScreen stages={stages} settings={settings} courseResults={courseResults} weeklyActivity={weeklyActivity} pastWeeks={weekStats} weekByType={weekStatsByType} streak={streak} courseCRCount={courseCRCount} onSettingsPress={()=>setShowSettings(true)} onStatPress={key=>setSheet('stat-'+key)} onGoToStages={()=>{setCoursesFilter('stages');setTab('stages');}} onGoToCourses={()=>{setCoursesFilter('courses');setTab('stages');}}onOpenProgress={()=>setShowProgress(true)} onOpenBikeSetup={()=>setShowBikeSetup(true)} followerCount={followerCount} onOpenFollowers={()=>setShowFollow(true)} onOpenTrophies={()=>setShowTrophies(true)}/>
 
         </div>
       )}
