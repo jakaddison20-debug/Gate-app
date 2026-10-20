@@ -4309,7 +4309,7 @@ function StreakCard({streak}){
     ?(cur>1&&cur>=best?"Your longest yet":best>cur?`Best ${wk(best)}`:"Keep it going")
     :(cur>0?`Ride this week to make it ${cur+1}`:(best>0?`Best ${wk(best)} · ride this week to start one`:"Ride this week to start one"));
   return(
-    <div style={{padding:"18px 16px 0"}}>
+    <div style={{padding:"26px 16px 0"}}>
       <div style={{border:`1px solid ${C.border}`,borderRadius:14,padding:14,display:"flex",alignItems:"center",gap:12}}>
         <div style={{width:38,height:38,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><SparkBolt color={rode?C.blue:C.mutedL}/></div>
         <div style={{flex:1,minWidth:0}}>
@@ -4336,7 +4336,7 @@ function ProfileTrophyCard({counts,onOpen}){
     );
   };
   return(
-    <div style={{padding:"18px 16px 0"}}>
+    <div style={{padding:"26px 16px 0"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
         <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase"}}>Trophy cabinet</div>
         <button className="tap" onClick={onOpen} style={{background:"none",border:"none",padding:0,fontSize:12,color:C.muted}}>View all ›</button>
@@ -4381,7 +4381,7 @@ function ProfileScreen({trophyCounts,streak,stages,settings,courseResults,pastWe
 
       <ProfileTrophyCard counts={trophyCounts} onOpen={onOpenTrophies}/>
       {streak&&<StreakCard streak={streak}/>}
-      <div style={{padding:streak?"14px 16px 0":"18px 16px 0"}}>
+      <div style={{padding:"26px 16px 0"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
           <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase"}}>Your week</div>
           <div style={{fontSize:12,color:C.muted}}>{weekLabel}</div>
@@ -4424,7 +4424,7 @@ function ProfileScreen({trophyCounts,streak,stages,settings,courseResults,pastWe
         </div>
       </div>
 
-      <div style={{padding:"10px 16px 24px"}}>
+      <div style={{padding:"18px 16px 24px"}}>
         {[
           {label:"Statistics",Ic:Icon.BarChart,onClick:onOpenProgress},
           {label:"Stages",Ic:Icon.Lightning,onClick:onGoToStages},
