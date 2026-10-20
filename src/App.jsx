@@ -2051,7 +2051,88 @@ function ShareStageSheet({stage,onShare,onDismiss}){
 }
 
 // ── Activity Card ─────────────────────────────────────────────────────────────
-    function FeedCard({item,stage,onViewStage}){
+// ── Feed: stage created / record / PB cards (same look as the recap card) ──
+function feedRoutePts(stage,W,H,pad){
+  const raw=stage.line_coords&&stage.line_coords.length>1?stage.line_coords:[stage.start,stage.finish];
+  if(!raw||raw.length<2||!raw[0]||!raw[raw.length-1])return null;
+  const wx=lng=>(lng+180)/360*512;
+  const wy=lat=>{const s=Math.sin(lat*Math.PI/180);return(0.5-Math.log((1+s)/(1-s))/(4*Math.PI))*512;};
+  const P=raw.map(c=>[wx(c.lng),wy(c.lat)]);
+  const xs=P.map(p=>p[0]),ys=P.map(p=>p[1]);
+  const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+  const rx=Math.max(x1-x0,1e-9),ry=Math.max(y1-y0,1e-9);
+  const s=Math.min((W-pad*2)/rx,(H-pad*2)/ry);
+  const ox=(W-rx*s)/2,oy=(H-ry*s)/2;
+  return P.map(p=>[ox+(p[0]-x0)*s,oy+(p[1]-y0)*s]);
+}
+function feedSmoothPath(pts){
+  const t=[pts[0]];
+  for(let i=1;i<pts.length-1;i++){const l=t[t.length-1];if(Math.hypot(pts[i][0]-l[0],pts[i][1]-l[1])>=1.6)t.push(pts[i]);}
+  t.push(pts[pts.length-1]);
+  if(t.length<3)return"M"+t.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join("L");
+  let d=`M${t[0][0].toFixed(1)},${t[0][1].toFixed(1)}`;
+  for(let i=1;i<t.length-1;i++){const mx=(t[i][0]+t[i+1][0])/2,my=(t[i][1]+t[i+1][1])/2;d+=`Q${t[i][0].toFixed(1)},${t[i][1].toFixed(1)} ${mx.toFixed(1)},${my.toFixed(1)}`;}
+  const l=t[t.length-1];
+  return d+`L${l[0].toFixed(1)},${l[1].toFixed(1)}`;
+}
+function FeedStageCard({item,stage,onViewStage,units}){
+  const color=(DIFFICULTIES.find(d=>d.val===stage.difficulty)||DIFFICULTIES[0]).color;
+  const isNew=item.event_type==="stage_created";
+  const isPb=item.event_type==="personal_best";
+  const[steep,setSteep]=useState(undefined);
+  useEffect(()=>{
+    if(!isNew)return;
+    let off=false;
+    stageSteepPct(stage).then(v=>{if(!off)setSteep(v);}).catch(()=>{});
+    return()=>{off=true;};
+  },[stage.id,isNew]);
+  const W=334,H=160;
+  const pts=isNew?feedRoutePts(stage,W,H,24):null;
+  const d=pts?feedSmoothPath(pts):"";
+  const st=pts&&pts[0],en=pts&&pts[pts.length-1];
+  const lenM=stageLengthM(stage);
+  const miles=lenM/1609.34;
+  const lenTxt=lenM<=0?"":units==="imperial"?`${miles.toFixed(miles<1?2:1)}mi`:`${(lenM/1000).toFixed(lenM<1000?2:1)}km`;
+  const gradeTxt=typeof steep==="number"?`${steep}% grade`:"";
+  const tm=item.context&&item.context.time_ms;
+  const timeTxt=tm?formatTime(tm):((item.message||"").split(" · ")[1]||"");
+  const text=isNew?"created a new stage":isPb?"set a new personal best":"set a new record";
+  const chip=isNew?{bg:`${C.blue}15`,ic:<Icon.Lightning size={15} color={C.blue}/>}:isPb?{bg:"#EFF6FF",ic:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>}:{bg:"#FFFBEB",ic:<Icon.Crown size={15} color="#92400E"/>};
+  const go=()=>onViewStage&&onViewStage(item.stage_id);
+  return(
+    <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.border}`}}>
+      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,overflow:"hidden"}}>
+        <div style={{display:"flex",alignItems:"flex-start",gap:12,padding:"14px 14px 12px"}}>
+          <Avatar size={38} url={item.avatarUrl}/>
+          <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,color:C.text,lineHeight:1.4}}><span style={{fontWeight:700}}>{item.userName}</span> {text}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>{item.ago}</div></div>
+          <div style={{width:30,height:30,borderRadius:8,background:chip.bg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{chip.ic}</div>
+        </div>
+        {isNew&&pts&&<div style={{margin:"0 12px",borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`,background:C.mapPark}}>
+          <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{display:"block"}}>
+            <path d={d} fill="none" stroke="#fff" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d={d} fill="none" stroke={color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
+            <circle cx={st[0]} cy={st[1]} r="6.6" fill={color} stroke="#fff" strokeWidth="2.4"/>
+            <circle cx={st[0]} cy={st[1]} r="2.2" fill="#fff"/>
+            <circle cx={en[0]} cy={en[1]} r="6.6" fill="#fff" stroke={C.text} strokeWidth="2.4"/>
+            <circle cx={en[0]} cy={en[1]} r="2.3" fill={C.text}/>
+          </svg>
+        </div>}
+        <button className="tap" onClick={go} style={{display:"flex",alignItems:"center",gap:10,width:"calc(100% - 24px)",margin:12,background:"#fff",border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px",textAlign:"left"}}>
+          <span style={{display:"flex",flexShrink:0}}><TallDiamond color={color} size={16}/></span>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:15,fontWeight:700,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{stage.name}</div>
+            {isNew?<div style={{fontSize:12,color:C.muted,marginTop:2}}>{lenTxt}{lenTxt&&gradeTxt?" · ":""}{gradeTxt}</div>
+                  :<div style={{fontSize:12,fontWeight:600,color:isPb?C.blue:"#92400E",marginTop:2}}>{isPb?"Personal best":"Course record"}</div>}
+          </div>
+          {isNew?<span style={{fontSize:12,fontWeight:700,color:C.blue,flexShrink:0}}>View stage →</span>
+                :<><span style={{fontSize:22,fontWeight:800,letterSpacing:-0.5,color:C.text,fontVariantNumeric:"tabular-nums"}}>{timeTxt}</span><span style={{fontSize:12,fontWeight:700,color:C.blue}}>→</span></>}
+        </button>
+      </div>
+    </div>
+  );
+}
+function FeedCard({item,stage,onViewStage,units}){
+if(stage&&["stage_created","stage_record","personal_best"].includes(item.event_type))return <FeedStageCard item={item} stage={stage} onViewStage={onViewStage} units={units}/>;
 if(item.event_type==='day_recap'&&item.context&&item.context.stages){
   const n=item.context.stages.length;
   return(<div style={{padding:"14px 16px",borderBottom:`1px solid ${C.border}`}}><DayRecapCard recap={item.context} head={{name:item.userName,avatarUrl:item.avatarUrl,ago:item.ago,text:`rode ${n} stage${n===1?"":"s"} today`}}/></div>);
@@ -6476,7 +6557,7 @@ if(showBikeSetup)return(
               </div>
             </div>
           )}
-          {feed.length===0?<div style={{textAlign:"center",padding:"48px 20px",color:C.muted,fontSize:13}}>No activity yet — set a record, finish a course, or add a stage to get things started.</div>:feed.map(item=><FeedCard key={item.id} item={item} stage={stages.find(s=>String(s.id)===String(item.stage_id))} onViewStage={goToStage}/>)}
+          {feed.length===0?<div style={{textAlign:"center",padding:"48px 20px",color:C.muted,fontSize:13}}>No activity yet — set a record, finish a course, or add a stage to get things started.</div>:feed.map(item=><FeedCard key={item.id} item={item} stage={stages.find(s=>String(s.id)===String(item.stage_id))} onViewStage={goToStage} units={settings.units}/>)}
         </div>
       )}
 
