@@ -1888,6 +1888,19 @@ const saveDifficulty=async(val)=>{
 const isCreator=!!(user&&stage.created_by&&stage.created_by===user.id);
 const saveName=async()=>{const trimmed=nameVal.trim();if(!trimmed||trimmed===stage.name){setEditingName(false);setNameVal(stage.name);return;}setSavingName(true);const{error}=await supabase.from('stages').update({name:trimmed}).eq('id',stage.id);setSavingName(false);if(error){alert(error.message);return;}onRename&&onRename(stage.id,trimmed);setEditingName(false);};
 const dist=haversine(stage.start,stage.finish);
+const saveEdits=async()=>{
+  const nm=nameVal.trim()||stage.name;
+  const bb=builtByVal.trim().slice(0,60);
+  setSavingName(true);
+  const{error}=await supabase.from('stages').update({name:nm,built_by:bb||null,difficulty}).eq('id',stage.id);
+  setSavingName(false);
+  if(error){alert(error.message);return;}
+  const renamed=nm!==stage.name;
+  stage.built_by=bb||null;stage.difficulty=difficulty;
+  setNameVal(nm);setBuiltBy(bb);setBuiltByVal(bb);
+  if(renamed&&onRename)onRename(stage.id,nm);
+  setEditingName(false);
+};
 const myEntry=lb.find(e=>user&&e.user_id===user.id);
 
 const lbFiltered=lbPeriod!=="all"||lbCat!=="all";
@@ -1911,50 +1924,40 @@ if(lbFiltered){
     <div style={{padding:"0 0 40px"}}>
 <div style={{background:"#fff",padding:"16px 16px 4px",borderBottom:`1px solid ${C.border}`}}>
 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
-<div style={{flex:1,marginRight:12}}>
-{editingName?(
-<div style={{display:"flex",alignItems:"center",gap:8}}>
-<input autoFocus value={nameVal} onChange={e=>setNameVal(e.target.value)} style={{flex:1,fontSize:20,fontWeight:800,color:C.text,border:`1.5px solid ${C.blue}`,borderRadius:8,padding:"6px 10px",background:"#fff"}}/>
-<button className="tap" onClick={saveName} disabled={savingName} style={{background:C.blue,border:"none",borderRadius:8,padding:"8px 12px",color:"#fff",fontSize:13,fontWeight:700}}>{savingName?"…":"Save"}</button>
-<button className="tap" onClick={()=>{setEditingName(false);setNameVal(stage.name);}} style={{background:"none",border:"none",color:C.muted,fontSize:13}}>Cancel</button>
-</div>
-):(
+<div style={{flex:1,marginRight:12,minWidth:0}}>
 <div style={{display:"flex",alignItems:"center",gap:8}}>
 <div style={{fontSize:20,fontWeight:800,color:C.text}}>{nameVal}</div>
-{isCreator&&<button className="tap" onClick={()=>setEditingName(true)} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:6,padding:"3px 8px",color:C.muted,fontSize:11,fontWeight:600}}>Edit</button>}
+{isCreator&&!editingName&&<button className="tap" onClick={()=>setEditingName(true)} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:6,padding:"3px 8px",color:C.muted,fontSize:11,fontWeight:600}}>Edit</button>}
 </div>
-)}
-<div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
-  <span style={{fontSize:12,color:C.muted}}>{stage.privacy}</span>
-  <span style={{fontSize:12,color:C.muted}}>·</span>
-  {isCreator?(
-    <button className="tap" onClick={()=>setEditingDifficulty(v=>!v)} style={{background:"none",border:"none",padding:0,display:"flex",alignItems:"center",gap:4}}>
-      <DifficultyDiamond color={DIFFICULTIES.find(d=>d.val===difficulty)?.color} size={12}/>
-      <span style={{fontSize:12,fontWeight:600,color:DIFFICULTIES.find(d=>d.val===difficulty)?.color}}>{DIFFICULTIES.find(d=>d.val===difficulty)?.label}</span>
-    </button>
-  ):(
-    <div style={{display:"flex",alignItems:"center",gap:4}}>
-      <DifficultyDiamond color={DIFFICULTIES.find(d=>d.val===difficulty)?.color} size={12}/>
-      <span style={{fontSize:12,fontWeight:600,color:DIFFICULTIES.find(d=>d.val===difficulty)?.color}}>{DIFFICULTIES.find(d=>d.val===difficulty)?.label}</span>
-    </div>
-  )}
+<div style={{display:"flex",alignItems:"center",gap:8,marginTop:5,fontSize:12,color:C.muted,flexWrap:"wrap"}}>
+<span style={{display:"inline-flex",alignItems:"center",gap:5}}>
+<TallDiamond color={DIFFICULTIES.find(d=>d.val===difficulty)?.color} size={15}/>
+<span style={{fontWeight:600,color:DIFFICULTIES.find(d=>d.val===difficulty)?.color}}>{DIFFICULTIES.find(d=>d.val===difficulty)?.label}</span>
+</span>
+{stage.privacy&&stage.privacy!=="public"&&<><span style={{color:C.mutedL}}>·</span><span style={{display:"inline-flex",alignItems:"center",gap:4}}>{stage.privacy==="private"?<Icon.Lock size={11} color={C.muted}/>:<Icon.Users size={12} color={C.muted}/>}{stage.privacy==="private"?"Private":"Group"}</span></>}
+{builtBy&&<><span style={{color:C.mutedL}}>·</span><span>Built by <span style={{fontWeight:600,color:C.text}}>{builtBy}</span></span></>}
 </div>
-{editingDifficulty&&<div style={{marginTop:10}}><DifficultyPicker value={difficulty} onChange={saveDifficulty}/></div>}
-{(builtBy||isCreator)&&(editingBuiltBy?(
-  <div style={{display:"flex",alignItems:"center",gap:8,marginTop:10}}>
-    <input autoFocus value={builtByVal} onChange={e=>setBuiltByVal(e.target.value)} maxLength={60} placeholder="Who built this trail?" style={{flex:1,fontSize:13,color:C.text,border:`1.5px solid ${C.blue}`,borderRadius:8,padding:"7px 10px",background:"#fff"}}/>
-    <button className="tap" onClick={saveBuiltBy} style={{background:C.blue,border:"none",borderRadius:8,padding:"8px 12px",color:"#fff",fontSize:12,fontWeight:700}}>Save</button>
-    <button className="tap" onClick={()=>{setEditingBuiltBy(false);setBuiltByVal(builtBy);}} style={{background:"none",border:"none",color:C.muted,fontSize:12}}>Cancel</button>
-  </div>
-):(
-  <div style={{display:"flex",alignItems:"center",gap:6,marginTop:8,fontSize:12,color:C.muted}}>
-    {builtBy?<span>Trail built by <span style={{fontWeight:600,color:C.text}}>{builtBy}</span></span>:<span>No trail builder credited</span>}
-    {isCreator&&<button className="tap" onClick={()=>setEditingBuiltBy(true)} style={{background:"none",border:"none",padding:0,color:C.blue,fontSize:12,fontWeight:600}}>{builtBy?"Edit":"Add"}</button>}
-  </div>
-))}
 </div>
 <button className="tap" onClick={onClose} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 12px",color:C.text,fontSize:13}}>Close</button>
 </div>
+{editingName&&isCreator&&(
+<div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:12,marginBottom:16}}>
+<div style={{fontSize:10,fontWeight:600,color:C.muted,letterSpacing:0.6,marginBottom:6}}>NAME</div>
+<input value={nameVal} onChange={e=>setNameVal(e.target.value)} style={{width:"100%",boxSizing:"border-box",fontSize:15,fontWeight:700,color:C.text,border:`1.5px solid ${C.blue}`,borderRadius:8,padding:"8px 10px",background:"#fff"}}/>
+<div style={{fontSize:10,fontWeight:600,color:C.muted,letterSpacing:0.6,margin:"12px 0 6px"}}>DIFFICULTY</div>
+<div style={{display:"flex",gap:8}}>
+{DIFFICULTIES.map(d=>{const on=difficulty===d.val;return(
+<button key={d.val} className="tap" onClick={()=>setDifficulty(d.val)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"9px 0",borderRadius:10,border:on?`1.5px solid ${d.color}`:`1px solid ${C.border}`,background:on?"#fff":C.surface,fontSize:13,fontWeight:on?700:600,color:on?d.color:C.muted}}><DifficultyDiamond color={d.color} size={13}/>{d.label}</button>
+);})}
+</div>
+<div style={{fontSize:10,fontWeight:600,color:C.muted,letterSpacing:0.6,margin:"12px 0 6px"}}>TRAIL BUILT BY</div>
+<input value={builtByVal} maxLength={60} onChange={e=>setBuiltByVal(e.target.value)} placeholder="Who built this trail? (optional)" style={{width:"100%",boxSizing:"border-box",fontSize:13,color:C.text,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 10px",background:"#fff"}}/>
+<div style={{display:"flex",alignItems:"center",gap:8,marginTop:12}}>
+<button className="tap" onClick={saveEdits} disabled={savingName} style={{flex:1,background:C.blue,border:"none",borderRadius:8,padding:"9px 12px",color:"#fff",fontSize:13,fontWeight:700}}>{savingName?"…":"Save"}</button>
+<button className="tap" onClick={()=>{setEditingName(false);setNameVal(stage.name);setBuiltByVal(builtBy);setDifficulty(stage.difficulty||'blue');}} style={{background:"none",border:"none",color:C.muted,fontSize:13,padding:"0 8px"}}>Cancel</button>
+</div>
+</div>
+)}
 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}}>
 <div style={{background:C.surface,borderRadius:10,padding:"10px 8px",textAlign:"center",border:`1px solid ${C.border}`}}>
 <div style={{fontSize:14,fontWeight:700,color:C.green}}>{stage.time?formatTime(stage.time):"—"}</div>
