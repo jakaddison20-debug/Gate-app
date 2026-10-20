@@ -6686,11 +6686,11 @@ if(showBikeSetup)return(
         <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",background:"#fff",overflow:"hidden",fontFamily:"'Inter',sans-serif"}}>
       <style>{STYLES}</style>
       <Analytics/>
-      <div style={{height:44,background:tab==="map"?"transparent":"#fff",position:"relative",zIndex:10}}/>
+      <div style={{height:"env(safe-area-inset-top, 0px)",background:tab==="map"?"transparent":"#fff",position:"relative",zIndex:10}}/>
 
             {/* HOME */}
       {tab==="home"&&(
-        <div style={{height:"calc(var(--app-h) - 44px)",overflowY:"auto",paddingBottom:100}}>
+        <div style={{height:"calc(var(--app-h) - env(safe-area-inset-top, 0px))",overflowY:"auto",paddingBottom:100}}>
           <div style={{padding:"12px 16px 14px",borderBottom:`1px solid ${C.border}`,position:"sticky",top:0,background:"#fff",zIndex:5}}>
             <div style={{fontSize:22,fontWeight:800,color:C.text,marginBottom:12}}>Feed</div>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -6746,7 +6746,7 @@ if(showBikeSetup)return(
           <div style={{position:"absolute",inset:0,cursor:"grab",touchAction:"none"}} onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
               <MapboxStyleMap center={mapCenter} zoom={zoom} flyToTrigger={flyToTrigger} width={mapSize.w} height={mapSize.h} stages={stages} courses={courses} userPos={userPos} userHeading={userHeading} diffFilter={diffFilter} onStagePress={s=>pickingGroup?handlePickStage(s):setSelectedStage(s)}/>
           </div>
-                       <div style={{position:"absolute",top:52,left:16,right:16,zIndex:10}}>
+                       <div style={{position:"absolute",top:"calc(env(safe-area-inset-top, 0px) + 12px)",left:16,right:16,zIndex:10}}>
             {pickingGroup?(
               <div style={{background:C.blue,borderRadius:12,padding:"12px 14px",boxShadow:"0 2px 10px rgba(0,0,0,0.15)",display:"flex",alignItems:"center",gap:10}}>
                 <div style={{flex:1}}>
@@ -6782,7 +6782,7 @@ if(showBikeSetup)return(
           </div>       
 
           {!pickingGroup&&(
-            <div style={{position:"absolute",top:106,left:16,right:16,zIndex:9}}>
+            <div style={{position:"absolute",top:"calc(env(safe-area-inset-top, 0px) + 66px)",left:16,right:16,zIndex:9}}>
               <DifficultyChips value={diffFilter} onChange={setDiffFilter} shadow/>
             </div>
           )}
@@ -6805,7 +6805,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
 
       {/* STAGES */}
       {tab==="stages"&&(
-        <div style={{height:"calc(var(--app-h) - 44px)",overflowY:"auto",paddingBottom:100}}>
+        <div style={{height:"calc(var(--app-h) - env(safe-area-inset-top, 0px))",overflowY:"auto",paddingBottom:100}}>
                     <div style={{padding:"12px 16px 0",position:"sticky",top:0,background:"#fff",zIndex:5,borderBottom:`1px solid ${C.border}`,paddingBottom:12}}>
             <div style={{display:"flex",background:C.surface,borderRadius:10,padding:3,marginBottom:12}}>
               {[{val:"stages",label:"Stages"},{val:"courses",label:"Courses"}].map(t=>(
@@ -6873,7 +6873,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
 
       {/* PROFILE */}
       {tab==="profile"&&(
-        <div style={{height:"calc(var(--app-h) - 44px)",overflowY:"auto",paddingBottom:100}}>
+        <div style={{height:"calc(var(--app-h) - env(safe-area-inset-top, 0px))",overflowY:"auto",paddingBottom:100}}>
             <ProfileScreen stages={stages} settings={settings} courseResults={courseResults} weeklyActivity={weeklyActivity} pastWeeks={weekStats} weekByType={weekStatsByType} streak={streak} courseCRCount={courseCRCount} onSettingsPress={()=>setShowSettings(true)} onStatPress={key=>setSheet('stat-'+key)} onGoToStages={()=>{setCoursesFilter('stages');setTab('stages');}} onGoToCourses={()=>{setCoursesFilter('courses');setTab('stages');}}onOpenProgress={()=>setShowProgress(true)} onOpenBikeSetup={()=>setShowBikeSetup(true)} followerCount={followerCount} onOpenFollowers={()=>setShowFollow(true)} onOpenTrophies={()=>setShowTrophies(true)}/>
 
         </div>
