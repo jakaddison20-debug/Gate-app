@@ -6690,7 +6690,7 @@ if(showBikeSetup)return(
 
             {/* HOME */}
       {tab==="home"&&(
-        <div style={{height:"calc(var(--app-h) - 44px - 83px)",overflowY:"auto"}}>
+        <div style={{height:"calc(var(--app-h) - 44px)",overflowY:"auto",paddingBottom:100}}>
           <div style={{padding:"12px 16px 14px",borderBottom:`1px solid ${C.border}`,position:"sticky",top:0,background:"#fff",zIndex:5}}>
             <div style={{fontSize:22,fontWeight:800,color:C.text,marginBottom:12}}>Feed</div>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -6805,7 +6805,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
 
       {/* STAGES */}
       {tab==="stages"&&(
-        <div style={{height:"calc(var(--app-h) - 44px - 83px)",overflowY:"auto"}}>
+        <div style={{height:"calc(var(--app-h) - 44px)",overflowY:"auto",paddingBottom:100}}>
                     <div style={{padding:"12px 16px 0",position:"sticky",top:0,background:"#fff",zIndex:5,borderBottom:`1px solid ${C.border}`,paddingBottom:12}}>
             <div style={{display:"flex",background:C.surface,borderRadius:10,padding:3,marginBottom:12}}>
               {[{val:"stages",label:"Stages"},{val:"courses",label:"Courses"}].map(t=>(
@@ -6873,7 +6873,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
 
       {/* PROFILE */}
       {tab==="profile"&&(
-        <div style={{height:"calc(var(--app-h) - 44px - 83px)",overflowY:"auto"}}>
+        <div style={{height:"calc(var(--app-h) - 44px)",overflowY:"auto",paddingBottom:100}}>
             <ProfileScreen stages={stages} settings={settings} courseResults={courseResults} weeklyActivity={weeklyActivity} pastWeeks={weekStats} weekByType={weekStatsByType} streak={streak} courseCRCount={courseCRCount} onSettingsPress={()=>setShowSettings(true)} onStatPress={key=>setSheet('stat-'+key)} onGoToStages={()=>{setCoursesFilter('stages');setTab('stages');}} onGoToCourses={()=>{setCoursesFilter('courses');setTab('stages');}}onOpenProgress={()=>setShowProgress(true)} onOpenBikeSetup={()=>setShowBikeSetup(true)} followerCount={followerCount} onOpenFollowers={()=>setShowFollow(true)} onOpenTrophies={()=>setShowTrophies(true)}/>
 
         </div>
