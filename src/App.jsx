@@ -4321,6 +4321,33 @@ function StreakCard({streak}){
     </div>
   );
 }
+function ProfileTrophyCard({counts,onOpen}){
+  const c=counts||{gold:0,silver:0,bronze:0};
+  const medal=(pos,n,big)=>{
+    const m=TROPHY_MEDAL[pos],has=n>0,sz=big?52:44;
+    return(
+      <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",paddingTop:big?0:6}}>
+        <div style={{width:sz,height:sz,borderRadius:"50%",border:has?`2.5px solid ${m.col}`:`1.5px dashed ${C.mutedL}`,background:has?m.bg:"#fff",display:"flex",alignItems:"center",justifyContent:"center"}}><TrophyCrown size={big?24:20} color={has?m.col:C.mutedL}/></div>
+        <div style={{display:"flex",alignItems:"baseline",gap:5,marginTop:7}}>
+          <span style={{fontSize:big?18:16,fontWeight:800,color:has?C.text:C.mutedL,lineHeight:1}}>{n}</span>
+          <span style={{fontSize:10,fontWeight:600,color:has?C.muted:C.mutedL}}>{m.name}</span>
+        </div>
+      </div>
+    );
+  };
+  return(
+    <div style={{padding:"18px 16px 0"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
+        <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase"}}>Trophy cabinet</div>
+        <button className="tap" onClick={onOpen} style={{background:"none",border:"none",padding:0,fontSize:12,color:C.muted}}>View all ›</button>
+      </div>
+      <button className="tap" onClick={onOpen} style={{width:"100%",background:"none",border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 10px",display:"flex",alignItems:"flex-end"}}>
+        {medal(2,c.silver)}{medal(1,c.gold,true)}{medal(3,c.bronze)}
+      </button>
+    </div>
+  );
+}
+
 function ProfileScreen({trophyCounts,streak,stages,settings,courseResults,pastWeeks,weekByType,onSettingsPress,onGoToStages,onGoToCourses,onOpenProgress,onOpenBikeSetup,followerCount,onOpenFollowers,onOpenTrophies}){
   const [selectedWeek,setSelectedWeek]=useState(pastWeeks.length-1);
   const stagesRidden=stages.filter(s=>s.time).length;
@@ -4352,6 +4379,7 @@ function ProfileScreen({trophyCounts,streak,stages,settings,courseResults,pastWe
         </div>
       </div>
 
+      <ProfileTrophyCard counts={trophyCounts} onOpen={onOpenTrophies}/>
       {streak&&<StreakCard streak={streak}/>}
       <div style={{padding:streak?"14px 16px 0":"18px 16px 0"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
@@ -4399,7 +4427,6 @@ function ProfileScreen({trophyCounts,streak,stages,settings,courseResults,pastWe
       <div style={{padding:"10px 16px 24px"}}>
         {[
           {label:"Statistics",Ic:Icon.BarChart,onClick:onOpenProgress},
-          {label:"Trophies",Ic:Icon.Crown,onClick:onOpenTrophies},
           {label:"Stages",Ic:Icon.Lightning,onClick:onGoToStages},
           {label:"Courses",Ic:Icon.Flag,onClick:onGoToCourses},
           {label:"Garage",Ic:Icon.Bike,onClick:onOpenBikeSetup},
