@@ -548,7 +548,7 @@ map.current.addImage('stage-pin',ctx.getImageData(0,0,24,24));
 
           const diffColors={blue:'#2563EB',red:'#DC2626',black:'#1A1A1A'};
           const stageColor=diffColors[stage.difficulty]||'#2563EB';
-          const startEl=document.createElement('div');startEl.innerHTML=`<div style="width:18px;height:18px;transform-origin:center;transition:transform 0.1s ease;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35));"><svg width="18" height="18" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="1.5" fill="${stageColor}" stroke="white" stroke-width="2" transform="rotate(45 12 12)"/></svg></div>`;
+          const startEl=document.createElement('div');startEl.innerHTML=`<div style="width:18px;height:18px;transform-origin:center;transition:transform 0.1s ease;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35));"><svg width="14" height="18" viewBox="0 0 18 24" style="display:block;margin:0 auto;overflow:visible"><path d="M9 1L17 12 9 23 1 12z" fill="${stageColor}" stroke="white" stroke-width="2.6" stroke-linejoin="round"/></svg></div>`;
           new mapboxgl.Marker({element:startEl}).setLngLat([stage.start.lng,stage.start.lat]).addTo(map.current);
           gateMarkersRef.current.push(startEl.firstElementChild);markerStagesRef.current.push({el:startEl,difficulty:stage.difficulty||'blue'});
           const finishEl=document.createElement('div');finishEl.innerHTML='<div style="width:18px;height:18px;border-radius:50%;background:white;border:2px solid #1A1A1A;box-shadow:0 2px 6px rgba(0,0,0,0.3);overflow:hidden;transform-origin:center;transition:transform 0.1s ease;"><svg width="14" height="14" viewBox="0 0 8 8"><rect width="2" height="2" fill="#1A1A1A"/><rect x="4" width="2" height="2" fill="#1A1A1A"/><rect x="2" y="2" width="2" height="2" fill="#1A1A1A"/><rect x="6" y="2" width="2" height="2" fill="#1A1A1A"/><rect y="4" width="2" height="2" fill="#1A1A1A"/><rect x="4" y="4" width="2" height="2" fill="#1A1A1A"/><rect x="2" y="6" width="2" height="2" fill="#1A1A1A"/><rect x="6" y="6" width="2" height="2" fill="#1A1A1A"/></svg></div>';
@@ -1888,6 +1888,19 @@ const saveDifficulty=async(val)=>{
 const isCreator=!!(user&&stage.created_by&&stage.created_by===user.id);
 const saveName=async()=>{const trimmed=nameVal.trim();if(!trimmed||trimmed===stage.name){setEditingName(false);setNameVal(stage.name);return;}setSavingName(true);const{error}=await supabase.from('stages').update({name:trimmed}).eq('id',stage.id);setSavingName(false);if(error){alert(error.message);return;}onRename&&onRename(stage.id,trimmed);setEditingName(false);};
 const dist=haversine(stage.start,stage.finish);
+const saveEdits=async()=>{
+  const nm=nameVal.trim()||stage.name;
+  const bb=builtByVal.trim().slice(0,60);
+  setSavingName(true);
+  const{error}=await supabase.from('stages').update({name:nm,built_by:bb||null,difficulty}).eq('id',stage.id);
+  setSavingName(false);
+  if(error){alert(error.message);return;}
+  const renamed=nm!==stage.name;
+  stage.built_by=bb||null;stage.difficulty=difficulty;
+  setNameVal(nm);setBuiltBy(bb);setBuiltByVal(bb);
+  if(renamed&&onRename)onRename(stage.id,nm);
+  setEditingName(false);
+};
 const myEntry=lb.find(e=>user&&e.user_id===user.id);
 
 const lbFiltered=lbPeriod!=="all"||lbCat!=="all";
@@ -1911,50 +1924,40 @@ if(lbFiltered){
     <div style={{padding:"0 0 40px"}}>
 <div style={{background:"#fff",padding:"16px 16px 4px",borderBottom:`1px solid ${C.border}`}}>
 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
-<div style={{flex:1,marginRight:12}}>
-{editingName?(
-<div style={{display:"flex",alignItems:"center",gap:8}}>
-<input autoFocus value={nameVal} onChange={e=>setNameVal(e.target.value)} style={{flex:1,fontSize:20,fontWeight:800,color:C.text,border:`1.5px solid ${C.blue}`,borderRadius:8,padding:"6px 10px",background:"#fff"}}/>
-<button className="tap" onClick={saveName} disabled={savingName} style={{background:C.blue,border:"none",borderRadius:8,padding:"8px 12px",color:"#fff",fontSize:13,fontWeight:700}}>{savingName?"…":"Save"}</button>
-<button className="tap" onClick={()=>{setEditingName(false);setNameVal(stage.name);}} style={{background:"none",border:"none",color:C.muted,fontSize:13}}>Cancel</button>
-</div>
-):(
+<div style={{flex:1,marginRight:12,minWidth:0}}>
 <div style={{display:"flex",alignItems:"center",gap:8}}>
 <div style={{fontSize:20,fontWeight:800,color:C.text}}>{nameVal}</div>
-{isCreator&&<button className="tap" onClick={()=>setEditingName(true)} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:6,padding:"3px 8px",color:C.muted,fontSize:11,fontWeight:600}}>Edit</button>}
+{isCreator&&!editingName&&<button className="tap" onClick={()=>setEditingName(true)} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:6,padding:"3px 8px",color:C.muted,fontSize:11,fontWeight:600}}>Edit</button>}
 </div>
-)}
-<div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
-  <span style={{fontSize:12,color:C.muted}}>{stage.privacy}</span>
-  <span style={{fontSize:12,color:C.muted}}>·</span>
-  {isCreator?(
-    <button className="tap" onClick={()=>setEditingDifficulty(v=>!v)} style={{background:"none",border:"none",padding:0,display:"flex",alignItems:"center",gap:4}}>
-      <DifficultyDiamond color={DIFFICULTIES.find(d=>d.val===difficulty)?.color} size={12}/>
-      <span style={{fontSize:12,fontWeight:600,color:DIFFICULTIES.find(d=>d.val===difficulty)?.color}}>{DIFFICULTIES.find(d=>d.val===difficulty)?.label}</span>
-    </button>
-  ):(
-    <div style={{display:"flex",alignItems:"center",gap:4}}>
-      <DifficultyDiamond color={DIFFICULTIES.find(d=>d.val===difficulty)?.color} size={12}/>
-      <span style={{fontSize:12,fontWeight:600,color:DIFFICULTIES.find(d=>d.val===difficulty)?.color}}>{DIFFICULTIES.find(d=>d.val===difficulty)?.label}</span>
-    </div>
-  )}
+<div style={{display:"flex",alignItems:"center",gap:8,marginTop:5,fontSize:12,color:C.muted,flexWrap:"wrap"}}>
+<span style={{display:"inline-flex",alignItems:"center",gap:5}}>
+<TallDiamond color={DIFFICULTIES.find(d=>d.val===difficulty)?.color} size={15}/>
+<span style={{fontWeight:600,color:DIFFICULTIES.find(d=>d.val===difficulty)?.color}}>{DIFFICULTIES.find(d=>d.val===difficulty)?.label}</span>
+</span>
+{stage.privacy&&stage.privacy!=="public"&&<><span style={{color:C.mutedL}}>·</span><span style={{display:"inline-flex",alignItems:"center",gap:4}}>{stage.privacy==="private"?<Icon.Lock size={11} color={C.muted}/>:<Icon.Users size={12} color={C.muted}/>}{stage.privacy==="private"?"Private":"Group"}</span></>}
+{builtBy&&<><span style={{color:C.mutedL}}>·</span><span>Built by <span style={{fontWeight:600,color:C.text}}>{builtBy}</span></span></>}
 </div>
-{editingDifficulty&&<div style={{marginTop:10}}><DifficultyPicker value={difficulty} onChange={saveDifficulty}/></div>}
-{(builtBy||isCreator)&&(editingBuiltBy?(
-  <div style={{display:"flex",alignItems:"center",gap:8,marginTop:10}}>
-    <input autoFocus value={builtByVal} onChange={e=>setBuiltByVal(e.target.value)} maxLength={60} placeholder="Who built this trail?" style={{flex:1,fontSize:13,color:C.text,border:`1.5px solid ${C.blue}`,borderRadius:8,padding:"7px 10px",background:"#fff"}}/>
-    <button className="tap" onClick={saveBuiltBy} style={{background:C.blue,border:"none",borderRadius:8,padding:"8px 12px",color:"#fff",fontSize:12,fontWeight:700}}>Save</button>
-    <button className="tap" onClick={()=>{setEditingBuiltBy(false);setBuiltByVal(builtBy);}} style={{background:"none",border:"none",color:C.muted,fontSize:12}}>Cancel</button>
-  </div>
-):(
-  <div style={{display:"flex",alignItems:"center",gap:6,marginTop:8,fontSize:12,color:C.muted}}>
-    {builtBy?<span>Trail built by <span style={{fontWeight:600,color:C.text}}>{builtBy}</span></span>:<span>No trail builder credited</span>}
-    {isCreator&&<button className="tap" onClick={()=>setEditingBuiltBy(true)} style={{background:"none",border:"none",padding:0,color:C.blue,fontSize:12,fontWeight:600}}>{builtBy?"Edit":"Add"}</button>}
-  </div>
-))}
 </div>
 <button className="tap" onClick={onClose} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 12px",color:C.text,fontSize:13}}>Close</button>
 </div>
+{editingName&&isCreator&&(
+<div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:12,marginBottom:16}}>
+<div style={{fontSize:10,fontWeight:600,color:C.muted,letterSpacing:0.6,marginBottom:6}}>NAME</div>
+<input value={nameVal} onChange={e=>setNameVal(e.target.value)} style={{width:"100%",boxSizing:"border-box",fontSize:15,fontWeight:700,color:C.text,border:`1.5px solid ${C.blue}`,borderRadius:8,padding:"8px 10px",background:"#fff"}}/>
+<div style={{fontSize:10,fontWeight:600,color:C.muted,letterSpacing:0.6,margin:"12px 0 6px"}}>DIFFICULTY</div>
+<div style={{display:"flex",gap:8}}>
+{DIFFICULTIES.map(d=>{const on=difficulty===d.val;return(
+<button key={d.val} className="tap" onClick={()=>setDifficulty(d.val)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"9px 0",borderRadius:10,border:on?`1.5px solid ${d.color}`:`1px solid ${C.border}`,background:on?"#fff":C.surface,fontSize:13,fontWeight:on?700:600,color:on?d.color:C.muted}}><DifficultyDiamond color={d.color} size={13}/>{d.label}</button>
+);})}
+</div>
+<div style={{fontSize:10,fontWeight:600,color:C.muted,letterSpacing:0.6,margin:"12px 0 6px"}}>TRAIL BUILT BY</div>
+<input value={builtByVal} maxLength={60} onChange={e=>setBuiltByVal(e.target.value)} placeholder="Who built this trail? (optional)" style={{width:"100%",boxSizing:"border-box",fontSize:13,color:C.text,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 10px",background:"#fff"}}/>
+<div style={{display:"flex",alignItems:"center",gap:8,marginTop:12}}>
+<button className="tap" onClick={saveEdits} disabled={savingName} style={{flex:1,background:C.blue,border:"none",borderRadius:8,padding:"9px 12px",color:"#fff",fontSize:13,fontWeight:700}}>{savingName?"…":"Save"}</button>
+<button className="tap" onClick={()=>{setEditingName(false);setNameVal(stage.name);setBuiltByVal(builtBy);setDifficulty(stage.difficulty||'blue');}} style={{background:"none",border:"none",color:C.muted,fontSize:13,padding:"0 8px"}}>Cancel</button>
+</div>
+</div>
+)}
 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}}>
 <div style={{background:C.surface,borderRadius:10,padding:"10px 8px",textAlign:"center",border:`1px solid ${C.border}`}}>
 <div style={{fontSize:14,fontWeight:700,color:C.green}}>{stage.time?formatTime(stage.time):"—"}</div>
@@ -2140,7 +2143,7 @@ function SegmentRow({stage,onPress}){
 function PositionBadge({pos,size=32}){const crownColor=pos===1?"#C9A227":pos===2?"#AEB2B8":pos===3?"#AD8158":null;return(<div style={{display:"flex",flexDirection:"column",alignItems:"center"}}>{crownColor&&<svg width={size*0.5} height={size*0.4} viewBox="0 0 24 20" style={{marginBottom:-size*0.06}}><path d="M3 19l-1.5-10L7 13l5-9 5 9 5.5-4L20 19H3z" fill={crownColor} stroke={crownColor} strokeLinejoin="round" strokeWidth="1"/><rect x="3" y="17" width="17" height="2.6" rx="1" fill={crownColor}/></svg>}<span style={{fontSize:size*0.44,fontWeight:800,color:C.text,letterSpacing:-0.5}}>P{pos}</span></div>);}
 const DIFFICULTIES=[{val:"blue",label:"Blue",color:C.blue},{val:"red",label:"Red",color:C.red},{val:"black",label:"Black",color:"#1A1A1A"}];
 function DifficultyDiamond({color,size=20}){
-  return <svg width={size} height={size} viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" fill={color} transform="rotate(45 12 12)"/></svg>;
+  return <TallDiamond color={color} size={size}/>;
 }
 function DifficultyPicker({value,onChange}){
   return(
@@ -2220,23 +2223,75 @@ function DifficultyChips({value,onChange,shadow=false}){
     </div>
   );
 }
-function PopularStageCard({stage,rank,rides,distKm,onPress}){
+function popularMapView(stage,W,H){
+  const raw=stage.line_coords&&stage.line_coords.length>1?stage.line_coords:[stage.start,stage.finish];
+  if(!raw||raw.length<2||!raw[0]||!raw[raw.length-1])return null;
+  const wx=lng=>(lng+180)/360*512;
+  const wy=lat=>{const s=Math.sin(lat*Math.PI/180);return(0.5-Math.log((1+s)/(1-s))/(4*Math.PI))*512;};
+  const P=raw.map(c=>[wx(c.lng),wy(c.lat)]);
+  const xs=P.map(p=>p[0]),ys=P.map(p=>p[1]);
+  const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+  const padX=14,top=26,bot=12;
+  const availW=W-padX*2,availH=H-top-bot;
+  const bw=Math.max(x1-x0,1e-9),bh=Math.max(y1-y0,1e-9);
+  const zoom=Math.max(10,Math.min(17,Math.log2(Math.min(availW/bw,availH/bh))));
+  const sc=Math.pow(2,zoom);
+  const mcx=(x0+x1)/2,mcy=(y0+y1)/2-((top+availH/2)-H/2)/sc;
+  const lng=mcx/512*360-180;
+  const n=Math.PI-2*Math.PI*mcy/512;
+  const lat=180/Math.PI*Math.atan(0.5*(Math.exp(n)-Math.exp(-n)));
+  const pts=P.map(p=>[(p[0]-mcx)*sc+W/2,(p[1]-mcy)*sc+H/2]);
+  return{lat,lng,zoom,pts};
+}
+function smoothRoutePath(pts){
+  const t=[pts[0]];
+  for(let i=1;i<pts.length-1;i++){const l=t[t.length-1];if(Math.hypot(pts[i][0]-l[0],pts[i][1]-l[1])>=1.6)t.push(pts[i]);}
+  t.push(pts[pts.length-1]);
+  if(t.length<3)return"M"+t.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join("L");
+  let d=`M${t[0][0].toFixed(1)},${t[0][1].toFixed(1)}`;
+  for(let i=1;i<t.length-1;i++){const mx=(t[i][0]+t[i+1][0])/2,my=(t[i][1]+t[i+1][1])/2;d+=`Q${t[i][0].toFixed(1)},${t[i][1].toFixed(1)} ${mx.toFixed(1)},${my.toFixed(1)}`;}
+  const l=t[t.length-1];
+  return d+`L${l[0].toFixed(1)},${l[1].toFixed(1)}`;
+}
+function PopularStageCard({stage,rank,rides,units,onPress}){
   const color=(DIFFICULTIES.find(d=>d.val===stage.difficulty)||DIFFICULTIES[0]).color;
-  const{d,start,end}=stageRouteThumb(stage,150,70,12);
+  const W=150,H=88;
+  const[steep,setSteep]=useState(undefined);
+  const[imgOk,setImgOk]=useState(true);
+  useEffect(()=>{
+    let off=false;
+    setSteep(undefined);
+    stageSteepPct(stage).then(v=>{if(!off)setSteep(v);}).catch(()=>{if(!off)setSteep(null);});
+    return()=>{off=true;};
+  },[stage.id]);
+  const m=popularMapView(stage,W,H);
+  const d=m?smoothRoutePath(m.pts):"";
+  const token=import.meta.env.VITE_MAPBOX_TOKEN;
+  const imgUrl=token&&m?`https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/static/${m.lng.toFixed(5)},${m.lat.toFixed(5)},${m.zoom.toFixed(2)}/${W}x${H}@2x?access_token=${token}`:null;
+  const lenM=stageLengthM(stage);
+  const miles=lenM/1609.34;
+  const lenTxt=lenM<=0?"":units==="imperial"?`${miles.toFixed(miles<1?2:1)}mi`:`${(lenM/1000).toFixed(lenM<1000?2:1)}km`;
+  const gradeTxt=typeof steep==="number"?`${steep}% grade`:"";
+  const st=m&&m.pts[0],en=m&&m.pts[m.pts.length-1];
   return(
     <button className="tap" onClick={()=>onPress(stage)} style={{flex:"0 0 150px",background:"#fff",border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden",textAlign:"left",padding:0}}>
-      <div style={{position:"relative"}}>
-        <svg viewBox="0 0 150 70" width="150" height="70" style={{display:"block"}}>
-          <rect width="150" height="70" fill={C.mapPark}/>
-          <path d={d} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-          <g transform={`translate(${start.x},${start.y}) rotate(45)`}><rect x="-4.5" y="-4.5" width="9" height="9" rx="1" fill={color} stroke="#fff" strokeWidth="1.6"/></g>
-          <circle cx={end.x} cy={end.y} r="4.5" fill="#fff" stroke={C.text} strokeWidth="1.6"/>
-        </svg>
+      <div style={{position:"relative",width:W,height:H,background:"radial-gradient(circle at 50% 50%,#fff 0%,#DCE3D8 100%)"}}>
+        {imgUrl&&imgOk&&<img src={imgUrl} alt="" width={W} height={H} onError={()=>setImgOk(false)} style={{position:"absolute",left:0,top:0,width:W,height:H,display:"block"}}/>}
+        {m&&<svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} style={{position:"absolute",left:0,top:0,display:"block"}}>
+          <path d={d} fill="none" stroke="#000" strokeOpacity="0.18" strokeWidth="5.2" strokeLinecap="round" strokeLinejoin="round" transform="translate(0,0.8)"/>
+          <path d={d} fill="none" stroke="#fff" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d={d} fill="none" stroke={color} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"/>
+          <circle cx={st[0]} cy={st[1]} r="4.6" fill={color} stroke="#fff" strokeWidth="1.8"/>
+          <circle cx={st[0]} cy={st[1]} r="1.5" fill="#fff"/>
+          <circle cx={en[0]} cy={en[1]} r="4.6" fill="#fff" stroke={C.text} strokeWidth="1.8"/>
+          <circle cx={en[0]} cy={en[1]} r="1.6" fill={C.text}/>
+        </svg>}
         <div style={{position:"absolute",top:6,left:6,background:"#fff",borderRadius:6,padding:"2px 7px",fontSize:11,fontWeight:800,color:C.text,boxShadow:"0 1px 3px rgba(0,0,0,0.15)"}}>#{rank}</div>
       </div>
       <div style={{padding:"9px 10px"}}>
-        <div style={{display:"flex",alignItems:"center",gap:5}}><DifficultyDiamond color={color} size={13}/><span style={{fontSize:13,fontWeight:700,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{stage.name}</span></div>
-        <div style={{fontSize:11,color:C.muted,marginTop:3}}>{rides} ride{rides===1?"":"s"} · {distKm.toFixed(1)}km away</div>
+        <div style={{display:"flex",alignItems:"center",gap:5}}><span style={{display:"flex",flexShrink:0}}><TallDiamond color={color} size={15}/></span><span style={{fontSize:13,fontWeight:700,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{stage.name}</span></div>
+        <div style={{fontSize:11,color:C.muted,marginTop:3,minHeight:14}}>{lenTxt}{lenTxt&&gradeTxt?" · ":""}{gradeTxt}</div>
+        <div style={{fontSize:11,color:"#9A9A9A",marginTop:1}}>{rides} ride{rides===1?"":"s"}</div>
       </div>
     </button>
   );
@@ -4042,7 +4097,7 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
                   return(
                     <div key={r.id} style={{padding:"12px 0",borderBottom:`1px solid ${C.border}`}}>
                       <div style={{display:"flex",alignItems:"center",gap:10}}>
-                        <svg width="16" height="16" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5" fill={color} transform="rotate(45 12 12)"/></svg>
+                        <TallDiamond color={color} size={16}/>
                         <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</div><div style={{fontSize:12,color:C.muted,marginTop:1}}>{r.riders} rider{r.riders===1?"":"s"}</div></div>
                         <div style={{textAlign:"right"}}><div style={{fontSize:16,fontWeight:800,color:C.text}}>{r.rides}</div><div style={{fontSize:10,color:C.muted}}>ride{r.rides===1?"":"s"}</div></div>
                       </div>
@@ -5569,15 +5624,100 @@ function recapMapPaths(list){
     return{n:x.n,p:encodePolyline(pts),s:[+L[0].lng.toFixed(5),+L[0].lat.toFixed(5)]};
   });
 }
-function recapMapUrl(paths,w=480,h=270){
+function decodePolyline(str){
+  const out=[];let i=0,la=0,ln=0;
+  while(i<str.length){
+    let shift=0,res=0,b;
+    do{b=str.charCodeAt(i++)-63;res|=(b&0x1f)<<shift;shift+=5;}while(b>=0x20&&i<str.length);
+    la+=(res&1)?~(res>>1):(res>>1);
+    shift=0;res=0;
+    do{b=str.charCodeAt(i++)-63;res|=(b&0x1f)<<shift;shift+=5;}while(b>=0x20&&i<str.length);
+    ln+=(res&1)?~(res>>1):(res>>1);
+    out.push({lat:la/1e5,lng:ln/1e5});
+  }
+  return out;
+}
+// Works out the map view ourselves (instead of Mapbox "auto") so the routes and droplets can be drawn exactly on top of it.
+function recapMapView(paths,w,h){
   if(!paths||!paths.length)return null;
-  const e=encodeURIComponent;
-  const overlay=[
-    ...paths.map(p=>`path-7+ffffff(${e(p.p)})`),
-    ...paths.map(p=>`path-4+f59e0b(${e(p.p)})`),
-    ...paths.map(p=>`pin-s-${p.n}+f59e0b(${p.s[0]},${p.s[1]})`)
-  ].join(',');
-  return `https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/static/${overlay}/auto/${w}x${h}@2x?padding=36&access_token=${import.meta.env.VITE_MAPBOX_TOKEN}`;
+  const wx=lng=>(lng+180)/360*512;
+  const wy=lat=>{const s=Math.sin(lat*Math.PI/180);return(0.5-Math.log((1+s)/(1-s))/(4*Math.PI))*512;};
+  const rs=paths.map(p=>({n:p.n,P:decodePolyline(p.p).map(c=>[wx(c.lng),wy(c.lat)])})).filter(r=>r.P.length>1);
+  if(!rs.length)return null;
+  let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
+  rs.forEach(r=>r.P.forEach(p=>{x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);y0=Math.min(y0,p[1]);y1=Math.max(y1,p[1]);}));
+  const padX=40,top=46,bot=30;
+  const aw=w-padX*2,ah=h-top-bot;
+  const bw=Math.max(x1-x0,1e-9),bh=Math.max(y1-y0,1e-9);
+  const zoom=Math.max(3,Math.min(16,Math.log2(Math.min(aw/bw,ah/bh))));
+  const sc=Math.pow(2,zoom);
+  const mcx=(x0+x1)/2,mcy=(y0+y1)/2-((top+ah/2)-h/2)/sc;
+  const lng=mcx/512*360-180;
+  const nn=Math.PI-2*Math.PI*mcy/512;
+  const lat=180/Math.PI*Math.atan(0.5*(Math.exp(nn)-Math.exp(-nn)));
+  return{lat,lng,zoom,routes:rs.map(r=>({n:r.n,pts:r.P.map(p=>[(p[0]-mcx)*sc+w/2,(p[1]-mcy)*sc+h/2])}))};
+}
+function recapSmoothPath(pts){
+  const t=[pts[0]];
+  for(let i=1;i<pts.length-1;i++){const l=t[t.length-1];if(Math.hypot(pts[i][0]-l[0],pts[i][1]-l[1])>=1.2)t.push(pts[i]);}
+  t.push(pts[pts.length-1]);
+  if(t.length<3)return"M"+t.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join("L");
+  let d=`M${t[0][0].toFixed(1)},${t[0][1].toFixed(1)}`;
+  for(let i=1;i<t.length-1;i++){const mx=(t[i][0]+t[i+1][0])/2,my=(t[i][1]+t[i+1][1])/2;d+=`Q${t[i][0].toFixed(1)},${t[i][1].toFixed(1)} ${mx.toFixed(1)},${my.toFixed(1)}`;}
+  const l=t[t.length-1];
+  return d+`L${l[0].toFixed(1)},${l[1].toFixed(1)}`;
+}
+const RECAP_PIN_D="M0,0 C-6,-12 -22,-22 -22,-36 A22,22 0 1 1 22,-36 C22,-22 6,-12 0,0 Z";
+const RECAP_PIN_K=0.484;
+const recapStageColor=(recap,n)=>{const s=recap.stages&&recap.stages[n-1];return(DIFFICULTIES.find(d=>d.val===(s&&s.diff))||DIFFICULTIES[0]).color;};
+// Background map only. The routes and droplets are drawn on top (RecapMapOverlay / drawRecapMapShapes).
+function recapMapUrl(paths,w=480,h=270){
+  const v=recapMapView(paths,w,h);
+  if(!v)return null;
+  return `https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/static/${v.lng.toFixed(5)},${v.lat.toFixed(5)},${v.zoom.toFixed(2)}/${w}x${h}@2x?access_token=${import.meta.env.VITE_MAPBOX_TOKEN}`;
+}
+function RecapMapOverlay({recap,w=480,h=270}){
+  const v=recapMapView(recap.map,w,h);
+  if(!v)return null;
+  const BLUE=C.blue;
+  return(
+    <svg viewBox={`0 0 ${w} ${h}`} style={{position:"absolute",left:0,top:0,width:"100%",height:"100%"}}>
+      {v.routes.map(r=>{const d=recapSmoothPath(r.pts);return(<g key={r.n}>
+        <path d={d} fill="none" stroke="#fff" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d={d} fill="none" stroke={recapStageColor(recap,r.n)} strokeWidth="4.8" strokeLinecap="round" strokeLinejoin="round"/>
+      </g>);})}
+      {v.routes.slice().reverse().map(r=>{const p=r.pts[0];return(
+        <g key={"p"+r.n} transform={`translate(${p[0].toFixed(1)},${p[1].toFixed(1)}) scale(${RECAP_PIN_K})`}>
+          <path d={RECAP_PIN_D} fill={BLUE} fillOpacity="0.16" stroke={BLUE} strokeWidth="5" strokeLinejoin="round"/>
+          <text x="0" y="-27" textAnchor="middle" fontFamily="Inter, sans-serif" fontWeight="800" fontSize="27" fill={BLUE} stroke="#fff" strokeWidth="5" strokeLinejoin="round" paintOrder="stroke">{r.n}</text>
+        </g>);})}
+    </svg>
+  );
+}
+// Same drawing for the saved snapshot image (canvas). x,y,w,h = where the map sits on the canvas.
+function drawRecapMapShapes(ctx,recap,x,y,w,h,F){
+  const v=recapMapView(recap.map,480,270);
+  if(!v)return;
+  const k=w/480;
+  ctx.save();ctx.translate(x,y);ctx.scale(k,k);
+  ctx.lineCap='round';ctx.lineJoin='round';
+  v.routes.forEach(r=>{
+    const p=new Path2D(recapSmoothPath(r.pts));
+    ctx.strokeStyle='#fff';ctx.lineWidth=8;ctx.stroke(p);
+    ctx.strokeStyle=recapStageColor(recap,r.n);ctx.lineWidth=4.8;ctx.stroke(p);
+  });
+  const pin=new Path2D(RECAP_PIN_D);
+  v.routes.slice().reverse().forEach(r=>{
+    const q=r.pts[0];
+    ctx.save();ctx.translate(q[0],q[1]);ctx.scale(RECAP_PIN_K,RECAP_PIN_K);
+    ctx.fillStyle='rgba(37,99,235,0.16)';ctx.fill(pin);
+    ctx.strokeStyle=C.blue;ctx.lineWidth=5;ctx.stroke(pin);
+    ctx.textAlign='center';ctx.textBaseline='alphabetic';ctx.font=`800 27px ${F}`;
+    ctx.strokeStyle='#fff';ctx.lineWidth=5;ctx.strokeText(String(r.n),0,-17);
+    ctx.fillStyle=C.blue;ctx.fillText(String(r.n),0,-17);
+    ctx.restore();
+  });
+  ctx.restore();
 }
 
 // ── Build today's recap ──────────────────────────────────────────────────────
@@ -5661,8 +5801,9 @@ function DayRecapCard({recap,head}){
         <div style={{flex:1}}><div style={{fontSize:13,color:C.text,lineHeight:1.4}}><span style={{fontWeight:700}}>{head.name}</span> {head.text}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>{head.ago}</div></div>
         <div style={{width:30,height:30,borderRadius:8,background:`${C.green}15`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.BarChart size={15} color={C.green}/></div>
       </div>}
-      <div style={{margin:head?"0 12px":"12px 12px 0",borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`,background:C.mapPark,aspectRatio:"16 / 9"}}>
+      <div style={{margin:head?"0 12px":"12px 12px 0",borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`,background:C.mapPark,aspectRatio:"16 / 9",position:"relative"}}>
         {url&&<img src={url} alt="" style={{width:"100%",height:"100%",display:"block",objectFit:"cover"}} onError={e=>{e.currentTarget.style.display="none";}}/>}
+        <RecapMapOverlay recap={recap}/>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,padding:"12px 12px 0"}}>
         {isWeek?<>{box(recap.days_ridden,"Days ridden")}{box(recap.run_count,"Runs")}{box(recapTotal(recap.total_time_ms),"Total time")}</>:<>{box(recap.run_count,"Runs")}{box(recapTotal(recap.total_time_ms),"Total time")}{box(recap.descent_ft?`${fatCommas(recap.descent_ft)} ft`:"–","Descent")}</>}
@@ -5709,7 +5850,7 @@ async function drawRecapImage(recap,name){
   y+=70+40;
   ctx.fillStyle=C.text;ctx.font=`800 68px ${F}`;ctx.fillText(recap.days?`${name}'s week`:`${name}'s ride`,P,y+54);y+=80+30;
   // map
-  ctx.save();rrect(ctx,P,y,mapW,mapH,28);ctx.clip();ctx.fillStyle=C.mapPark;ctx.fillRect(P,y,mapW,mapH);if(mapImg)ctx.drawImage(mapImg,P,y,mapW,mapH);ctx.restore();
+  ctx.save();rrect(ctx,P,y,mapW,mapH,28);ctx.clip();ctx.fillStyle=C.mapPark;ctx.fillRect(P,y,mapW,mapH);if(mapImg)ctx.drawImage(mapImg,P,y,mapW,mapH);drawRecapMapShapes(ctx,recap,P,y,mapW,mapH,F);ctx.restore();
   rrect(ctx,P,y,mapW,mapH,28);ctx.strokeStyle=C.border;ctx.lineWidth=2;ctx.stroke();y+=mapH+30;
   // stats
   const bw=(mapW-48)/3,vals=recap.days?[[String(recap.days_ridden),'Days ridden'],[String(recap.run_count),'Runs'],[recapTotal(recap.total_time_ms),'Total time']]:[[String(recap.run_count),'Runs'],[recapTotal(recap.total_time_ms),'Total time'],[recap.descent_ft?`${fatCommas(recap.descent_ft)} ft`:'–','Descent']];
@@ -5740,7 +5881,7 @@ async function drawRecapImage(recap,name){
     const ry=y+i*rowH;
     if(i){ctx.beginPath();ctx.moveTo(P,ry);ctx.lineTo(P+mapW,ry);ctx.strokeStyle=C.border;ctx.stroke();}
     const col=(DIFFICULTIES.find(d=>d.val===s.diff)||DIFFICULTIES[0]).color;
-    ctx.save();ctx.translate(P+44,ry+rowH/2);ctx.rotate(Math.PI/4);ctx.fillStyle=col;ctx.fillRect(-12,-12,24,24);ctx.restore();
+    ctx.save();ctx.translate(P+44,ry+rowH/2);ctx.fillStyle=col;ctx.beginPath();ctx.moveTo(0,-17);ctx.lineTo(14,0);ctx.lineTo(0,17);ctx.lineTo(-14,0);ctx.closePath();ctx.fill();ctx.restore();
     ctx.fillStyle=C.text;ctx.font=`600 38px ${F}`;ctx.fillText(s.name,P+86,ry+54);
     ctx.fillStyle=C.muted;ctx.font=`400 28px ${F}`;ctx.fillText(`${s.runs} run${s.runs===1?'':'s'}${s.mph?` · ${s.mph.toFixed(1)} mph`:''}`,P+86,ry+90);
     ctx.textAlign='right';ctx.fillStyle=C.text;ctx.font=`700 42px ${F}`;const t=formatTime(s.best);ctx.fillText(t,P+mapW-36,ry+rowH/2+15);
@@ -6429,7 +6570,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
             <div style={{padding:"16px 0 0"}}>
               <div style={{margin:"0 16px 8px"}}><span style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase"}}>Popular near you</span><span style={{fontSize:11,color:"#9A9A9A"}}> · most rides this month</span></div>
               <div style={{display:"flex",gap:10,overflowX:"auto",padding:"2px 16px 4px"}}>
-                {popularStages.map((s,i)=><PopularStageCard key={s.id} stage={s} rank={i+1} rides={stageRides[s.id]||0} distKm={haversine(userPos,s.start)/1000} onPress={st=>{setSelectedStage(st);setMapCenter({lat:st.start.lat,lng:st.start.lng});setZoom(15);setTab("map");}}/>)}
+                {popularStages.map((s,i)=><PopularStageCard key={s.id} stage={s} rank={i+1} rides={stageRides[s.id]||0} units={settings.units} onPress={st=>{setSelectedStage(st);setMapCenter({lat:st.start.lat,lng:st.start.lng});setZoom(15);setTab("map");}}/>)}
               </div>
             </div>
           )}
