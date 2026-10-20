@@ -453,6 +453,7 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
             {key:"sessionInvite",label:"Session invites",sub:"When a mate creates a session"},
             {key:"courseRecord",label:"Course records",sub:"When you set a new CR"},
             {key:"ridesOnMine",label:"Rides on your stages",sub:"A daily summary when others ride your stages"},
+            {key:"newFollower",label:"New followers",sub:"When someone follows you"},
             {key:"weeklyDigest",label:"Weekly digest",sub:"Summary of your activity",last:true},
           ].map(({key,label,sub,last})=>(
             <Row key={key} label={label} sub={sub} noBorder={last} right={
@@ -6322,7 +6323,8 @@ useEffect(()=>{
 const [notifications,setNotifications]=useState([]);
 const [showNotifications,setShowNotifications]=useState(false);
 useEffect(()=>{if(!user)return;supabase.from('notifications').select('*').eq('user_id',user.id).order('created_at',{ascending:false}).limit(50).then(({data})=>{if(data)setNotifications(data);});},[user,refreshTick]);
-const unreadCount=notifications.filter(n=>!n.read_at).length;
+const shownNotifications=notifications.filter(n=>!(n.kind==='new_follower'&&settings.notifications&&settings.notifications.newFollower===false));
+const unreadCount=shownNotifications.filter(n=>!n.read_at).length;
 const markNotificationRead=(id)=>{
   const now=new Date().toISOString();
   setNotifications(prev=>prev.map(n=>n.id===id?{...n,read_at:now}:n));
@@ -6565,7 +6567,7 @@ if(showBikeSetup)return(
   if(showNotifications)return(
     <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
       <style>{STYLES}</style>
-      <NotificationsScreen notifications={notifications} onBack={()=>setShowNotifications(false)} onMarkAll={markAllNotificationsRead} onOpen={openNotification}/>
+      <NotificationsScreen notifications={shownNotifications} onBack={()=>setShowNotifications(false)} onMarkAll={markAllNotificationsRead} onOpen={openNotification}/>
     </div>
   );
   if(activeRace)return(
