@@ -5624,15 +5624,100 @@ function recapMapPaths(list){
     return{n:x.n,p:encodePolyline(pts),s:[+L[0].lng.toFixed(5),+L[0].lat.toFixed(5)]};
   });
 }
-function recapMapUrl(paths,w=480,h=270){
+function decodePolyline(str){
+  const out=[];let i=0,la=0,ln=0;
+  while(i<str.length){
+    let shift=0,res=0,b;
+    do{b=str.charCodeAt(i++)-63;res|=(b&0x1f)<<shift;shift+=5;}while(b>=0x20&&i<str.length);
+    la+=(res&1)?~(res>>1):(res>>1);
+    shift=0;res=0;
+    do{b=str.charCodeAt(i++)-63;res|=(b&0x1f)<<shift;shift+=5;}while(b>=0x20&&i<str.length);
+    ln+=(res&1)?~(res>>1):(res>>1);
+    out.push({lat:la/1e5,lng:ln/1e5});
+  }
+  return out;
+}
+// Works out the map view ourselves (instead of Mapbox "auto") so the routes and droplets can be drawn exactly on top of it.
+function recapMapView(paths,w,h){
   if(!paths||!paths.length)return null;
-  const e=encodeURIComponent;
-  const overlay=[
-    ...paths.map(p=>`path-7+ffffff(${e(p.p)})`),
-    ...paths.map(p=>`path-4+f59e0b(${e(p.p)})`),
-    ...paths.map(p=>`pin-s-${p.n}+f59e0b(${p.s[0]},${p.s[1]})`)
-  ].join(',');
-  return `https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/static/${overlay}/auto/${w}x${h}@2x?padding=36&access_token=${import.meta.env.VITE_MAPBOX_TOKEN}`;
+  const wx=lng=>(lng+180)/360*512;
+  const wy=lat=>{const s=Math.sin(lat*Math.PI/180);return(0.5-Math.log((1+s)/(1-s))/(4*Math.PI))*512;};
+  const rs=paths.map(p=>({n:p.n,P:decodePolyline(p.p).map(c=>[wx(c.lng),wy(c.lat)])})).filter(r=>r.P.length>1);
+  if(!rs.length)return null;
+  let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
+  rs.forEach(r=>r.P.forEach(p=>{x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);y0=Math.min(y0,p[1]);y1=Math.max(y1,p[1]);}));
+  const padX=40,top=46,bot=30;
+  const aw=w-padX*2,ah=h-top-bot;
+  const bw=Math.max(x1-x0,1e-9),bh=Math.max(y1-y0,1e-9);
+  const zoom=Math.max(3,Math.min(16,Math.log2(Math.min(aw/bw,ah/bh))));
+  const sc=Math.pow(2,zoom);
+  const mcx=(x0+x1)/2,mcy=(y0+y1)/2-((top+ah/2)-h/2)/sc;
+  const lng=mcx/512*360-180;
+  const nn=Math.PI-2*Math.PI*mcy/512;
+  const lat=180/Math.PI*Math.atan(0.5*(Math.exp(nn)-Math.exp(-nn)));
+  return{lat,lng,zoom,routes:rs.map(r=>({n:r.n,pts:r.P.map(p=>[(p[0]-mcx)*sc+w/2,(p[1]-mcy)*sc+h/2])}))};
+}
+function recapSmoothPath(pts){
+  const t=[pts[0]];
+  for(let i=1;i<pts.length-1;i++){const l=t[t.length-1];if(Math.hypot(pts[i][0]-l[0],pts[i][1]-l[1])>=1.2)t.push(pts[i]);}
+  t.push(pts[pts.length-1]);
+  if(t.length<3)return"M"+t.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join("L");
+  let d=`M${t[0][0].toFixed(1)},${t[0][1].toFixed(1)}`;
+  for(let i=1;i<t.length-1;i++){const mx=(t[i][0]+t[i+1][0])/2,my=(t[i][1]+t[i+1][1])/2;d+=`Q${t[i][0].toFixed(1)},${t[i][1].toFixed(1)} ${mx.toFixed(1)},${my.toFixed(1)}`;}
+  const l=t[t.length-1];
+  return d+`L${l[0].toFixed(1)},${l[1].toFixed(1)}`;
+}
+const RECAP_PIN_D="M0,0 C-6,-12 -22,-22 -22,-36 A22,22 0 1 1 22,-36 C22,-22 6,-12 0,0 Z";
+const RECAP_PIN_K=0.484;
+const recapStageColor=(recap,n)=>{const s=recap.stages&&recap.stages[n-1];return(DIFFICULTIES.find(d=>d.val===(s&&s.diff))||DIFFICULTIES[0]).color;};
+// Background map only. The routes and droplets are drawn on top (RecapMapOverlay / drawRecapMapShapes).
+function recapMapUrl(paths,w=480,h=270){
+  const v=recapMapView(paths,w,h);
+  if(!v)return null;
+  return `https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/static/${v.lng.toFixed(5)},${v.lat.toFixed(5)},${v.zoom.toFixed(2)}/${w}x${h}@2x?access_token=${import.meta.env.VITE_MAPBOX_TOKEN}`;
+}
+function RecapMapOverlay({recap,w=480,h=270}){
+  const v=recapMapView(recap.map,w,h);
+  if(!v)return null;
+  const BLUE=C.blue;
+  return(
+    <svg viewBox={`0 0 ${w} ${h}`} style={{position:"absolute",left:0,top:0,width:"100%",height:"100%"}}>
+      {v.routes.map(r=>{const d=recapSmoothPath(r.pts);return(<g key={r.n}>
+        <path d={d} fill="none" stroke="#fff" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d={d} fill="none" stroke={recapStageColor(recap,r.n)} strokeWidth="4.8" strokeLinecap="round" strokeLinejoin="round"/>
+      </g>);})}
+      {v.routes.slice().reverse().map(r=>{const p=r.pts[0];return(
+        <g key={"p"+r.n} transform={`translate(${p[0].toFixed(1)},${p[1].toFixed(1)}) scale(${RECAP_PIN_K})`}>
+          <path d={RECAP_PIN_D} fill={BLUE} fillOpacity="0.16" stroke={BLUE} strokeWidth="5" strokeLinejoin="round"/>
+          <text x="0" y="-27" textAnchor="middle" fontFamily="Inter, sans-serif" fontWeight="800" fontSize="27" fill={BLUE} stroke="#fff" strokeWidth="5" strokeLinejoin="round" paintOrder="stroke">{r.n}</text>
+        </g>);})}
+    </svg>
+  );
+}
+// Same drawing for the saved snapshot image (canvas). x,y,w,h = where the map sits on the canvas.
+function drawRecapMapShapes(ctx,recap,x,y,w,h,F){
+  const v=recapMapView(recap.map,480,270);
+  if(!v)return;
+  const k=w/480;
+  ctx.save();ctx.translate(x,y);ctx.scale(k,k);
+  ctx.lineCap='round';ctx.lineJoin='round';
+  v.routes.forEach(r=>{
+    const p=new Path2D(recapSmoothPath(r.pts));
+    ctx.strokeStyle='#fff';ctx.lineWidth=8;ctx.stroke(p);
+    ctx.strokeStyle=recapStageColor(recap,r.n);ctx.lineWidth=4.8;ctx.stroke(p);
+  });
+  const pin=new Path2D(RECAP_PIN_D);
+  v.routes.slice().reverse().forEach(r=>{
+    const q=r.pts[0];
+    ctx.save();ctx.translate(q[0],q[1]);ctx.scale(RECAP_PIN_K,RECAP_PIN_K);
+    ctx.fillStyle='rgba(37,99,235,0.16)';ctx.fill(pin);
+    ctx.strokeStyle=C.blue;ctx.lineWidth=5;ctx.stroke(pin);
+    ctx.textAlign='center';ctx.textBaseline='alphabetic';ctx.font=`800 27px ${F}`;
+    ctx.strokeStyle='#fff';ctx.lineWidth=5;ctx.strokeText(String(r.n),0,-17);
+    ctx.fillStyle=C.blue;ctx.fillText(String(r.n),0,-17);
+    ctx.restore();
+  });
+  ctx.restore();
 }
 
 // ── Build today's recap ──────────────────────────────────────────────────────
@@ -5716,8 +5801,9 @@ function DayRecapCard({recap,head}){
         <div style={{flex:1}}><div style={{fontSize:13,color:C.text,lineHeight:1.4}}><span style={{fontWeight:700}}>{head.name}</span> {head.text}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>{head.ago}</div></div>
         <div style={{width:30,height:30,borderRadius:8,background:`${C.green}15`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.BarChart size={15} color={C.green}/></div>
       </div>}
-      <div style={{margin:head?"0 12px":"12px 12px 0",borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`,background:C.mapPark,aspectRatio:"16 / 9"}}>
+      <div style={{margin:head?"0 12px":"12px 12px 0",borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`,background:C.mapPark,aspectRatio:"16 / 9",position:"relative"}}>
         {url&&<img src={url} alt="" style={{width:"100%",height:"100%",display:"block",objectFit:"cover"}} onError={e=>{e.currentTarget.style.display="none";}}/>}
+        <RecapMapOverlay recap={recap}/>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,padding:"12px 12px 0"}}>
         {isWeek?<>{box(recap.days_ridden,"Days ridden")}{box(recap.run_count,"Runs")}{box(recapTotal(recap.total_time_ms),"Total time")}</>:<>{box(recap.run_count,"Runs")}{box(recapTotal(recap.total_time_ms),"Total time")}{box(recap.descent_ft?`${fatCommas(recap.descent_ft)} ft`:"–","Descent")}</>}
@@ -5764,7 +5850,7 @@ async function drawRecapImage(recap,name){
   y+=70+40;
   ctx.fillStyle=C.text;ctx.font=`800 68px ${F}`;ctx.fillText(recap.days?`${name}'s week`:`${name}'s ride`,P,y+54);y+=80+30;
   // map
-  ctx.save();rrect(ctx,P,y,mapW,mapH,28);ctx.clip();ctx.fillStyle=C.mapPark;ctx.fillRect(P,y,mapW,mapH);if(mapImg)ctx.drawImage(mapImg,P,y,mapW,mapH);ctx.restore();
+  ctx.save();rrect(ctx,P,y,mapW,mapH,28);ctx.clip();ctx.fillStyle=C.mapPark;ctx.fillRect(P,y,mapW,mapH);if(mapImg)ctx.drawImage(mapImg,P,y,mapW,mapH);drawRecapMapShapes(ctx,recap,P,y,mapW,mapH,F);ctx.restore();
   rrect(ctx,P,y,mapW,mapH,28);ctx.strokeStyle=C.border;ctx.lineWidth=2;ctx.stroke();y+=mapH+30;
   // stats
   const bw=(mapW-48)/3,vals=recap.days?[[String(recap.days_ridden),'Days ridden'],[String(recap.run_count),'Runs'],[recapTotal(recap.total_time_ms),'Total time']]:[[String(recap.run_count),'Runs'],[recapTotal(recap.total_time_ms),'Total time'],[recap.descent_ft?`${fatCommas(recap.descent_ft)} ft`:'–','Descent']];
