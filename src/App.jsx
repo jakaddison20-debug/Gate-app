@@ -4319,9 +4319,9 @@ function ProfileScreen({stages,settings,courseResults,pastWeeks,weekByType,onSet
         </div>
         <div style={{display:"flex",gap:8}}>
           {[{label:"Followers",value:followerCount==null?"—":String(followerCount),onClick:onOpenFollowers},{label:"Stages Ridden",value:String(stagesRidden)},{label:"Courses Complete",value:String(coursesComplete)}].map(s=>(
-            <button key={s.label} className="tap" onClick={s.onClick||undefined} style={{flex:1,minWidth:0,background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 6px",textAlign:"center"}}>
-              <div style={{fontSize:11,color:C.muted,fontWeight:500,whiteSpace:"nowrap"}}>{s.label}</div>
-              <div style={{fontSize:17,color:C.text,fontWeight:700,marginTop:3}}>{s.value}</div>
+            <button key={s.label} className="tap" onClick={s.onClick||undefined} style={{flex:1,minWidth:0,background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"5px 4px",textAlign:"center",lineHeight:1.15}}>
+              <div style={{fontSize:14,color:C.text,fontWeight:700}}>{s.value}</div>
+              <div style={{fontSize:10,color:C.muted,fontWeight:500,whiteSpace:"nowrap"}}>{s.label}</div>
             </button>
           ))}
         </div>
