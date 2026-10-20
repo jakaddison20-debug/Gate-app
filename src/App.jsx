@@ -1570,7 +1570,7 @@ function InsightHubTile({ring,title,onClick}){
 
 function ImprovementHubTile({rows,onClick}){
   const scored=rows?rows.filter(r=>r.im):[];
-  if(rows===null||scored.length===0)return <InsightHubTile onClick={onClick} title="Improvement" sub={rows===null?"Loading…":"Needs 2+ runs in both months"} ring={<InsightRing pct={0} color={C.green}><span style={{fontSize:11,fontWeight:800,color:C.text}}>–</span></InsightRing>}/>;
+  if(rows===null||scored.length===0)return <InsightHubTile onClick={onClick} title="Improvement" sub={rows===null?"Loading…":"Needs 2+ runs in each of the last 2 weeks"} ring={<InsightRing pct={0} color={C.green}><span style={{fontSize:11,fontWeight:800,color:C.text}}>–</span></InsightRing>}/>;
   const overall=scored.reduce((a,r)=>a+r.im.pct,0)/scored.length;
   const up=overall>=0;
   const ex=scored[0].im;
@@ -1585,7 +1585,7 @@ function ImprovementScreen({rows}){
   const [explain,setExplain]=useState(false);
   if(rows===null)return <EmptyNote>Loading…</EmptyNote>;
   const scored=rows.filter(r=>r.im);
-  if(scored.length===0)return <EmptyNote>Ride the same stage at least twice this month and twice last month to see your improvement here.</EmptyNote>;
+  if(scored.length===0)return <EmptyNote>Ride the same stage at least twice in each of the last 2 weeks to see your improvement here.</EmptyNote>;
   const overall=scored.reduce((a,r)=>a+r.im.pct,0)/scored.length;
   const up=overall>=0,oColor=up?C.green:C.red;
   const byPct=scored.slice().sort((a,b)=>b.im.pct-a.im.pct);
@@ -1601,7 +1601,7 @@ function ImprovementScreen({rows}){
           </InsightRing>
         </div>
         <div style={{fontSize:20,fontWeight:800,color:oColor,marginTop:14}}>{up?'Getting faster':'Slowing down'}</div>
-        <div style={{fontSize:13,color:C.muted,marginTop:4,lineHeight:1.45}}>Your average run this month against last month, across {scored.length} stage{scored.length===1?'':'s'} you rode in both.</div>
+        <div style={{fontSize:13,color:C.muted,marginTop:4,lineHeight:1.45}}>Your average run {ex.mode==='week'?'this week against last week':'this month against last month'}, across {scored.length} stage{scored.length===1?'':'s'} you rode in both.</div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,padding:"16px 16px 0"}}>
         <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:12}}><MiniLabel>MOST IMPROVED</MiniLabel><div style={{fontSize:14,fontWeight:700,marginTop:6,color:C.text}}>{top.stage.name}</div><div style={{fontSize:12,color:top.im.pct>=0?C.green:C.red,fontWeight:600,marginTop:2}}>{fmtPct(top.im.pct)}</div></div>
@@ -1622,7 +1622,7 @@ function ImprovementScreen({rows}){
                 <StageDiamond stage={stage}/>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:14,fontWeight:600,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{stage.name}</div>
-                  <div style={{fontSize:12,color:C.muted,marginTop:1}}>{im?`${im.curCount} runs this month · avg ${Math.abs(im.diffMs/1000).toFixed(1)}s ${upS?'faster':'slower'}`:'Needs 2+ runs in both months'}</div>
+                  <div style={{fontSize:12,color:C.muted,marginTop:1}}>{im?`${im.curCount} runs ${im.mode==='week'?'this week':'this month'} · avg ${Math.abs(im.diffMs/1000).toFixed(1)}s ${upS?'faster':'slower'}`:(ex.mode==='week'?'Needs 2+ runs in each of the last 2 weeks':'Needs 2+ runs in both months')}</div>
                 </div>
                 <div style={{textAlign:"right"}}><div style={{fontSize:18,fontWeight:800,color:col}}>{im?fmtPct(im.pct):'-'}</div><div style={{fontSize:10,fontWeight:600,color:col}}>{!im?'Not enough runs':steady?'Steady':upS?'Faster':'Slower'}</div></div>
               </div>
@@ -1637,9 +1637,9 @@ function ImprovementScreen({rows}){
       <div style={{margin:"20px 16px 24px",border:`1px solid ${C.border}`,borderRadius:12,overflow:"hidden"}}>
         <button onClick={()=>setExplain(e=>!e)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 14px",background:"#fff",border:"none",textAlign:"left",fontSize:14,fontWeight:600,color:C.text}}>How it's measured<span style={{color:C.muted,fontSize:12}}>{explain?'Hide':'Show'}</span></button>
         {explain&&<div style={{padding:"0 14px 14px",background:C.surface,fontSize:12,lineHeight:1.55,color:C.text}}>
-          <div style={{paddingTop:12}}>We take your average run time on a stage this calendar month and compare it with your average last month.</div>
+          <div style={{paddingTop:12}}>{ex.mode==='week'?"We take your average run time on a stage over the last 7 days and compare it with the 7 days before. Once you have runs in two calendar months, it switches to this month against last month.":"We take your average run time on a stage this calendar month and compare it with your average last month."}</div>
           <div style={{marginTop:8}}>The percentage is how much quicker (or slower) that average is. Using percentages lets short and long stages be compared fairly.</div>
-          <div style={{marginTop:10,color:C.muted}}>Needs at least 2 runs on the stage in each month to count.</div>
+          <div style={{marginTop:10,color:C.muted}}>Needs at least 2 runs on the stage in each {ex.mode==='week'?'week':'month'} to count.</div>
         </div>}
       </div>
     </div>
