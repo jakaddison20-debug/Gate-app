@@ -4627,6 +4627,110 @@ function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,cou
   );
 }
 
+function GateDot({kind,color}){
+  if(kind==="start")return <div style={{width:26,height:26,borderRadius:"50%",background:color,border:"3px solid #fff",boxShadow:`0 0 0 1.5px ${color}`,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{width:8,height:8,borderRadius:"50%",background:"#fff"}}/></div>;
+  if(kind==="finish")return <div style={{width:26,height:26,borderRadius:"50%",background:"#fff",border:"3px solid #1A1A1A",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{width:8,height:8,borderRadius:"50%",background:"#1A1A1A"}}/></div>;
+  return <div style={{width:26,height:26,borderRadius:"50%",background:"#fff",border:`2px dashed ${C.mutedL}`}}/>;
+}
+const STAGE_PRIVACY_SUB={private:"Only you can see and ride this stage",group:"Shared with the riders in your group",public:"Anyone can find, ride and time this stage"};
+function NewStageSheet({onClose,onSave}){
+  const [name,setName]=useState("");
+  const [difficulty,setDifficulty]=useState("blue");
+  const [builtBy,setBuiltBy]=useState("");
+  const [showCredit,setShowCredit]=useState(false);
+  const [privacy,setPrivacy]=useState("private");
+  const [start,setStart]=useState(null);
+  const [finish,setFinish]=useState(null);
+  const [recording,setRecording]=useState(false);
+  const [lineCoords,setLineCoords]=useState([]);
+  const trackRef=useRef(null);
+  const simulatePlace=()=>{if(!navigator.geolocation){alert("GPS not available");return;}navigator.geolocation.getCurrentPosition(pos=>{const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};if(!start){setStart(loc);setLineCoords([loc]);setRecording(true);trackRef.current=navigator.geolocation.watchPosition(p=>setLineCoords(prev=>[...prev,{lat:p.coords.latitude,lng:p.coords.longitude}]),err=>console.log(err),{enableHighAccuracy:true,maximumAge:0});}else if(!finish){setFinish(loc);setRecording(false);navigator.geolocation.clearWatch(trackRef.current);const fullLine=[...lineCoords,loc];let total=0;for(let i=0;i<fullLine.length-1;i++)total+=haversine(fullLine[i],fullLine[i+1]);if(total>25){const trimmed=trimLineFromStart(fullLine,25);if(trimmed&&trimmed.length>0){setStart(trimmed[0]);setLineCoords(trimmed);}else{setLineCoords(fullLine);}}else{setLineCoords(fullLine);}}},err=>alert("Could not get location — make sure GPS is on"),{enableHighAccuracy:true,timeout:10000});};
+  const redoGates=()=>{if(trackRef.current!==null&&navigator.geolocation)navigator.geolocation.clearWatch(trackRef.current);trackRef.current=null;setStart(null);setFinish(null);setLineCoords([]);setRecording(false);};
+  const canSave=!!(name.trim()&&start&&finish);
+  const dist=start&&finish?haversine(start,finish):null;
+  let live=0;for(let i=0;i<lineCoords.length-1;i++)live+=haversine(lineCoords[i],lineCoords[i+1]);
+  const missing=[];if(!name.trim())missing.push("add a name");if(!start)missing.push("place both gates");else if(!finish)missing.push("place the finish gate");
+  const dcolor=(DIFFICULTIES.find(d=>d.val===difficulty)||DIFFICULTIES[0]).color;
+  const lab=(t,extra)=><div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase",marginBottom:8}}>{t}{extra}</div>;
+  const gateRow=(kind,title,done)=>(
+    <div style={{display:"flex",alignItems:"center",gap:12}}>
+      <div style={{width:26,display:"flex",justifyContent:"center",flexShrink:0}}><GateDot kind={done?kind:"empty"} color={dcolor}/></div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:14,fontWeight:700,color:C.text}}>{title}</div>
+        <div style={{fontSize:12,color:done?C.green:C.muted,marginTop:1}}>{done?"Placed":"Not placed"}</div>
+      </div>
+      {done&&<div style={{width:20,height:20,borderRadius:"50%",background:C.green,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon.Check size={11} color="#fff"/></div>}
+    </div>
+  );
+  return(
+    <div style={{padding:"0 16px 74px"}}>
+      <style>{"@keyframes gatePulse{0%{box-shadow:0 0 0 0 rgba(37,99,235,.45)}100%{box-shadow:0 0 0 9px rgba(37,99,235,0)}}"}</style>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0 16px"}}>
+        <div style={{fontSize:19,fontWeight:800,letterSpacing:-0.3,color:C.text}}>New Stage</div>
+        <button className="tap" onClick={onClose} style={{background:C.surface,borderRadius:8,padding:"6px 14px",color:C.text,fontSize:13,fontWeight:500,border:`1px solid ${C.border}`}}>Cancel</button>
+      </div>
+      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:14,marginBottom:20}}>
+        {gateRow("start","Start gate",!!start)}
+        <div style={{display:"flex",alignItems:"stretch",gap:12,margin:"4px 0"}}>
+          <div style={{width:26,display:"flex",justifyContent:"center",flexShrink:0}}><div style={{width:0,borderLeft:finish?`2px solid ${C.text}`:`2px dashed ${C.mutedL}`,minHeight:30}}/></div>
+          <div style={{flex:1,display:"flex",alignItems:"center",fontSize:12,fontWeight:600,color:recording?C.blue:C.muted}}>
+            {recording&&<><span style={{width:8,height:8,borderRadius:"50%",background:C.blue,marginRight:8,animation:"gatePulse 1.3s infinite"}}/>Recording · {formatDist(live)}</>}
+            {finish&&dist!==null&&<>Stage length · {formatDist(dist)}</>}
+          </div>
+        </div>
+        {gateRow("finish","Finish gate",!!finish)}
+        {!finish?(
+          <>
+            <button className="tap" onClick={simulatePlace} style={{width:"100%",marginTop:14,background:C.blue,border:"none",borderRadius:12,padding:13,color:"#fff",fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+              <Icon.Location size={16} color="#fff"/>{!start?"Place Start Gate":"Place Finish Gate"}
+            </button>
+            <div style={{textAlign:"center",fontSize:11,color:C.muted,marginTop:8}}>{!start?"Stand at the top of the trail":"Ride down, then place it at the bottom"}</div>
+          </>
+        ):(
+          <button className="tap" onClick={redoGates} style={{marginTop:12,background:"none",border:"none",color:C.muted,fontSize:12,fontWeight:600,padding:0}}>Redo gates</button>
+        )}
+      </div>
+      {lab("Name")}
+      <input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Rock Garden" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:12,padding:14,fontSize:16,fontWeight:600,color:C.text,background:C.surface,marginBottom:20}}/>
+      {lab("Difficulty")}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:20}}>
+        {DIFFICULTIES.map(d=>{const on=difficulty===d.val;return(
+          <button key={d.val} className="tap" onClick={()=>setDifficulty(d.val)} style={{background:on?`${d.color}15`:C.surface,border:`1.5px solid ${on?d.color:C.border}`,borderRadius:12,padding:"11px 6px",display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
+            <div style={{height:22,display:"flex",alignItems:"center"}}><TallDiamond color={d.color} size={22}/></div>
+            <div style={{fontSize:12,fontWeight:on?700:500,color:on?d.color:C.text}}>{d.label}</div>
+          </button>
+        );})}
+      </div>
+      {lab("Who can see it")}
+      <div style={{display:"flex",background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:3,gap:2}}>
+        {[{val:"private",label:"Private",Ic:Icon.Lock},{val:"group",label:"Group",Ic:Icon.Users},{val:"public",label:"Public",Ic:Icon.Globe}].map(({val,label,Ic})=>{const on=privacy===val;return(
+          <button key={val} className="tap" onClick={()=>setPrivacy(val)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"9px 0",borderRadius:9,border:"none",background:on?"#fff":"transparent",boxShadow:on?"0 1px 3px rgba(0,0,0,0.12)":"none",fontSize:13,fontWeight:on?700:500,color:on?C.blue:C.muted}}>
+            <Ic size={14} color={on?C.blue:C.muted}/>{label}
+          </button>
+        );})}
+      </div>
+      <div style={{fontSize:12,color:C.muted,margin:"8px 2px 20px"}}>{STAGE_PRIVACY_SUB[privacy]}</div>
+      {lab("Trail built by",<span style={{textTransform:"none",letterSpacing:0,fontWeight:400}}> (optional)</span>)}
+      <div style={{marginBottom:6}}>
+        {showCredit||builtBy?(
+          <input value={builtBy} onChange={e=>setBuiltBy(e.target.value)} maxLength={60} placeholder="Who built this trail?" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"12px 14px",fontSize:14,color:C.text,background:C.surface}}/>
+        ):(
+          <button className="tap" onClick={()=>setShowCredit(true)} style={{background:"none",border:"none",padding:0,color:C.blue,fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>Credit the trail builders
+          </button>
+        )}
+      </div>
+      <div style={{position:"sticky",bottom:74,margin:"0 -16px",background:"#fff",borderTop:`1px solid ${C.border}`,padding:"12px 16px"}}>
+        {missing.length>0&&<div style={{textAlign:"center",fontSize:12,color:C.muted,marginBottom:8}}>To create: {missing.join(" and ")}</div>}
+        <button className="tap" onClick={()=>canSave&&onSave({id:Date.now(),name:name.trim(),start,finish,privacy,difficulty,builtBy:builtBy.trim(),time:null,cr:false,crHolder:null,crDate:null,lineCoords})}
+          style={{width:"100%",background:canSave?C.orange:C.surface,border:canSave?"none":`1px solid ${C.border}`,borderRadius:12,padding:15,color:canSave?"#fff":C.mutedL,fontSize:15,fontWeight:700,transition:"all 0.2s"}}>
+          Create Stage
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Course Builder Sheet ──────────────────────────────────────────────────────
  function CourseStagesMap({courseStages}){
   const mapContainer=useRef(null);
