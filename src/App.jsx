@@ -6954,13 +6954,13 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
 
 
         {/* Tab bar */}
-      <div style={{position:"fixed",bottom:0,left:0,right:0,background:"white",borderTop:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"space-around",padding:"10px 0 24px",zIndex:50}}>
+      <div style={{position:"fixed",bottom:"calc(env(safe-area-inset-bottom, 0px) + 16px)",left:24,right:24,background:"rgba(255,255,255,0.08)",WebkitBackdropFilter:"blur(10px) saturate(1.8)",backdropFilter:"blur(10px) saturate(1.8)",border:"1px solid rgba(255,255,255,0.5)",borderRadius:22,boxShadow:"0 6px 22px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.05)",display:"flex",alignItems:"center",padding:"6px 4px 5px",zIndex:50}}>
         {TABS.map(t=>{
           const active=tab===t.id;
           return(
-            <button key={t.id} className="tap" onClick={()=>setTab(t.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",padding:"2px 10px"}}>
-              <t.Ic size={22} color={active?C.blue:C.muted}/>
-              <span style={{fontSize:10,fontWeight:active?600:400,color:active?C.blue:C.muted}}>{t.label}</span>
+            <button key={t.id} className="tap" onClick={()=>setTab(t.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,background:"none",border:"none",padding:"2px 0",WebkitTapHighlightColor:"transparent",outline:"none"}}>
+              <span style={{display:"flex",filter:"drop-shadow(0 0 3px rgba(255,255,255,0.9))"}}><t.Ic size={21} color={active?C.blue:C.muted}/></span>
+              <span style={{fontSize:10,fontWeight:active?600:400,color:active?C.blue:C.muted,textShadow:"0 0 4px rgba(255,255,255,0.95), 0 0 8px rgba(255,255,255,0.7)"}}>{t.label}</span>
             </button>
           );
         })}
