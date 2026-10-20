@@ -2615,15 +2615,30 @@ function pickBike(s){const o={};BIKE_KEYS.forEach(k=>{o[k]=s[k]??DEFAULT_SETTING
 function bikeSettings(b){return{...pickBike(DEFAULT_SETTINGS),...(b.setup||{}),bikeName:b.name||""};}
 function profileBikeUpdate(s){return{bike_name:s.bikeName,rider_weight:s.riderWeight,tire_dry_front:s.tireDryFront,tire_dry_rear:s.tireDryRear,tire_wet_front:s.tireWetFront,tire_wet_rear:s.tireWetRear,shock_mode:s.shockMode,shock_psi:s.shockPsi,shock_spring_rate:s.shockSpringRate,shock_lsc:s.shockLsc,shock_hsc:s.shockHsc,shock_lsr:s.shockLsr,shock_hsr:s.shockHsr,shock_hsb:s.shockHsb,shock_tokens:s.shockTokens,shock_sag:s.shockSag,fork_mode:s.forkMode,fork_psi:s.forkPsi,fork_spring_rate:s.forkSpringRate,fork_lsc:s.forkLsc,fork_hsc:s.forkHsc,fork_lsr:s.forkLsr,fork_hsr:s.forkHsr,fork_hsb:s.forkHsb,fork_tokens:s.forkTokens,fork_sag:s.forkSag,bike_notes:s.bikeNotes,fork_notes:s.forkNotes,shock_notes:s.shockNotes};}
 
+const BIKE_TYPES=[{val:"enduro",label:"Enduro"},{val:"dh",label:"DH"},{val:"ebike",label:"E-bike"}];
+function BikeTypePicker({value,onChange}){
+  return(
+    <div style={{marginBottom:14}}>
+      <div style={{fontSize:10,fontWeight:600,color:C.muted,letterSpacing:0.8,marginBottom:6}}>BIKE TYPE</div>
+      <div style={{display:"flex",gap:8}}>
+        {BIKE_TYPES.map(t=>{const on=value===t.val;return(
+          <button key={t.val} className="tap" onClick={()=>onChange(t.val)} style={{flex:1,padding:"11px 0",borderRadius:10,border:on?`1.5px solid ${C.blue}`:`1.5px solid ${C.border}`,background:on?`${C.blue}15`:C.surface,fontSize:13,fontWeight:on?700:500,color:on?C.blue:C.text}}>{t.label}</button>
+        );})}
+      </div>
+      <div style={{fontSize:11,color:C.muted,marginTop:8,lineHeight:1.4}}>Runs on this bike count under {(BIKE_TYPES.find(t=>t.val===value)||BIKE_TYPES[0]).label} in your week on Profile.</div>
+    </div>
+  );
+}
 function BikeDetailsScreen({user,bike,isActive,settings,setSettings,onSaved,onBack}){
   const [s,setS]=useState(()=>bikeSettings(bike));
+  const [bt,setBt]=useState(bike.bike_type||"enduro");
   const [saving,setSaving]=useState(false);
   const setField=(key,val)=>setS(prev=>({...prev,[key]:val}));
   const saveAndClose=async()=>{
     if(saving)return;
     setSaving(true);
     const name=(s.bikeName||"").trim()||"My bike";
-    const{data,error}=await supabase.from('bikes').update({name,setup:pickBike(s)}).eq('id',bike.id).select().single();
+    const{data,error}=await supabase.from('bikes').update({name,setup:pickBike(s),bike_type:bt}).eq('id',bike.id).select().single();
     if(error){setSaving(false);alert("Couldn't save bike: "+error.message);return;}
     if(isActive){
       const merged={...settings,...s,bikeName:name};
@@ -2646,6 +2661,7 @@ function BikeDetailsScreen({user,bike,isActive,settings,setSettings,onSaved,onBa
           <img src="/bike-setup.jpeg" alt="Bike" style={{width:"100%",height:"auto",display:"block",margin:"0 auto 14px"}}/>
           <input value={s.bikeName} onChange={e=>setField("bikeName",e.target.value)} placeholder="Name your bike" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"12px 14px",fontSize:16,fontWeight:700,color:C.text,background:C.surface,marginBottom:12,boxSizing:"border-box",textAlign:"center"}}/>
           <div style={{marginBottom:14}}>
+            <BikeTypePicker value={bt} onChange={setBt}/>
             <UnitField label="Rider weight — with gear" unit="kg" value={s.riderWeight} onChange={v=>setField("riderWeight",v)}/>
           </div>
           <div style={{fontSize:10,fontWeight:700,color:C.mutedL,letterSpacing:0.6,textTransform:"uppercase",marginBottom:6}}>Dry</div>
@@ -4280,15 +4296,40 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
 }
 
 // ── Profile ───────────────────────────────────────────────────────────────────
-function ProfileScreen({stages,settings,courseResults,pastWeeks,onSettingsPress,onGoToStages,onGoToCourses,onOpenProgress,onOpenBikeSetup,followerCount,onOpenFollowers,onOpenTrophies}){
+function SparkBolt({color,size=38}){
+  return <svg width={size} height={size} viewBox="0 0 36 36" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z" transform="translate(7,4) scale(1.05)"/><path d="M5 9l3 2M3 17h4M6 25l3-2M31 9l-3 2M33 17h-4M30 25l-3-2"/></svg>;
+}
+function StreakCard({streak}){
+  const cur=streak.cur||0,best=streak.best||0,rode=!!streak.rode;
+  const wk=n=>`${n} week${n===1?"":"s"}`;
+  const title=cur>0?`${cur} week streak`:(best>0?"No streak":"No streak yet");
+  const sub=rode
+    ?(cur>1&&cur>=best?"Your longest yet":best>cur?`Best ${wk(best)}`:"Keep it going")
+    :(cur>0?`Ride this week to make it ${cur+1}`:(best>0?`Best ${wk(best)} · ride this week to start one`:"Ride this week to start one"));
+  return(
+    <div style={{padding:"18px 16px 0"}}>
+      <div style={{border:`1px solid ${C.border}`,borderRadius:14,padding:14,display:"flex",alignItems:"center",gap:12}}>
+        <div style={{width:38,height:38,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><SparkBolt color={rode?C.blue:C.mutedL}/></div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:15,fontWeight:800,color:cur>0?C.text:C.muted}}>{title}</div>
+          <div style={{fontSize:12,color:C.muted,marginTop:1}}>{sub}</div>
+        </div>
+        {!rode&&cur>0&&<div style={{padding:"4px 9px",borderRadius:999,background:"#FFFBEB",color:"#92400E",fontSize:11,fontWeight:800,whiteSpace:"nowrap"}}>Ride by Sunday</div>}
+      </div>
+    </div>
+  );
+}
+function ProfileScreen({streak,stages,settings,courseResults,pastWeeks,weekByType,onSettingsPress,onGoToStages,onGoToCourses,onOpenProgress,onOpenBikeSetup,followerCount,onOpenFollowers,onOpenTrophies}){
   const [selectedWeek,setSelectedWeek]=useState(pastWeeks.length-1);
   const stagesRidden=stages.filter(s=>s.time).length;
   const coursesComplete=courseResults.length;
-  const w=pastWeeks[selectedWeek]||{stages:0,runs:0,mins:0,pbs:0,days:[false,false,false,false,false,false,false]};
+  const [rideType,setRideType]=useState("all");
+  const weeks=(weekByType&&weekByType[rideType])||pastWeeks;
+  const w=weeks[selectedWeek]||{stages:0,runs:0,mins:0,pbs:0,days:[false,false,false,false,false,false,false]};
   const weeksAgo=pastWeeks.length-1-selectedWeek;
   const weekLabel=weeksAgo===0?"This week":weeksAgo===1?"1 week ago":`${weeksAgo} weeks ago`;
   const fmtMins=m=>m>=60?`${Math.floor(m/60)}h ${m%60}m`:`${m}m`;
-  const weekMax=Math.max(...pastWeeks.map(x=>x.mins),1);
+  const weekMax=Math.max(...weeks.map(x=>x.mins),1);
   const dayLabels=["M","T","W","T","F","S","S"];
   const stats=[{label:"Stages",value:String(w.stages)},{label:"Runs",value:String(w.runs)},{label:"Time",value:fmtMins(w.mins)},{label:"New PBs",value:String(w.pbs),green:w.pbs>0}];
   return(
@@ -4301,20 +4342,22 @@ function ProfileScreen({stages,settings,courseResults,pastWeeks,onSettingsPress,
         </div>
         <div style={{display:"flex",gap:8}}>
           {[{label:"Followers",value:followerCount==null?"—":String(followerCount),onClick:onOpenFollowers},{label:"Stages Ridden",value:String(stagesRidden)},{label:"Courses Complete",value:String(coursesComplete)}].map(s=>(
-            <button key={s.label} className="tap" onClick={s.onClick||undefined} style={{flex:1,minWidth:0,background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 6px",textAlign:"center"}}>
-              <div style={{fontSize:11,color:C.muted,fontWeight:500,whiteSpace:"nowrap"}}>{s.label}</div>
-              <div style={{fontSize:17,color:C.text,fontWeight:700,marginTop:3}}>{s.value}</div>
+            <button key={s.label} className="tap" onClick={s.onClick||undefined} style={{flex:1,minWidth:0,background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"5px 4px",textAlign:"center",lineHeight:1.15}}>
+              <div style={{fontSize:14,color:C.text,fontWeight:700}}>{s.value}</div>
+              <div style={{fontSize:10,color:C.muted,fontWeight:500,whiteSpace:"nowrap"}}>{s.label}</div>
             </button>
           ))}
         </div>
       </div>
 
-      <div style={{padding:"18px 16px 0"}}>
+      {streak&&<StreakCard streak={streak}/>}
+      <div style={{padding:streak?"14px 16px 0":"18px 16px 0"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
           <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase"}}>Your week</div>
           <div style={{fontSize:12,color:C.muted}}>{weekLabel}</div>
         </div>
         <div style={{border:`1px solid ${C.border}`,borderRadius:14,padding:14}}>
+          <div style={{marginBottom:14}}><LbSeg full options={[{val:"all",label:"All"},{val:"enduro",label:"Enduro"},{val:"dh",label:"DH"},{val:"ebike",label:"E-bike"}]} value={rideType} onChange={setRideType}/></div>
           <div style={{display:"flex",gap:24,marginBottom:14}}>
             {stats.map(s=>(
               <div key={s.label}>
@@ -4333,7 +4376,7 @@ function ProfileScreen({stages,settings,courseResults,pastWeeks,onSettingsPress,
           </div>
           <div style={{borderTop:`1px solid ${C.border}`,marginTop:14,paddingTop:12}}>
             <div style={{display:"flex",alignItems:"flex-end",gap:3,height:40,marginBottom:6}}>
-              {pastWeeks.map((x,i)=>{
+              {weeks.map((x,i)=>{
                 const pct=x.mins>0?Math.max((x.mins/weekMax)*100,10):6;
                 const on=i===selectedWeek;
                 return(
@@ -6111,7 +6154,7 @@ export default function App(){
   useEffect(()=>{ACTIVE_BIKE_ID=activeBikeId;},[activeBikeId]);
   useEffect(()=>{
     if(!user)return;
-    supabase.from('bikes').select('id,name,setup,created_at').order('created_at',{ascending:true}).then(({data})=>{if(data)setBikes(data);});
+    supabase.from('bikes').select('id,name,setup,bike_type,created_at').order('created_at',{ascending:true}).then(({data})=>{if(data)setBikes(data);});
     supabase.from('profiles').select('active_bike_id').eq('id',user.id).single().then(({data})=>{if(data)setActiveBikeId(data.active_bike_id||null);});
   },[user,refreshTick]);
   const deleteStage=async(id)=>{
@@ -6206,6 +6249,8 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
   useEffect(()=>{if(!user)return;supabase.from('course_results').select('id,total_time_ms,mode,completed_at,courses(name,stage_ids)').eq('user_id',user.id).order('completed_at',{ascending:false}).then(({data})=>{if(data)setCourseResults(data.map(r=>({id:r.id,name:r.courses?.name||'Course',date:new Date(r.completed_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}),stages:r.courses?.stage_ids?.length||0,mode:r.mode,totalTime:r.total_time_ms,pos:null})));});},[user]);
 
     const [recentStageTimes,setRecentStageTimes]=useState([]);
+    const [streak,setStreak]=useState(null);
+    useEffect(()=>{if(!user)return;supabase.rpc('my_weekly_streak',{p_tz:Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'}).then(({data,error})=>{if(error){console.log('streak failed',error.message);return;}const r=Array.isArray(data)?data[0]:data;if(r)setStreak({cur:r.current_streak,best:r.best_streak,rode:r.rode_this_week});});},[user,refreshTick]);
 const [feed,setFeed]=useState([]);
 useEffect(()=>{if(!user)return;const loadFeed=cols=>supabase.from('app_events').select(cols).in('event_type',FEED_TYPES).order('created_at',{ascending:false}).limit(50);loadFeed('id,event_type,message,created_at,stage_id,context,profiles(display_name,avatar_url)').then(async({data,error})=>{let rows=data;if(error){console.log('feed query failed, retrying without the rider name lookup',error);logEvent(user.id,'feed_error',error.message||String(error),null,{code:error.code});const r=await supabase.from('app_events').select('id,event_type,message,created_at,stage_id,user_id').in('event_type',FEED_TYPES).order('created_at',{ascending:false}).limit(50);rows=r.data;if(r.error)logEvent(user.id,'feed_error_retry',r.error.message||String(r.error),null,{code:r.error.code});}if(rows)setFeed(rows.map(e=>({id:e.id,event_type:e.event_type,message:e.message,stage_id:e.stage_id,userName:e.profiles?.display_name||'Rider',avatarUrl:e.profiles?.avatar_url||null,context:e.context,ago:timeAgo(e.created_at)})));});},[user,refreshTick]);
   const [pushState,setPushState]=useState('hidden');
@@ -6327,7 +6372,7 @@ const postDayRecap=async()=>{
     const interval=setInterval(check,60000);
     return()=>{document.removeEventListener('visibilitychange',check);clearInterval(interval);};
   },[]);
-  useEffect(()=>{if(!user)return;const since=new Date();since.setDate(since.getDate()-83);since.setHours(0,0,0,0);supabase.from('stage_times').select('stage_id,time_ms,created_at').eq('user_id',user.id).gte('created_at',since.toISOString()).then(({data})=>{if(data)setRecentStageTimes(data);});},[user,refreshTick]);
+  useEffect(()=>{if(!user)return;const since=new Date();since.setDate(since.getDate()-83);since.setHours(0,0,0,0);supabase.from('stage_times').select('stage_id,time_ms,created_at,bike_id').eq('user_id',user.id).gte('created_at',since.toISOString()).then(({data})=>{if(data)setRecentStageTimes(data);});},[user,refreshTick]);
 
     const weeklyActivity=useMemo(()=>{
     const monday=getMonday(new Date());
@@ -6365,34 +6410,43 @@ const postDayRecap=async()=>{
     return buckets.map(b=>({stages:b.stages,mins:Math.round(b.mins)}));
   },[recentStageTimes,todayKey]);
 
-const weekStats=useMemo(()=>{
-  const thisMonday=getMonday(new Date());
-  const buckets=[];
-  for(let wk=11;wk>=0;wk--){
-    const start=new Date(thisMonday);
-    start.setDate(start.getDate()-wk*7);
-    const end=new Date(start);
-    end.setDate(end.getDate()+6);
-    end.setHours(23,59,59,999);
-    buckets.push({start,end,stageSet:new Set(),runs:0,mins:0,pbs:0,days:[false,false,false,false,false,false,false]});
-  }
-  const bestByStage={};
-  [...recentStageTimes].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).forEach(t=>{
-    const created=new Date(t.created_at);
-    const prev=bestByStage[t.stage_id];
+const weekStatsByType=useMemo(()=>{
+  const typeOf={};
+  bikes.forEach(b=>{typeOf[b.id]=b.bike_type||'enduro';});
+  const best={};
+  const runs=[...recentStageTimes].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).map(t=>{
+    const prev=best[t.stage_id];
     const isPb=prev!==undefined&&t.time_ms<prev;
-    if(prev===undefined||t.time_ms<prev)bestByStage[t.stage_id]=t.time_ms;
-    const bucket=buckets.find(b=>created>=b.start&&created<=b.end);
-    if(!bucket)return;
-    bucket.stageSet.add(t.stage_id);
-    bucket.runs+=1;
-    bucket.mins+=t.time_ms/60000;
-    if(isPb)bucket.pbs+=1;
-    const dayIdx=Math.round((new Date(created.getFullYear(),created.getMonth(),created.getDate())-new Date(bucket.start.getFullYear(),bucket.start.getMonth(),bucket.start.getDate()))/86400000);
-    if(dayIdx>=0&&dayIdx<7)bucket.days[dayIdx]=true;
+    if(prev===undefined||t.time_ms<prev)best[t.stage_id]=t.time_ms;
+    return{...t,isPb,type:t.bike_id?(typeOf[t.bike_id]||null):null};
   });
-  return buckets.map(b=>({stages:b.stageSet.size,runs:b.runs,mins:Math.round(b.mins),pbs:b.pbs,days:b.days}));
-},[recentStageTimes,todayKey]);
+  const build=list=>{
+    const thisMonday=getMonday(new Date());
+    const buckets=[];
+    for(let wk=11;wk>=0;wk--){
+      const start=new Date(thisMonday);
+      start.setDate(start.getDate()-wk*7);
+      const end=new Date(start);
+      end.setDate(end.getDate()+6);
+      end.setHours(23,59,59,999);
+      buckets.push({start,end,stageSet:new Set(),runs:0,mins:0,pbs:0,days:[false,false,false,false,false,false,false]});
+    }
+    list.forEach(t=>{
+      const created=new Date(t.created_at);
+      const bucket=buckets.find(b=>created>=b.start&&created<=b.end);
+      if(!bucket)return;
+      bucket.stageSet.add(t.stage_id);
+      bucket.runs+=1;
+      bucket.mins+=t.time_ms/60000;
+      if(t.isPb)bucket.pbs+=1;
+      const dayIdx=Math.round((new Date(created.getFullYear(),created.getMonth(),created.getDate())-new Date(bucket.start.getFullYear(),bucket.start.getMonth(),bucket.start.getDate()))/86400000);
+      if(dayIdx>=0&&dayIdx<7)bucket.days[dayIdx]=true;
+    });
+    return buckets.map(b=>({stages:b.stageSet.size,runs:b.runs,mins:Math.round(b.mins),pbs:b.pbs,days:b.days}));
+  };
+  return{all:build(runs),enduro:build(runs.filter(r=>r.type==='enduro')),dh:build(runs.filter(r=>r.type==='dh')),ebike:build(runs.filter(r=>r.type==='ebike'))};
+},[recentStageTimes,bikes,todayKey]);
+const weekStats=weekStatsByType.all;
 
   const dragRef=useRef(null),pinchRef=useRef(null);
   const onTouchStart=useCallback(e=>{if(e.touches.length===2){return;}else{dragRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY,center:{...mapCenter}};pinchRef.current=null;}},[mapCenter,zoom]);
@@ -6712,7 +6766,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
       {/* PROFILE */}
       {tab==="profile"&&(
         <div style={{height:"calc(var(--app-h) - 44px - 83px)",overflowY:"auto"}}>
-            <ProfileScreen stages={stages} settings={settings} courseResults={courseResults} weeklyActivity={weeklyActivity} pastWeeks={weekStats} courseCRCount={courseCRCount} onSettingsPress={()=>setShowSettings(true)} onStatPress={key=>setSheet('stat-'+key)} onGoToStages={()=>{setCoursesFilter('stages');setTab('stages');}} onGoToCourses={()=>{setCoursesFilter('courses');setTab('stages');}}onOpenProgress={()=>setShowProgress(true)} onOpenBikeSetup={()=>setShowBikeSetup(true)} followerCount={followerCount} onOpenFollowers={()=>setShowFollow(true)} onOpenTrophies={()=>setShowTrophies(true)}/>
+            <ProfileScreen stages={stages} settings={settings} courseResults={courseResults} weeklyActivity={weeklyActivity} pastWeeks={weekStats} weekByType={weekStatsByType} streak={streak} courseCRCount={courseCRCount} onSettingsPress={()=>setShowSettings(true)} onStatPress={key=>setSheet('stat-'+key)} onGoToStages={()=>{setCoursesFilter('stages');setTab('stages');}} onGoToCourses={()=>{setCoursesFilter('courses');setTab('stages');}}onOpenProgress={()=>setShowProgress(true)} onOpenBikeSetup={()=>setShowBikeSetup(true)} followerCount={followerCount} onOpenFollowers={()=>setShowFollow(true)} onOpenTrophies={()=>setShowTrophies(true)}/>
 
         </div>
       )}
