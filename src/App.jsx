@@ -2223,23 +2223,75 @@ function DifficultyChips({value,onChange,shadow=false}){
     </div>
   );
 }
-function PopularStageCard({stage,rank,rides,distKm,onPress}){
+function popularMapView(stage,W,H){
+  const raw=stage.line_coords&&stage.line_coords.length>1?stage.line_coords:[stage.start,stage.finish];
+  if(!raw||raw.length<2||!raw[0]||!raw[raw.length-1])return null;
+  const wx=lng=>(lng+180)/360*512;
+  const wy=lat=>{const s=Math.sin(lat*Math.PI/180);return(0.5-Math.log((1+s)/(1-s))/(4*Math.PI))*512;};
+  const P=raw.map(c=>[wx(c.lng),wy(c.lat)]);
+  const xs=P.map(p=>p[0]),ys=P.map(p=>p[1]);
+  const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+  const padX=14,top=26,bot=12;
+  const availW=W-padX*2,availH=H-top-bot;
+  const bw=Math.max(x1-x0,1e-9),bh=Math.max(y1-y0,1e-9);
+  const zoom=Math.max(10,Math.min(17,Math.log2(Math.min(availW/bw,availH/bh))));
+  const sc=Math.pow(2,zoom);
+  const mcx=(x0+x1)/2,mcy=(y0+y1)/2-((top+availH/2)-H/2)/sc;
+  const lng=mcx/512*360-180;
+  const n=Math.PI-2*Math.PI*mcy/512;
+  const lat=180/Math.PI*Math.atan(0.5*(Math.exp(n)-Math.exp(-n)));
+  const pts=P.map(p=>[(p[0]-mcx)*sc+W/2,(p[1]-mcy)*sc+H/2]);
+  return{lat,lng,zoom,pts};
+}
+function smoothRoutePath(pts){
+  const t=[pts[0]];
+  for(let i=1;i<pts.length-1;i++){const l=t[t.length-1];if(Math.hypot(pts[i][0]-l[0],pts[i][1]-l[1])>=1.6)t.push(pts[i]);}
+  t.push(pts[pts.length-1]);
+  if(t.length<3)return"M"+t.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join("L");
+  let d=`M${t[0][0].toFixed(1)},${t[0][1].toFixed(1)}`;
+  for(let i=1;i<t.length-1;i++){const mx=(t[i][0]+t[i+1][0])/2,my=(t[i][1]+t[i+1][1])/2;d+=`Q${t[i][0].toFixed(1)},${t[i][1].toFixed(1)} ${mx.toFixed(1)},${my.toFixed(1)}`;}
+  const l=t[t.length-1];
+  return d+`L${l[0].toFixed(1)},${l[1].toFixed(1)}`;
+}
+function PopularStageCard({stage,rank,rides,units,onPress}){
   const color=(DIFFICULTIES.find(d=>d.val===stage.difficulty)||DIFFICULTIES[0]).color;
-  const{d,start,end}=stageRouteThumb(stage,150,70,12);
+  const W=150,H=88;
+  const[steep,setSteep]=useState(undefined);
+  const[imgOk,setImgOk]=useState(true);
+  useEffect(()=>{
+    let off=false;
+    setSteep(undefined);
+    stageSteepPct(stage).then(v=>{if(!off)setSteep(v);}).catch(()=>{if(!off)setSteep(null);});
+    return()=>{off=true;};
+  },[stage.id]);
+  const m=popularMapView(stage,W,H);
+  const d=m?smoothRoutePath(m.pts):"";
+  const token=import.meta.env.VITE_MAPBOX_TOKEN;
+  const imgUrl=token&&m?`https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/static/${m.lng.toFixed(5)},${m.lat.toFixed(5)},${m.zoom.toFixed(2)}/${W}x${H}@2x?access_token=${token}`:null;
+  const lenM=stageLengthM(stage);
+  const miles=lenM/1609.34;
+  const lenTxt=lenM<=0?"":units==="imperial"?`${miles.toFixed(miles<1?2:1)}mi`:`${(lenM/1000).toFixed(lenM<1000?2:1)}km`;
+  const gradeTxt=typeof steep==="number"?`${steep}% grade`:"";
+  const st=m&&m.pts[0],en=m&&m.pts[m.pts.length-1];
   return(
     <button className="tap" onClick={()=>onPress(stage)} style={{flex:"0 0 150px",background:"#fff",border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden",textAlign:"left",padding:0}}>
-      <div style={{position:"relative"}}>
-        <svg viewBox="0 0 150 70" width="150" height="70" style={{display:"block"}}>
-          <rect width="150" height="70" fill={C.mapPark}/>
-          <path d={d} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-          <g transform={`translate(${start.x},${start.y}) rotate(45)`}><rect x="-4.5" y="-4.5" width="9" height="9" rx="1" fill={color} stroke="#fff" strokeWidth="1.6"/></g>
-          <circle cx={end.x} cy={end.y} r="4.5" fill="#fff" stroke={C.text} strokeWidth="1.6"/>
-        </svg>
+      <div style={{position:"relative",width:W,height:H,background:"radial-gradient(circle at 50% 50%,#fff 0%,#DCE3D8 100%)"}}>
+        {imgUrl&&imgOk&&<img src={imgUrl} alt="" width={W} height={H} onError={()=>setImgOk(false)} style={{position:"absolute",left:0,top:0,width:W,height:H,display:"block"}}/>}
+        {m&&<svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} style={{position:"absolute",left:0,top:0,display:"block"}}>
+          <path d={d} fill="none" stroke="#000" strokeOpacity="0.18" strokeWidth="5.2" strokeLinecap="round" strokeLinejoin="round" transform="translate(0,0.8)"/>
+          <path d={d} fill="none" stroke="#fff" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d={d} fill="none" stroke={color} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"/>
+          <circle cx={st[0]} cy={st[1]} r="4.6" fill={color} stroke="#fff" strokeWidth="1.8"/>
+          <circle cx={st[0]} cy={st[1]} r="1.5" fill="#fff"/>
+          <circle cx={en[0]} cy={en[1]} r="4.6" fill="#fff" stroke={C.text} strokeWidth="1.8"/>
+          <circle cx={en[0]} cy={en[1]} r="1.6" fill={C.text}/>
+        </svg>}
         <div style={{position:"absolute",top:6,left:6,background:"#fff",borderRadius:6,padding:"2px 7px",fontSize:11,fontWeight:800,color:C.text,boxShadow:"0 1px 3px rgba(0,0,0,0.15)"}}>#{rank}</div>
       </div>
       <div style={{padding:"9px 10px"}}>
-        <div style={{display:"flex",alignItems:"center",gap:5}}><DifficultyDiamond color={color} size={13}/><span style={{fontSize:13,fontWeight:700,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{stage.name}</span></div>
-        <div style={{fontSize:11,color:C.muted,marginTop:3}}>{rides} ride{rides===1?"":"s"} · {distKm.toFixed(1)}km away</div>
+        <div style={{display:"flex",alignItems:"center",gap:5}}><span style={{display:"flex",flexShrink:0}}><TallDiamond color={color} size={15}/></span><span style={{fontSize:13,fontWeight:700,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{stage.name}</span></div>
+        <div style={{fontSize:11,color:C.muted,marginTop:3,minHeight:14}}>{lenTxt}{lenTxt&&gradeTxt?" · ":""}{gradeTxt}</div>
+        <div style={{fontSize:11,color:"#9A9A9A",marginTop:1}}>{rides} ride{rides===1?"":"s"}</div>
       </div>
     </button>
   );
@@ -6432,7 +6484,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
             <div style={{padding:"16px 0 0"}}>
               <div style={{margin:"0 16px 8px"}}><span style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase"}}>Popular near you</span><span style={{fontSize:11,color:"#9A9A9A"}}> · most rides this month</span></div>
               <div style={{display:"flex",gap:10,overflowX:"auto",padding:"2px 16px 4px"}}>
-                {popularStages.map((s,i)=><PopularStageCard key={s.id} stage={s} rank={i+1} rides={stageRides[s.id]||0} distKm={haversine(userPos,s.start)/1000} onPress={st=>{setSelectedStage(st);setMapCenter({lat:st.start.lat,lng:st.start.lng});setZoom(15);setTab("map");}}/>)}
+                {popularStages.map((s,i)=><PopularStageCard key={s.id} stage={s} rank={i+1} rides={stageRides[s.id]||0} units={settings.units} onPress={st=>{setSelectedStage(st);setMapCenter({lat:st.start.lat,lng:st.start.lng});setZoom(15);setTab("map");}}/>)}
               </div>
             </div>
           )}
