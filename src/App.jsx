@@ -2266,6 +2266,7 @@ function NotificationsScreen({notifications,onBack,onMarkAll,onOpen}){
     if(n.kind==='record_lost')return{icon:<GoldCrown size={16}/>,bg:"#FFFBEB",main:<>{who} took your record on {n.subject_name}</>,sub:`${formatTime(n.new_time_ms)} · you had ${formatTime(n.old_time_ms)}`};
     if(n.kind==='course_record_lost')return{icon:<GoldCrown size={16}/>,bg:"#FFFBEB",main:<>{who} took your course record on {n.subject_name}</>,sub:`${formatTime(n.new_time_ms)} · you had ${formatTime(n.old_time_ms)}`};
     if(n.kind==='time_beaten')return{icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>,bg:"#EFF6FF",main:<>{who} beat your time on {n.subject_name}</>,sub:`${formatTime(n.new_time_ms)}${n.new_position?` · you're now P${n.new_position}`:""}`};
+    if(n.kind==='new_follower')return{icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><path d="M19 8v6M16 11h6"/></svg>,bg:"#EFF6FF",main:<>{who} started following you</>,sub:"Tap to see your followers"};
     const rides=n.ride_count||1,riders=(n.rider_ids||[]).length||1;
     return{icon:<Icon.Lightning size={16} color={C.muted}/>,bg:C.surface,main:<><span style={{fontWeight:700}}>{rides} ride{rides===1?"":"s"}</span> on your stage {n.subject_name}</>,sub:`${riders} rider${riders===1?"":"s"}`};
   };
@@ -6335,7 +6336,8 @@ const markAllNotificationsRead=()=>{
 const openNotification=(n)=>{
   if(!n.read_at)markNotificationRead(n.id);
   setShowNotifications(false);
-  if(n.kind==='course_record_lost'){setCoursesFilter('courses');setTab('stages');}
+  if(n.kind==='new_follower'){setShowFollow(true);}
+  else if(n.kind==='course_record_lost'){setCoursesFilter('courses');setTab('stages');}
   else if(n.stage_id)goToStage(n.stage_id);
 }; 
 const [todayStageTimes,setTodayStageTimes]=useState([]);
