@@ -2615,15 +2615,30 @@ function pickBike(s){const o={};BIKE_KEYS.forEach(k=>{o[k]=s[k]??DEFAULT_SETTING
 function bikeSettings(b){return{...pickBike(DEFAULT_SETTINGS),...(b.setup||{}),bikeName:b.name||""};}
 function profileBikeUpdate(s){return{bike_name:s.bikeName,rider_weight:s.riderWeight,tire_dry_front:s.tireDryFront,tire_dry_rear:s.tireDryRear,tire_wet_front:s.tireWetFront,tire_wet_rear:s.tireWetRear,shock_mode:s.shockMode,shock_psi:s.shockPsi,shock_spring_rate:s.shockSpringRate,shock_lsc:s.shockLsc,shock_hsc:s.shockHsc,shock_lsr:s.shockLsr,shock_hsr:s.shockHsr,shock_hsb:s.shockHsb,shock_tokens:s.shockTokens,shock_sag:s.shockSag,fork_mode:s.forkMode,fork_psi:s.forkPsi,fork_spring_rate:s.forkSpringRate,fork_lsc:s.forkLsc,fork_hsc:s.forkHsc,fork_lsr:s.forkLsr,fork_hsr:s.forkHsr,fork_hsb:s.forkHsb,fork_tokens:s.forkTokens,fork_sag:s.forkSag,bike_notes:s.bikeNotes,fork_notes:s.forkNotes,shock_notes:s.shockNotes};}
 
+const BIKE_TYPES=[{val:"enduro",label:"Enduro"},{val:"dh",label:"DH"},{val:"ebike",label:"E-bike"}];
+function BikeTypePicker({value,onChange}){
+  return(
+    <div style={{marginBottom:14}}>
+      <div style={{fontSize:10,fontWeight:600,color:C.muted,letterSpacing:0.8,marginBottom:6}}>BIKE TYPE</div>
+      <div style={{display:"flex",gap:8}}>
+        {BIKE_TYPES.map(t=>{const on=value===t.val;return(
+          <button key={t.val} className="tap" onClick={()=>onChange(t.val)} style={{flex:1,padding:"11px 0",borderRadius:10,border:on?`1.5px solid ${C.blue}`:`1.5px solid ${C.border}`,background:on?`${C.blue}15`:C.surface,fontSize:13,fontWeight:on?700:500,color:on?C.blue:C.text}}>{t.label}</button>
+        );})}
+      </div>
+      <div style={{fontSize:11,color:C.muted,marginTop:8,lineHeight:1.4}}>Runs on this bike count under {(BIKE_TYPES.find(t=>t.val===value)||BIKE_TYPES[0]).label} in your week on Profile.</div>
+    </div>
+  );
+}
 function BikeDetailsScreen({user,bike,isActive,settings,setSettings,onSaved,onBack}){
   const [s,setS]=useState(()=>bikeSettings(bike));
+  const [bt,setBt]=useState(bike.bike_type||"enduro");
   const [saving,setSaving]=useState(false);
   const setField=(key,val)=>setS(prev=>({...prev,[key]:val}));
   const saveAndClose=async()=>{
     if(saving)return;
     setSaving(true);
     const name=(s.bikeName||"").trim()||"My bike";
-    const{data,error}=await supabase.from('bikes').update({name,setup:pickBike(s)}).eq('id',bike.id).select().single();
+    const{data,error}=await supabase.from('bikes').update({name,setup:pickBike(s),bike_type:bt}).eq('id',bike.id).select().single();
     if(error){setSaving(false);alert("Couldn't save bike: "+error.message);return;}
     if(isActive){
       const merged={...settings,...s,bikeName:name};
@@ -2646,6 +2661,7 @@ function BikeDetailsScreen({user,bike,isActive,settings,setSettings,onSaved,onBa
           <img src="/bike-setup.jpeg" alt="Bike" style={{width:"100%",height:"auto",display:"block",margin:"0 auto 14px"}}/>
           <input value={s.bikeName} onChange={e=>setField("bikeName",e.target.value)} placeholder="Name your bike" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"12px 14px",fontSize:16,fontWeight:700,color:C.text,background:C.surface,marginBottom:12,boxSizing:"border-box",textAlign:"center"}}/>
           <div style={{marginBottom:14}}>
+            <BikeTypePicker value={bt} onChange={setBt}/>
             <UnitField label="Rider weight — with gear" unit="kg" value={s.riderWeight} onChange={v=>setField("riderWeight",v)}/>
           </div>
           <div style={{fontSize:10,fontWeight:700,color:C.mutedL,letterSpacing:0.6,textTransform:"uppercase",marginBottom:6}}>Dry</div>
@@ -6111,7 +6127,7 @@ export default function App(){
   useEffect(()=>{ACTIVE_BIKE_ID=activeBikeId;},[activeBikeId]);
   useEffect(()=>{
     if(!user)return;
-    supabase.from('bikes').select('id,name,setup,created_at').order('created_at',{ascending:true}).then(({data})=>{if(data)setBikes(data);});
+    supabase.from('bikes').select('id,name,setup,bike_type,created_at').order('created_at',{ascending:true}).then(({data})=>{if(data)setBikes(data);});
     supabase.from('profiles').select('active_bike_id').eq('id',user.id).single().then(({data})=>{if(data)setActiveBikeId(data.active_bike_id||null);});
   },[user,refreshTick]);
   const deleteStage=async(id)=>{
