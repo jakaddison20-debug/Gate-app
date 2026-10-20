@@ -4309,7 +4309,7 @@ function StreakCard({streak}){
     ?(cur>1&&cur>=best?"Your longest yet":best>cur?`Best ${wk(best)}`:"Keep it going")
     :(cur>0?`Ride this week to make it ${cur+1}`:(best>0?`Best ${wk(best)} · ride this week to start one`:"Ride this week to start one"));
   return(
-    <div style={{padding:"18px 16px 0"}}>
+    <div style={{padding:"26px 16px 0"}}>
       <div style={{border:`1px solid ${C.border}`,borderRadius:14,padding:14,display:"flex",alignItems:"center",gap:12}}>
         <div style={{width:38,height:38,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><SparkBolt color={rode?C.blue:C.mutedL}/></div>
         <div style={{flex:1,minWidth:0}}>
@@ -4321,7 +4321,34 @@ function StreakCard({streak}){
     </div>
   );
 }
-function ProfileScreen({streak,stages,settings,courseResults,pastWeeks,weekByType,onSettingsPress,onGoToStages,onGoToCourses,onOpenProgress,onOpenBikeSetup,followerCount,onOpenFollowers,onOpenTrophies}){
+function ProfileTrophyCard({counts,onOpen}){
+  const c=counts||{gold:0,silver:0,bronze:0};
+  const medal=(pos,n,big)=>{
+    const m=TROPHY_MEDAL[pos],has=n>0,sz=big?52:44;
+    return(
+      <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",paddingTop:big?0:6}}>
+        <div style={{width:sz,height:sz,borderRadius:"50%",border:has?`2.5px solid ${m.col}`:`1.5px dashed ${C.mutedL}`,background:has?m.bg:"#fff",display:"flex",alignItems:"center",justifyContent:"center"}}><TrophyCrown size={big?24:20} color={has?m.col:C.mutedL}/></div>
+        <div style={{display:"flex",alignItems:"baseline",gap:5,marginTop:7}}>
+          <span style={{fontSize:big?18:16,fontWeight:800,color:has?C.text:C.mutedL,lineHeight:1}}>{n}</span>
+          <span style={{fontSize:10,fontWeight:600,color:has?C.muted:C.mutedL}}>{m.name}</span>
+        </div>
+      </div>
+    );
+  };
+  return(
+    <div style={{padding:"26px 16px 0"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
+        <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase"}}>Trophy cabinet</div>
+        <button className="tap" onClick={onOpen} style={{background:"none",border:"none",padding:0,fontSize:12,color:C.muted}}>View all ›</button>
+      </div>
+      <button className="tap" onClick={onOpen} style={{width:"100%",background:"none",border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 10px",display:"flex",alignItems:"flex-end"}}>
+        {medal(2,c.silver)}{medal(1,c.gold,true)}{medal(3,c.bronze)}
+      </button>
+    </div>
+  );
+}
+
+function ProfileScreen({trophyCounts,streak,stages,settings,courseResults,pastWeeks,weekByType,onSettingsPress,onGoToStages,onGoToCourses,onOpenProgress,onOpenBikeSetup,followerCount,onOpenFollowers,onOpenTrophies}){
   const [selectedWeek,setSelectedWeek]=useState(pastWeeks.length-1);
   const stagesRidden=stages.filter(s=>s.time).length;
   const coursesComplete=courseResults.length;
@@ -4352,8 +4379,9 @@ function ProfileScreen({streak,stages,settings,courseResults,pastWeeks,weekByTyp
         </div>
       </div>
 
+      <ProfileTrophyCard counts={trophyCounts} onOpen={onOpenTrophies}/>
       {streak&&<StreakCard streak={streak}/>}
-      <div style={{padding:streak?"14px 16px 0":"18px 16px 0"}}>
+      <div style={{padding:"26px 16px 0"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
           <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase"}}>Your week</div>
           <div style={{fontSize:12,color:C.muted}}>{weekLabel}</div>
@@ -4396,10 +4424,9 @@ function ProfileScreen({streak,stages,settings,courseResults,pastWeeks,weekByTyp
         </div>
       </div>
 
-      <div style={{padding:"10px 16px 24px"}}>
+      <div style={{padding:"18px 16px 24px"}}>
         {[
           {label:"Statistics",Ic:Icon.BarChart,onClick:onOpenProgress},
-          {label:"Trophies",Ic:Icon.Crown,onClick:onOpenTrophies},
           {label:"Stages",Ic:Icon.Lightning,onClick:onGoToStages},
           {label:"Courses",Ic:Icon.Flag,onClick:onGoToCourses},
           {label:"Garage",Ic:Icon.Bike,onClick:onOpenBikeSetup},
@@ -6426,6 +6453,8 @@ useEffect(()=>{
 },[stageIdsKey,user,refreshTick]);
 const [notifications,setNotifications]=useState([]);
 const [showNotifications,setShowNotifications]=useState(false);
+const [trophyCounts,setTrophyCounts]=useState(null);
+useEffect(()=>{if(!user)return;supabase.rpc('list_trophy_h2h').then(({data,error})=>{if(error||!Array.isArray(data))return;setTrophyCounts({gold:data.filter(r=>r.result!=="lost").length,silver:data.filter(r=>r.result==="lost").length,bronze:0});});},[user,refreshTick]);
 useEffect(()=>{if(!user)return;supabase.from('notifications').select('*').eq('user_id',user.id).order('created_at',{ascending:false}).limit(50).then(({data})=>{if(data)setNotifications(data);});},[user,refreshTick]);
 const shownNotifications=notifications.filter(n=>!(n.kind==='new_follower'&&settings.notifications&&settings.notifications.newFollower===false));
 const unreadCount=shownNotifications.filter(n=>!n.read_at).length;
@@ -6686,11 +6715,11 @@ if(showBikeSetup)return(
         <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",background:"#fff",overflow:"hidden",fontFamily:"'Inter',sans-serif"}}>
       <style>{STYLES}</style>
       <Analytics/>
-      <div style={{height:44,background:tab==="map"?"transparent":"#fff",position:"relative",zIndex:10}}/>
+      <div style={{height:"env(safe-area-inset-top, 0px)",background:tab==="map"?"transparent":"#fff",position:"relative",zIndex:10}}/>
 
             {/* HOME */}
       {tab==="home"&&(
-        <div style={{height:"calc(var(--app-h) - 44px)",overflowY:"auto",paddingBottom:100}}>
+        <div style={{height:"calc(var(--app-h) - env(safe-area-inset-top, 0px))",overflowY:"auto",paddingBottom:100}}>
           <div style={{padding:"12px 16px 14px",borderBottom:`1px solid ${C.border}`,position:"sticky",top:0,background:"#fff",zIndex:5}}>
             <div style={{fontSize:22,fontWeight:800,color:C.text,marginBottom:12}}>Feed</div>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -6746,7 +6775,7 @@ if(showBikeSetup)return(
           <div style={{position:"absolute",inset:0,cursor:"grab",touchAction:"none"}} onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
               <MapboxStyleMap center={mapCenter} zoom={zoom} flyToTrigger={flyToTrigger} width={mapSize.w} height={mapSize.h} stages={stages} courses={courses} userPos={userPos} userHeading={userHeading} diffFilter={diffFilter} onStagePress={s=>pickingGroup?handlePickStage(s):setSelectedStage(s)}/>
           </div>
-                       <div style={{position:"absolute",top:52,left:16,right:16,zIndex:10}}>
+                       <div style={{position:"absolute",top:"calc(env(safe-area-inset-top, 0px) + 12px)",left:16,right:16,zIndex:10}}>
             {pickingGroup?(
               <div style={{background:C.blue,borderRadius:12,padding:"12px 14px",boxShadow:"0 2px 10px rgba(0,0,0,0.15)",display:"flex",alignItems:"center",gap:10}}>
                 <div style={{flex:1}}>
@@ -6782,7 +6811,7 @@ if(showBikeSetup)return(
           </div>       
 
           {!pickingGroup&&(
-            <div style={{position:"absolute",top:106,left:16,right:16,zIndex:9}}>
+            <div style={{position:"absolute",top:"calc(env(safe-area-inset-top, 0px) + 66px)",left:16,right:16,zIndex:9}}>
               <DifficultyChips value={diffFilter} onChange={setDiffFilter} shadow/>
             </div>
           )}
@@ -6805,7 +6834,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
 
       {/* STAGES */}
       {tab==="stages"&&(
-        <div style={{height:"calc(var(--app-h) - 44px)",overflowY:"auto",paddingBottom:100}}>
+        <div style={{height:"calc(var(--app-h) - env(safe-area-inset-top, 0px))",overflowY:"auto",paddingBottom:100}}>
                     <div style={{padding:"12px 16px 0",position:"sticky",top:0,background:"#fff",zIndex:5,borderBottom:`1px solid ${C.border}`,paddingBottom:12}}>
             <div style={{display:"flex",background:C.surface,borderRadius:10,padding:3,marginBottom:12}}>
               {[{val:"stages",label:"Stages"},{val:"courses",label:"Courses"}].map(t=>(
@@ -6873,8 +6902,8 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
 
       {/* PROFILE */}
       {tab==="profile"&&(
-        <div style={{height:"calc(var(--app-h) - 44px)",overflowY:"auto",paddingBottom:100}}>
-            <ProfileScreen stages={stages} settings={settings} courseResults={courseResults} weeklyActivity={weeklyActivity} pastWeeks={weekStats} weekByType={weekStatsByType} streak={streak} courseCRCount={courseCRCount} onSettingsPress={()=>setShowSettings(true)} onStatPress={key=>setSheet('stat-'+key)} onGoToStages={()=>{setCoursesFilter('stages');setTab('stages');}} onGoToCourses={()=>{setCoursesFilter('courses');setTab('stages');}}onOpenProgress={()=>setShowProgress(true)} onOpenBikeSetup={()=>setShowBikeSetup(true)} followerCount={followerCount} onOpenFollowers={()=>setShowFollow(true)} onOpenTrophies={()=>setShowTrophies(true)}/>
+        <div style={{height:"calc(var(--app-h) - env(safe-area-inset-top, 0px))",overflowY:"auto",paddingBottom:100}}>
+            <ProfileScreen stages={stages} settings={settings} courseResults={courseResults} weeklyActivity={weeklyActivity} pastWeeks={weekStats} weekByType={weekStatsByType} streak={streak} courseCRCount={courseCRCount} onSettingsPress={()=>setShowSettings(true)} onStatPress={key=>setSheet('stat-'+key)} onGoToStages={()=>{setCoursesFilter('stages');setTab('stages');}} onGoToCourses={()=>{setCoursesFilter('courses');setTab('stages');}}onOpenProgress={()=>setShowProgress(true)} onOpenBikeSetup={()=>setShowBikeSetup(true)} followerCount={followerCount} onOpenFollowers={()=>setShowFollow(true)} onOpenTrophies={()=>setShowTrophies(true)} trophyCounts={trophyCounts}/>
 
         </div>
       )}
