@@ -1447,19 +1447,34 @@ const fmtShort=ms=>Math.floor(ms/60000)+':'+String(Math.round((ms%60000)/1000)).
 const monthIndex=d=>{const x=new Date(d);return x.getFullYear()*12+x.getMonth();};
 const monthName=(idx,style='long')=>{const n=new Date(Math.floor(idx/12),idx%12,1).toLocaleDateString('en-GB',{month:'long'});return style==='short'?n.slice(0,3):n;};
 
-// This calendar month vs last calendar month (average run time). Needs 2+ runs in each month.
-function calcImprovement(runs,now=new Date()){
-  if(!runs)return null;
-  const cur=monthIndex(now),prev=cur-1;
-  const a=runs.filter(r=>monthIndex(r.created_at)===prev);
-  const b=runs.filter(r=>monthIndex(r.created_at)===cur);
+const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
+// Compares two sets of runs by average run time. Needs 2+ runs in each.
+function impBuild(a,b,lab){
   if(a.length<2||b.length<2)return null;
   const avg=arr=>arr.reduce((s,r)=>s+r.time_ms,0)/arr.length;
   const bestOf=arr=>Math.min(...arr.map(r=>r.time_ms));
   const pa=avg(a),ca=avg(b);
   return{prevAvg:pa,curAvg:ca,prevBest:bestOf(a),curBest:bestOf(b),prevRuns:a,curRuns:b,prevCount:a.length,curCount:b.length,
-    diffMs:pa-ca,pct:((pa-ca)/pa)*100,
-    prevLong:monthName(prev),curLong:monthName(cur),prevShort:monthName(prev,'short'),curShort:monthName(cur,'short')};
+    diffMs:pa-ca,pct:((pa-ca)/pa)*100,...lab};
+}
+// This calendar month vs last calendar month
+function calcImprovementMonth(runs,now=new Date()){
+  const cur=monthIndex(now),prev=cur-1;
+  return impBuild(runs.filter(r=>monthIndex(r.created_at)===prev),runs.filter(r=>monthIndex(r.created_at)===cur),
+    {mode:'month',prevLong:monthName(prev),curLong:monthName(cur),prevShort:monthName(prev,'short'),curShort:monthName(cur,'short'),inPrev:'in '+monthName(prev),inCur:'in '+monthName(cur)});
+}
+// Last 7 days vs the 7 days before
+function calcImprovementWeek(runs,now=new Date()){
+  const D=86400000,t=now.getTime(),at=r=>new Date(r.created_at).getTime();
+  return impBuild(runs.filter(r=>at(r)>t-14*D&&at(r)<=t-7*D),runs.filter(r=>at(r)>t-7*D&&at(r)<=t),
+    {mode:'week',prevLong:'last week',curLong:'this week',prevShort:'Last wk',curShort:'This wk',inPrev:'last week',inCur:'this week'});
+}
+// mode 'month' or 'week' forces one. No mode = month if you have it, otherwise the weekly one.
+function calcImprovement(runs,now=new Date(),mode){
+  if(!runs)return null;
+  if(mode==='month')return calcImprovementMonth(runs,now);
+  if(mode==='week')return calcImprovementWeek(runs,now);
+  return calcImprovementMonth(runs,now)||calcImprovementWeek(runs,now);
 }
 
 // --- Improvement stage-sheet card ---
@@ -1472,9 +1487,9 @@ function StageImprovementCard({myAttempts,defaultOpen=false}){
     const nCur=myAttempts.filter(r=>monthIndex(r.created_at)===cur).length,nPrev=myAttempts.filter(r=>monthIndex(r.created_at)===prev).length;
     return(
       <InsightTile
-        open={open} onToggle={()=>setOpen(o=>!o)} title="Improvement" sub="Needs 2+ runs in both months"
+        open={open} onToggle={()=>setOpen(o=>!o)} title="Improvement" sub="Needs 2+ runs in each of the last 2 weeks"
         ring={<InsightRing pct={0} color={C.green}><span style={{fontSize:11,fontWeight:800,color:C.text}}>–</span></InsightRing>}>
-        <div style={{fontSize:12,color:C.muted,lineHeight:1.5}}>You've ridden this stage {nCur} time{nCur===1?'':'s'} in {monthName(cur)} and {nPrev} in {monthName(prev)}. Ride it at least twice in each month to see how your average run is changing.</div>
+        <div style={{fontSize:12,color:C.muted,lineHeight:1.5}}>Ride this stage at least twice in each of the last 2 weeks to see how your average run is changing.</div>
       </InsightTile>
     );
   }
@@ -1487,7 +1502,7 @@ function StageImprovementCard({myAttempts,defaultOpen=false}){
   const ticks=[lo,(lo+hi)/2,hi];
   const xa=xs(im.prevAvg),xb=xs(im.curAvg);
   const bestDrop=(Math.min(...im.prevRuns.map(r=>r.time_ms))-Math.min(...im.curRuns.map(r=>r.time_ms)))/1000;
-  const tip=`You rode ${im.curCount} times in ${im.curLong} against ${im.prevCount} in ${im.prevLong}, and your best ${bestDrop>=0?'dropped by ':'is '}${Math.abs(bestDrop).toFixed(1)}s${bestDrop>=0?'.':' slower.'}`;
+  const tip=`You rode ${im.curCount} times ${im.inCur} against ${im.prevCount} ${im.inPrev}, and your best ${bestDrop>=0?'dropped by ':'is '}${Math.abs(bestDrop).toFixed(1)}s${bestDrop>=0?'.':' slower.'}`;
   const card=(name,avg,best,count)=>(
     <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:12}}>
       <MiniLabel>{name.toUpperCase()}</MiniLabel>
@@ -1498,16 +1513,16 @@ function StageImprovementCard({myAttempts,defaultOpen=false}){
   );
   return(
     <InsightTile
-      open={open} onToggle={()=>setOpen(o=>!o)} title="Improvement" sub={`${im.curLong} vs ${im.prevLong}`}
+      open={open} onToggle={()=>setOpen(o=>!o)} title="Improvement" sub={`${cap(im.curLong)} vs ${im.prevLong}`}
       ring={<InsightRing pct={ringPct} color={color}><span style={{fontSize:11,letterSpacing:-0.4,fontWeight:800,color:C.text}}>{fmtPct(im.pct)}</span></InsightRing>}>
       <div style={{fontSize:17,fontWeight:800,color}}>{Math.abs(im.diffMs/1000).toFixed(1)}s {up?'faster':'slower'} than {im.prevLong}</div>
-      <div style={{fontSize:12,color:C.muted,lineHeight:1.45,marginTop:6}}>Your average run in {im.curLong} against your average run in {im.prevLong}.</div>
+      <div style={{fontSize:12,color:C.muted,lineHeight:1.45,marginTop:6}}>Your average run {im.inCur} against your average run {im.inPrev}.</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginTop:12}}>
         {card(im.prevLong,im.prevAvg,im.prevBest,im.prevCount)}
         {card(im.curLong,im.curAvg,im.curBest,im.curCount)}
       </div>
       <div style={{display:"flex",justifyContent:"space-between",marginTop:16,marginBottom:4}}>
-        <MiniLabel>EVERY RUN, BY MONTH</MiniLabel><div style={{fontSize:10,color:C.muted}}>left = faster</div>
+        <MiniLabel>{im.mode==='week'?'EVERY RUN, BY WEEK':'EVERY RUN, BY MONTH'}</MiniLabel><div style={{fontSize:10,color:C.muted}}>left = faster</div>
       </div>
       <svg viewBox="0 0 320 112" width="100%" height="112" style={{display:"block"}}>
         <line x1={XL} y1="32" x2={XR} y2="32" stroke="#EDEDED" strokeWidth="1"/>
@@ -1522,7 +1537,7 @@ function StageImprovementCard({myAttempts,defaultOpen=false}){
         <rect x={xb-1} y="72" width="2" height="20" rx="1" fill={C.text}/>
         {ticks.map((t,i)=><text key={i} x={xs(t)} y="108" fill="#C4C4C4" fontSize="9" textAnchor={i===0?"start":i===2?"end":"middle"}>{fmtShort(t)}</text>)}
       </svg>
-      <div style={{fontSize:10,color:C.mutedL,marginTop:4,textAlign:"center"}}>dots = your runs &middot; bar = month average</div>
+      <div style={{fontSize:10,color:C.mutedL,marginTop:4,textAlign:"center"}}>dots = your runs &middot; bar = {im.mode} average</div>
       <TipBox>{tip}</TipBox>
     </InsightTile>
   );
@@ -1531,14 +1546,16 @@ function StageImprovementCard({myAttempts,defaultOpen=false}){
 // --- Improvement Statistics pieces ---
 function improvementRows(grouped,stages){
   if(!grouped)return null;
-  const cur=monthIndex(new Date());
+  const now=new Date(),D=86400000,cur=monthIndex(now);
+  // month vs month once you have it, otherwise the last 7 days vs the 7 before
+  const mode=Object.keys(grouped).some(id=>calcImprovement(grouped[id],now,'month'))?'month':'week';
   return Object.keys(grouped).map(id=>{
     const stage=stages.find(s=>String(s.id)===String(id));
     if(!stage)return null;
-    const im=calcImprovement(grouped[id]);
-    const runsThisMonth=grouped[id].filter(r=>monthIndex(r.created_at)===cur).length;
+    const im=calcImprovement(grouped[id],now,mode);
+    const runsThisMonth=grouped[id].filter(r=>mode==='month'?monthIndex(r.created_at)===cur:new Date(r.created_at).getTime()>now.getTime()-7*D).length;
     if(!im&&runsThisMonth===0)return null;
-    return{stage,im,runsThisMonth};
+    return{stage,im,runsThisMonth,mode};
   }).filter(Boolean);
 }
 
