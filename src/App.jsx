@@ -548,7 +548,7 @@ map.current.addImage('stage-pin',ctx.getImageData(0,0,24,24));
 
           const diffColors={blue:'#2563EB',red:'#DC2626',black:'#1A1A1A'};
           const stageColor=diffColors[stage.difficulty]||'#2563EB';
-          const startEl=document.createElement('div');startEl.innerHTML=`<div style="width:18px;height:18px;transform-origin:center;transition:transform 0.1s ease;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35));"><svg width="18" height="18" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="1.5" fill="${stageColor}" stroke="white" stroke-width="2" transform="rotate(45 12 12)"/></svg></div>`;
+          const startEl=document.createElement('div');startEl.innerHTML=`<div style="width:18px;height:18px;transform-origin:center;transition:transform 0.1s ease;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35));"><svg width="14" height="18" viewBox="0 0 18 24" style="display:block;margin:0 auto;overflow:visible"><path d="M9 1L17 12 9 23 1 12z" fill="${stageColor}" stroke="white" stroke-width="2.6" stroke-linejoin="round"/></svg></div>`;
           new mapboxgl.Marker({element:startEl}).setLngLat([stage.start.lng,stage.start.lat]).addTo(map.current);
           gateMarkersRef.current.push(startEl.firstElementChild);markerStagesRef.current.push({el:startEl,difficulty:stage.difficulty||'blue'});
           const finishEl=document.createElement('div');finishEl.innerHTML='<div style="width:18px;height:18px;border-radius:50%;background:white;border:2px solid #1A1A1A;box-shadow:0 2px 6px rgba(0,0,0,0.3);overflow:hidden;transform-origin:center;transition:transform 0.1s ease;"><svg width="14" height="14" viewBox="0 0 8 8"><rect width="2" height="2" fill="#1A1A1A"/><rect x="4" width="2" height="2" fill="#1A1A1A"/><rect x="2" y="2" width="2" height="2" fill="#1A1A1A"/><rect x="6" y="2" width="2" height="2" fill="#1A1A1A"/><rect y="4" width="2" height="2" fill="#1A1A1A"/><rect x="4" y="4" width="2" height="2" fill="#1A1A1A"/><rect x="2" y="6" width="2" height="2" fill="#1A1A1A"/><rect x="6" y="6" width="2" height="2" fill="#1A1A1A"/></svg></div>';
@@ -2143,7 +2143,7 @@ function SegmentRow({stage,onPress}){
 function PositionBadge({pos,size=32}){const crownColor=pos===1?"#C9A227":pos===2?"#AEB2B8":pos===3?"#AD8158":null;return(<div style={{display:"flex",flexDirection:"column",alignItems:"center"}}>{crownColor&&<svg width={size*0.5} height={size*0.4} viewBox="0 0 24 20" style={{marginBottom:-size*0.06}}><path d="M3 19l-1.5-10L7 13l5-9 5 9 5.5-4L20 19H3z" fill={crownColor} stroke={crownColor} strokeLinejoin="round" strokeWidth="1"/><rect x="3" y="17" width="17" height="2.6" rx="1" fill={crownColor}/></svg>}<span style={{fontSize:size*0.44,fontWeight:800,color:C.text,letterSpacing:-0.5}}>P{pos}</span></div>);}
 const DIFFICULTIES=[{val:"blue",label:"Blue",color:C.blue},{val:"red",label:"Red",color:C.red},{val:"black",label:"Black",color:"#1A1A1A"}];
 function DifficultyDiamond({color,size=20}){
-  return <svg width={size} height={size} viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" fill={color} transform="rotate(45 12 12)"/></svg>;
+  return <TallDiamond color={color} size={size}/>;
 }
 function DifficultyPicker({value,onChange}){
   return(
@@ -4097,7 +4097,7 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
                   return(
                     <div key={r.id} style={{padding:"12px 0",borderBottom:`1px solid ${C.border}`}}>
                       <div style={{display:"flex",alignItems:"center",gap:10}}>
-                        <svg width="16" height="16" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5" fill={color} transform="rotate(45 12 12)"/></svg>
+                        <TallDiamond color={color} size={16}/>
                         <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</div><div style={{fontSize:12,color:C.muted,marginTop:1}}>{r.riders} rider{r.riders===1?"":"s"}</div></div>
                         <div style={{textAlign:"right"}}><div style={{fontSize:16,fontWeight:800,color:C.text}}>{r.rides}</div><div style={{fontSize:10,color:C.muted}}>ride{r.rides===1?"":"s"}</div></div>
                       </div>
@@ -5881,7 +5881,7 @@ async function drawRecapImage(recap,name){
     const ry=y+i*rowH;
     if(i){ctx.beginPath();ctx.moveTo(P,ry);ctx.lineTo(P+mapW,ry);ctx.strokeStyle=C.border;ctx.stroke();}
     const col=(DIFFICULTIES.find(d=>d.val===s.diff)||DIFFICULTIES[0]).color;
-    ctx.save();ctx.translate(P+44,ry+rowH/2);ctx.rotate(Math.PI/4);ctx.fillStyle=col;ctx.fillRect(-12,-12,24,24);ctx.restore();
+    ctx.save();ctx.translate(P+44,ry+rowH/2);ctx.fillStyle=col;ctx.beginPath();ctx.moveTo(0,-17);ctx.lineTo(14,0);ctx.lineTo(0,17);ctx.lineTo(-14,0);ctx.closePath();ctx.fill();ctx.restore();
     ctx.fillStyle=C.text;ctx.font=`600 38px ${F}`;ctx.fillText(s.name,P+86,ry+54);
     ctx.fillStyle=C.muted;ctx.font=`400 28px ${F}`;ctx.fillText(`${s.runs} run${s.runs===1?'':'s'}${s.mph?` · ${s.mph.toFixed(1)} mph`:''}`,P+86,ry+90);
     ctx.textAlign='right';ctx.fillStyle=C.text;ctx.font=`700 42px ${F}`;const t=formatTime(s.best);ctx.fillText(t,P+mapW-36,ry+rowH/2+15);
