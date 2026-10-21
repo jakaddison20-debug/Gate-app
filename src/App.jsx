@@ -3299,6 +3299,23 @@ function H2hScreen({user,onBack,onActivity}){
   const [picked,setPicked]=useState(null);
   const [sending,setSending]=useState(false);
   const [groups,setGroups]=useState([]);
+  const [sheet,setSheet]=useState(false);
+  const [gPicked,setGPicked]=useState([]);
+  const [gMates,setGMates]=useState(null);
+  const [gQuery,setGQuery]=useState("");
+  const [gSending,setGSending]=useState(false);
+  const openGroupPick=()=>{
+    setGPicked([]);setGMates(null);setGQuery("");setView({name:"gpick"});
+    supabase.rpc("list_connections").then(({data})=>setGMates(Array.isArray(data?.following)?data.following:[]));
+  };
+  const sendGroup=async()=>{
+    if(!gPicked.length)return;
+    setGSending(true);
+    const{error}=await supabase.rpc("create_group_ride",{p_members:gPicked});
+    setGSending(false);
+    if(error){alert(error.message);return;}
+    reload();setView({name:"home"});
+  };
 
   const reload=useCallback(()=>{
     supabase.rpc("list_group_rides").then(({data,error})=>{if(!error&&Array.isArray(data))setGroups(data);});
@@ -3395,6 +3412,47 @@ function H2hScreen({user,onBack,onActivity}){
     </div>
   );
 
+  // ── pick riders for a group ride
+  if(view.name==="gpick"){
+    const q=gQuery.trim().toLowerCase();
+    const shown=(gMates||[]).filter(m=>(m.display_name||"Rider").toLowerCase().includes(q));
+    const n=gPicked.length;
+    const toggle=id=>setGPicked(p=>p.includes(id)?p.filter(x=>x!==id):(p.length>=6?p:[...p,id]));
+    return(
+      <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
+        {header("Start a group ride",null,()=>setView({name:"home"}))}
+        <div style={{flex:1,overflowY:"auto",padding:"16px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,background:"#fff",border:`1px solid ${C.border}`,borderRadius:12,padding:"0 14px",marginBottom:14}}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.mutedL} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+            <input value={gQuery} onChange={e=>setGQuery(e.target.value)} placeholder="Search people you follow" style={{flex:1,border:"none",outline:"none",background:"none",padding:"13px 0",fontSize:14,fontFamily:"inherit",color:C.text}}/>
+          </div>
+          {label("People you follow")}
+          {gMates===null?<div style={{padding:30,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>:gMates.length===0?(
+            <div style={{textAlign:"center",padding:"32px 20px",color:C.muted}}>
+              <Icon.Users size={34} color={C.mutedL}/>
+              <div style={{fontSize:15,fontWeight:500,marginTop:12,marginBottom:4,color:C.text}}>No one to ride with yet</div>
+              <div style={{fontSize:13,color:C.mutedL}}>Follow some riders first</div>
+            </div>
+          ):shown.length===0?<div style={{textAlign:"center",fontSize:13,color:C.mutedL,padding:"30px 0"}}>No one found</div>
+          :shown.map(m=>{
+            const sel=gPicked.includes(m.user_id);
+            return(
+              <button key={m.user_id} className="tap" onClick={()=>toggle(m.user_id)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:sel?"#EFF6FF":C.surface,border:`${sel?1.5:1}px solid ${sel?C.blue:C.border}`,borderRadius:12,marginBottom:8,textAlign:"left"}}>
+                <Avatar size={42} url={m.avatar_url}/>
+                <div style={{flex:1,minWidth:0,fontSize:14,fontWeight:700,color:C.text}}>{m.display_name||"Rider"}</div>
+                <div style={{width:24,height:24,borderRadius:"50%",border:`2px solid ${sel?C.blue:C.mutedL}`,background:sel?C.blue:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{sel&&<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>}</div>
+              </button>
+            );
+          })}
+        </div>
+        <div style={{padding:"12px 20px 36px",borderTop:`1px solid ${C.border}`}}>
+          <div style={{textAlign:"center",fontSize:12,color:C.muted,marginBottom:8}}>{n} picked · up to 7 riders</div>
+          <button className="tap" onClick={sendGroup} disabled={!n||gSending} style={{width:"100%",background:n?"rgba(37,99,235,0.10)":C.surface,border:`1.5px solid ${n?C.blue:C.border}`,borderRadius:12,padding:14,color:n?C.text:C.muted,fontSize:14,fontWeight:700}}>{gSending?"Sending…":`Send invites${n?` (${n})`:""}`}</button>
+        </div>
+      </div>
+    );
+  }
+
   // ── home (Challenges: head to head + group rides)
   if(view.name==="home"){
     const me=user.id;
@@ -3449,7 +3507,24 @@ function H2hScreen({user,onBack,onActivity}){
     const nFin=gFin.length+hFin.length;
     return(
       <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
-        {header("Challenges",<button className="tap" onClick={openPick} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"7px 12px",color:C.blue,fontSize:13,fontWeight:600}}><Icon.Plus size={14} color={C.blue}/>Start</button>,onBack)}
+        {sheet&&(<>
+          <div onClick={()=>setSheet(false)} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.35)",zIndex:60}}/>
+          <div style={{position:"absolute",left:0,right:0,bottom:0,background:"#fff",borderRadius:"20px 20px 0 0",padding:"10px 16px 34px",zIndex:61,boxShadow:"0 -8px 30px rgba(0,0,0,0.15)"}}>
+            <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"0 auto 14px"}}/>
+            <div style={{fontSize:17,fontWeight:700,color:C.text,marginBottom:14}}>Start a challenge</div>
+            <button className="tap" onClick={()=>{setSheet(false);openPick();}} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:14,background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,marginBottom:8,textAlign:"left"}}>
+              <ChallengeIcon type="h2h"/>
+              <div style={{flex:1}}><div style={{fontSize:15,fontWeight:700,color:C.text}}>Head to head</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>You against one rider</div></div>
+              <Icon.ChevronRight size={16} color={C.mutedL}/>
+            </button>
+            <button className="tap" disabled={inRide} onClick={()=>{setSheet(false);openGroupPick();}} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:14,background:inRide?"#fff":C.surface,border:`1px ${inRide?"dashed":"solid"} ${C.border}`,borderRadius:12,textAlign:"left",opacity:inRide?0.7:1}}>
+              <ChallengeIcon type="group"/>
+              <div style={{flex:1}}><div style={{fontSize:15,fontWeight:700,color:C.text}}>Group ride</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>{inRide?"You already have one on. Finish it first.":"2 to 7 riders · ranked on total time"}</div></div>
+              {!inRide&&<Icon.ChevronRight size={16} color={C.mutedL}/>}
+            </button>
+          </div>
+        </>)}
+        {header("Challenges",<button className="tap" onClick={()=>setSheet(true)} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"7px 12px",color:C.blue,fontSize:13,fontWeight:600}}><Icon.Plus size={14} color={C.blue}/>Start</button>,onBack)}
         <div style={{flex:1,overflowY:"auto",padding:"18px 16px"}}>
           {list===null?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>:(nInv+nAct+nSent+nFin)===0?(
             <div style={{textAlign:"center",padding:"48px 20px",color:C.muted}}>
