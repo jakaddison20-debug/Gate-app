@@ -6310,6 +6310,7 @@ export default function App(){
 
   useEffect(()=>{if(!navigator.geolocation)return;let centered=false;const id=navigator.geolocation.watchPosition(pos=>{const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};setUserPos(loc);if(typeof pos.coords.heading==='number'&&!isNaN(pos.coords.heading))setUserHeading(pos.coords.heading);if(!centered){setMapCenter(loc);centered=true;}},err=>console.log(err),{enableHighAccuracy:true,maximumAge:2000,timeout:10000});return()=>navigator.geolocation.clearWatch(id);},[]);
 
+useEffect(()=>{window.__gateBusy=!!activeRace;return()=>{window.__gateBusy=false;};},[activeRace]);
 useEffect(()=>{
   if(!activeRace)return;
   let stopped=false;
