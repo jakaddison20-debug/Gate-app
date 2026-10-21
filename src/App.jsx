@@ -2847,10 +2847,10 @@ function GroupsScreen({user,onBack,onOpenGroup,h2h,onOpenH2h}){
       <div style={{flex:1,overflowY:"auto"}}>
         {view==='list'&&onOpenH2h&&(
           <button className="tap" onClick={onOpenH2h} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"14px 16px",borderBottom:`1px solid ${C.border}`,background:"white",textAlign:"left"}}>
-            <div style={{width:40,height:40,borderRadius:10,background:`${C.blue}12`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{fontSize:13,fontWeight:800,color:C.blue,letterSpacing:0.3}}>VS</span></div>
+            <ChallengeIcon type="h2h" size={40}/>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:14,fontWeight:600,color:C.text}}>Head to head</div>
-              <div style={{fontSize:12,color:C.muted,marginTop:2}}>{h2h&&(h2h.requests||h2h.active)?`${h2h.requests} request${h2h.requests===1?"":"s"} · ${h2h.active} active`:"Challenge a mate"}</div>
+              <div style={{fontSize:14,fontWeight:600,color:C.text}}>Challenges</div>
+              <div style={{fontSize:12,color:C.muted,marginTop:2}}>{h2h&&(h2h.requests||h2h.active)?`${h2h.requests} request${h2h.requests===1?"":"s"} · ${h2h.active} active`:"Head to head and group rides"}</div>
             </div>
             {h2h&&h2h.requests>0&&<div style={{minWidth:20,height:20,padding:"0 6px",borderRadius:10,background:C.blue,color:"#fff",fontSize:11,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{h2h.requests}</div>}
             <Icon.ChevronRight size={16} color={C.mutedL}/>
@@ -6694,6 +6694,12 @@ export default function App(){
   useEffect(()=>{if(!user)return;supabase.rpc('list_challenges').then(({data,error})=>{if(!error&&Array.isArray(data))setH2hList(data);});},[user,refreshTick,showH2h]);
   const h2hRequests=h2hList.filter(c=>c.status==='pending'&&c.opponent_id===user?.id).length;
   const h2hActive=h2hList.filter(c=>c.status==='active').length;
+  const [gRideList,setGRideList]=useState([]);
+  useEffect(()=>{if(!user)return;supabase.rpc('list_group_rides').then(({data,error})=>{if(!error&&Array.isArray(data))setGRideList(data);});},[user,refreshTick,showH2h]);
+  const gInvites=gRideList.filter(g=>g.my_status==='invited').length;
+  const gActiveCount=gRideList.filter(g=>g.my_status==='joined'&&g.status==='active').length;
+  const challengeBadge=h2hRequests+gInvites;
+  const [h2hFromFeed,setH2hFromFeed]=useState(false);
   useEffect(()=>{if(!user)return;supabase.rpc('follow_counts').then(({data,error})=>{if(!error&&data)setFollowerCount(data.followers);});},[user,refreshTick,showFollow]);
     useEffect(()=>{
   const onVisible=()=>{if(document.visibilityState==="visible"){syncOfflineTimes().then(()=>setRefreshTick(t=>t+1));}};
@@ -7098,7 +7104,7 @@ if(showBikeSetup)return(
   if(showH2h)return(
     <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
       <style>{STYLES}</style>
-      <H2hScreen user={user} onBack={()=>{setShowH2h(false);setShowGroups(true);}} onActivity={()=>setRefreshTick(t=>t+1)}/>
+      <H2hScreen user={user} onBack={()=>{setShowH2h(false);if(!h2hFromFeed)setShowGroups(true);}} onActivity={()=>setRefreshTick(t=>t+1)}/>
     </div>
   );
   if(showGroups)return(
@@ -7115,7 +7121,7 @@ if(showBikeSetup)return(
                 setTab('map');
               }}/>
             :<GroupDetailScreen group={activeGroup} user={user} onBack={()=>setActiveGroup(null)} onOpenMap={()=>setGroupMapOpen(true)}/>)
-        :<GroupsScreen user={user} onBack={()=>setShowGroups(false)} onOpenGroup={g=>setActiveGroup(g)} h2h={{requests:h2hRequests,active:h2hActive}} onOpenH2h={()=>{setShowGroups(false);setShowH2h(true);}}/>}
+        :<GroupsScreen user={user} onBack={()=>setShowGroups(false)} onOpenGroup={g=>setActiveGroup(g)} h2h={{requests:h2hRequests+gInvites,active:h2hActive+gActiveCount}} onOpenH2h={()=>{setH2hFromFeed(false);setShowGroups(false);setShowH2h(true);}}/>}
     </div>
   );
 
@@ -7146,7 +7152,8 @@ if(showBikeSetup)return(
           <div style={{padding:"12px 16px 14px",borderBottom:`1px solid ${C.border}`,position:"sticky",top:0,background:"#fff",zIndex:5}}>
             <div style={{fontSize:22,fontWeight:800,color:C.text,marginBottom:12}}>Feed</div>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <button className="tap" onClick={()=>setShowGroups(true)} style={{position:"relative",width:38,height:38,borderRadius:11,background:"#fff",border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}><Icon.Users size={17} color={C.text}/>{h2hRequests>0&&<div style={{position:"absolute",top:-5,right:-5,minWidth:17,height:17,padding:"0 4px",borderRadius:9,background:C.blue,color:"#fff",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid #fff",boxSizing:"content-box"}}>{h2hRequests>9?"9+":h2hRequests}</div>}</button>
+              <button className="tap" onClick={()=>setShowGroups(true)} style={{position:"relative",width:38,height:38,borderRadius:11,background:"#fff",border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}><Icon.Users size={17} color={C.text}/></button>
+              <button className="tap" onClick={()=>{setH2hFromFeed(true);setShowH2h(true);}} style={{position:"relative",width:38,height:38,borderRadius:11,background:"#fff",border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 2px rgba(0,0,0,0.04)",flexShrink:0}}><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={C.text} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="16" r="3"/><path d="M10.5 10.5l3 3"/></svg>{challengeBadge>0&&<div style={{position:"absolute",top:-5,right:-5,minWidth:17,height:17,padding:"0 4px",borderRadius:9,background:C.blue,color:"#fff",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid #fff",boxSizing:"content-box"}}>{challengeBadge>9?"9+":challengeBadge}</div>}</button>
               <button className="tap" onClick={()=>setShowNewPost(true)} style={{width:38,height:38,borderRadius:11,background:"#fff",border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}><Icon.Plus size={19} color={C.text}/></button>
               <button className="tap" style={{flex:1,height:38,display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:"#fff",border:`1px solid ${C.border}`,borderRadius:11,padding:"0 12px",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}><svg width="13" height="13" viewBox="0 0 24 24"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10" fill={C.blue}/></svg><span style={{color:C.text,fontSize:14,fontWeight:700}}>Upgrade</span></button>
                <button className="tap" onClick={()=>setShowNotifications(true)} style={{position:"relative",width:38,height:38,borderRadius:11,background:"#fff",border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}><Icon.Bell size={17} color={C.text}/>{unreadCount>0&&<div style={{position:"absolute",top:-5,right:-5,minWidth:17,height:17,padding:"0 4px",borderRadius:9,background:C.blue,color:"#fff",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid #fff",boxSizing:"content-box"}}>{unreadCount>9?"9+":unreadCount}</div>}</button>
