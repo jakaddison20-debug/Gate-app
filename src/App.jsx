@@ -3276,9 +3276,10 @@ function H2hDetail({c,user,meAvatar,onBack,onReload,onActivity}){
   );
 }
 
-function GroupRideDetail({id,user,onBack,onReload}){
+function GroupRideDetail({id,user,onBack,onReload,onRideAgain}){
   const [d,setD]=useState(null);
   const [open,setOpen]=useState(null);
+  const [more,setMore]=useState(false);
   const [busy,setBusy]=useState(false);
   const load=useCallback(()=>{
     supabase.rpc("get_group_ride",{p_id:id}).then(({data,error})=>{if(!error&&data)setD(data);});
@@ -3325,6 +3326,100 @@ function GroupRideDetail({id,user,onBack,onReload}){
     load();onReload&&onReload();
   };
   const tick=<div style={{width:22,height:22,borderRadius:"50%",background:C.green,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div>;
+
+  if(finished){
+    const nCounted=stages.filter(s=>s.counted).length;
+    if(stand.length===0)return(
+      <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
+        {head(sub)}
+        <div style={{flex:1,textAlign:"center",padding:"60px 24px",color:C.muted}}>
+          <Icon.Users size={36} color={C.mutedL}/>
+          <div style={{fontSize:15,fontWeight:500,marginTop:12,marginBottom:4,color:C.text}}>No result</div>
+          <div style={{fontSize:13,color:C.mutedL}}>No stage was ridden by everyone</div>
+        </div>
+      </div>
+    );
+    const win=stand[0];
+    const medalBadge=(pos,size)=><div style={{width:size,height:size,borderRadius:"50%",background:TROPHY_MEDAL[pos].bg,border:`2px solid ${TROPHY_MEDAL[pos].col}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><TrophyCrown size={size*0.5} color={TROPHY_MEDAL[pos].col}/></div>;
+    const podCol=(r,pos)=>{
+      const big=pos===1,size=big?60:48,h=big?118:pos===2?92:76;
+      return(
+        <div key={r.user_id} style={{display:"flex",flexDirection:"column",alignItems:"center",width:112}}>
+          <div style={{marginBottom:8,lineHeight:0,borderRadius:"50%",boxShadow:`0 0 0 3px #fff,0 0 0 5px ${TROPHY_MEDAL[pos].col}`}}><Avatar size={size} url={byId[r.user_id]?.avatar_url}/></div>
+          <div style={{fontSize:13,fontWeight:r.user_id===me?700:500,color:C.text,maxWidth:104,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nameOf(r.user_id)}</div>
+          <div style={{fontSize:11,color:C.muted,margin:"2px 0 8px",fontVariantNumeric:"tabular-nums"}}>{pos===1?formatTime(Number(r.total_ms)):gapTxt(Number(r.gap_ms))}</div>
+          <div style={{width:"100%",height:h,background:pos===1?"#FFFBEB":C.surface,border:`1px solid ${pos===1?"#F3E3B0":C.border}`,borderBottom:"none",borderRadius:"12px 12px 0 0",display:"flex",alignItems:"center",justifyContent:"center"}}>{medalBadge(pos,big?44:38)}</div>
+        </div>
+      );
+    };
+    const podium=[[stand[1],2],[stand[0],1],[stand[2],3]].filter(x=>x[0]);
+    const rest=stand.slice(3);
+    const shown=more?rest:rest.slice(0,3);
+    const tile=(v,l)=><div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"6px 4px",textAlign:"center"}}><div style={{fontSize:14,fontWeight:700,lineHeight:1.2,color:C.text}}>{v}</div><div style={{fontSize:10,color:C.muted}}>{l}</div></div>;
+    return(
+      <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
+        {head(sub)}
+        <div style={{flex:1,overflowY:"auto"}}>
+          <div style={{padding:"18px 20px 10px",textAlign:"center"}}>
+            <div style={{fontSize:28,fontWeight:800,color:C.text,marginBottom:4}}>{win.user_id===me?"You won":`${nameOf(win.user_id)} won`}</div>
+            <div style={{fontSize:14,color:C.muted}}>Total time over {nCounted} stage{nCounted===1?"":"s"}</div>
+          </div>
+          <div style={{display:"flex",justifyContent:"center",alignItems:"flex-end",gap:6,padding:"8px 12px 0",borderBottom:`1px solid ${C.border}`}}>
+            {podium.map(([r,pos])=>podCol(r,pos))}
+          </div>
+          <div style={{padding:16}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:18}}>
+              {tile(nCounted,"Stages")}{tile(stand.length,"Riders")}{tile(formatTime(Number(win.total_ms)),"Winning time")}
+            </div>
+            {rest.length>0&&<>
+              <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,margin:"0 0 8px"}}>Results</div>
+              <div style={{marginBottom:18}}>
+                {shown.map((r,i)=>(
+                  <div key={r.user_id} style={{display:"flex",alignItems:"center",gap:10,border:`1px solid ${C.border}`,borderRadius:12,padding:"8px 12px",marginBottom:6}}>
+                    <div style={{width:22,height:22,borderRadius:"50%",background:C.surface,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:C.muted,flexShrink:0}}>{i+4}</div>
+                    <Avatar size={26} url={byId[r.user_id]?.avatar_url}/>
+                    <div style={{flex:1,fontSize:13,fontWeight:r.user_id===me?700:600,color:C.text}}>{nameOf(r.user_id)}</div>
+                    <div style={{fontSize:12,fontWeight:700,color:C.red}}>{gapTxt(Number(r.gap_ms))}</div>
+                  </div>
+                ))}
+                {rest.length>3&&<button className="tap" onClick={()=>setMore(m=>!m)} style={{width:"100%",background:"none",border:"none",padding:"8px 0 2px",color:C.blue,fontSize:13,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>{more?"Show less":`See ${rest.length-3} more`}<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d={more?"M6 15l6-6 6 6":"M6 9l6 6 6-6"}/></svg></button>}
+              </div>
+            </>}
+            <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,margin:"0 0 8px"}}>Stages</div>
+            {stages.map(st=>{
+              const isOpen=open===st.stage_id;
+              const runs=st.runs||[];
+              const first=runs[0]?Number(runs[0].time_ms):0;
+              return(
+                <div key={st.stage_id} style={{border:`${isOpen?1.5:1}px solid ${isOpen?C.blue:C.border}`,borderRadius:12,padding:"12px 14px",marginBottom:8}}>
+                  <button className="tap" onClick={()=>setOpen(isOpen?null:st.stage_id)} style={{width:"100%",background:"none",border:"none",padding:0,display:"flex",alignItems:"center",gap:10,textAlign:"left"}}>
+                    <div style={{flex:1,fontSize:14,fontWeight:600,color:C.text}}>{st.name}</div>
+                    {st.counted?tick:<div style={{fontSize:12,fontWeight:700,color:C.muted,flexShrink:0}}>{runs.length}/{joined.length}</div>}
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={isOpen?C.muted:C.mutedL} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d={isOpen?"M6 15l6-6 6 6":"M6 9l6 6 6-6"}/></svg>
+                  </button>
+                  {isOpen&&<div style={{borderTop:`1px solid ${C.border}`,marginTop:12,paddingTop:6}}>
+                    {runs.map((r,i)=>(
+                      <div key={r.user_id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0"}}>
+                        <Avatar size={26} url={byId[r.user_id]?.avatar_url}/>
+                        <div style={{flex:1,fontSize:13,fontWeight:r.user_id===me?700:500,color:C.text}}>{nameOf(r.user_id)}</div>
+                        <div style={{textAlign:"right",fontVariantNumeric:"tabular-nums"}}>
+                          <div style={{fontSize:14,fontWeight:700,color:i===0?C.green:C.text}}>{formatTime(Number(r.time_ms))}</div>
+                          {i>0&&<div style={{fontSize:10,color:C.red,fontWeight:600}}>{gapTxt(Number(r.time_ms)-first)}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        {onRideAgain&&<div style={{padding:"12px 16px 36px",borderTop:`1px solid ${C.border}`}}>
+          <button className="tap" onClick={onRideAgain} style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:14,color:C.text,fontSize:14,fontWeight:600}}>Ride again</button>
+        </div>}
+      </div>
+    );
+  }
 
   const waitTxt=notDone.map(s=>{
     const have=new Set((s.runs||[]).map(r=>r.user_id));
@@ -3559,7 +3654,7 @@ function H2hScreen({user,onBack,onActivity}){
   );
 
   // ── group ride detail
-  if(view.name==="group")return <GroupRideDetail id={view.id} user={user} onBack={()=>{setView({name:"home"});reload();}} onReload={reload}/>;
+  if(view.name==="group")return <GroupRideDetail id={view.id} user={user} onBack={()=>{setView({name:"home"});reload();}} onReload={reload} onRideAgain={openGroupPick}/>;
 
   // ── pick riders for a group ride
   if(view.name==="gpick"){
@@ -3696,7 +3791,7 @@ function H2hScreen({user,onBack,onActivity}){
                 {hSent.map(c=>box(c.id,"h2h",2,`You vs ${c.other_name||"Rider"}`,"Waiting for them to accept",<div style={{fontSize:12,color:C.mutedL,fontWeight:600}}>Sent</div>,{dashed:true,noPress:true}))}
               </>}
               {nFin>0&&<>{label("Finished",(nInv||nAct||nSent)?14:0)}
-                {gFin.map(g=>box(g.id,"group",g.rider_count,gTitle(g),timeAgo(g.finished_at||g.ends_at),gRight(g),{noPress:true}))}
+                {gFin.map(g=>box(g.id,"group",g.rider_count,gTitle(g),timeAgo(g.finished_at||g.ends_at),gRight(g),{onPress:()=>setView({name:"group",id:g.id})}))}
                 {hFin.map(c=>box(c.id,"h2h",2,`You vs ${c.other_name||"Rider"}`,timeAgo(c.finished_at||c.ends_at),leadText(c,sums[c.id]),{onPress:()=>setView({name:"detail",id:c.id})}))}
               </>}
             </>
