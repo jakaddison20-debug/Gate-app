@@ -3276,6 +3276,152 @@ function H2hDetail({c,user,meAvatar,onBack,onReload,onActivity}){
   );
 }
 
+function GroupRideDetail({id,user,onBack,onReload}){
+  const [d,setD]=useState(null);
+  const [open,setOpen]=useState(null);
+  const [busy,setBusy]=useState(false);
+  const load=useCallback(()=>{
+    supabase.rpc("get_group_ride",{p_id:id}).then(({data,error})=>{if(!error&&data)setD(data);});
+  },[id]);
+  useEffect(()=>{load();const t=setInterval(load,20000);return()=>clearInterval(t);},[load]);
+
+  const head=(sub)=>(
+    <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+      <button className="tap" onClick={onBack} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:17,fontWeight:700,color:C.text}}>Group ride</div>
+        {sub&&<div style={{fontSize:12,color:C.muted}}>{sub}</div>}
+      </div>
+    </div>
+  );
+  if(!d)return(
+    <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
+      {head(null)}
+      <div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>
+    </div>
+  );
+
+  const me=user.id;
+  const joined=(d.members||[]).filter(m=>m.status==="joined");
+  const byId={};(d.members||[]).forEach(m=>{byId[m.user_id]=m;});
+  const nameOf=uid=>uid===me?"You":(byId[uid]?.display_name||"Rider");
+  const creator=byId[d.creator_id];
+  const isCreator=d.creator_id===me;
+  const stages=d.stages||[];
+  const stand=d.standings||[];
+  const notDone=stages.filter(s=>!s.counted);
+  const ready=stages.length>0&&notDone.length===0;
+  const finished=d.status==="finished";
+  const ringOf=r=>r<=3?TROPHY_MEDAL[r].col:null;
+  const gapTxt=ms=>`+${fmtDelta(ms)}${ms<100000?"s":""}`;
+  const mx=Math.max(1,...stand.map(r=>Number(r.gap_ms)));
+  const sub=finished?`Finished · ${joined.length} riders`:`${h2hLeft(d.ends_at)} · ${joined.length} riders`;
+
+  const doFinish=async()=>{
+    setBusy(true);
+    const{error}=await supabase.rpc("finish_group_ride",{p_id:id});
+    setBusy(false);
+    if(error){alert(error.message);return;}
+    load();onReload&&onReload();
+  };
+  const tick=<div style={{width:22,height:22,borderRadius:"50%",background:C.green,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></div>;
+
+  const waitTxt=notDone.map(s=>{
+    const have=new Set((s.runs||[]).map(r=>r.user_id));
+    const miss=joined.filter(m=>!have.has(m.user_id)).map(m=>nameOf(m.user_id));
+    return `${miss.join(", ")} on ${s.name}`;
+  }).join(" · ");
+
+  return(
+    <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
+      {head(sub)}
+      <div style={{flex:1,overflowY:"auto",padding:16}}>
+        {stages.length===0?(
+          <div style={{border:`1px solid ${C.border}`,borderRadius:14,padding:"36px 20px",textAlign:"center"}}>
+            <div style={{display:"flex",justifyContent:"center",marginBottom:10}}><Icon.Users size={34} color={C.mutedL}/></div>
+            <div style={{fontSize:15,fontWeight:600,color:C.text,marginBottom:4}}>{isCreator?"Ride a stage to start the list":`Waiting for ${creator?.display_name||"the host"} to ride a stage`}</div>
+            <div style={{fontSize:13,color:C.mutedL,lineHeight:1.45}}>{isCreator?"Every stage you ride goes on the list. Everyone else rides the same ones.":"Stages you need to ride show up here."}</div>
+          </div>
+        ):(
+          <>
+            {stand.length>0&&<>
+              <div style={{border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 14px 6px"}}>
+                {stand.map(r=>{
+                  const m=byId[r.user_id];
+                  const len=100-(Number(r.gap_ms)/mx)*58;
+                  const isMe=r.user_id===me;
+                  const ring=ringOf(r.rank);
+                  return(
+                    <div key={r.user_id} style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+                      <div style={{width:44,fontSize:12,fontWeight:isMe?800:600,color:isMe?C.text:C.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nameOf(r.user_id)}</div>
+                      <div style={{flex:1,position:"relative",height:36}}>
+                        <div style={{position:"absolute",left:0,top:16,right:0,height:4,borderRadius:2,background:"#F0F0F0"}}/>
+                        <div style={{position:"absolute",left:0,top:16,width:`calc(${len}% - 18px)`,height:4,borderRadius:2,background:isMe?C.blue:C.mutedL}}/>
+                        <div style={{position:"absolute",top:0,left:`calc(${len}% - 36px)`,lineHeight:0,borderRadius:"50%",boxShadow:ring?`0 0 0 3px #fff,0 0 0 5px ${ring}`:"none"}}><Avatar size={36} url={m?.avatar_url}/></div>
+                      </div>
+                      <div style={{width:58,textAlign:"right",fontVariantNumeric:"tabular-nums"}}>{r.rank===1?<div style={{fontSize:12,fontWeight:800,color:C.green}}>Leader</div>:<div style={{fontSize:12,fontWeight:700,color:C.red}}>{gapTxt(Number(r.gap_ms))}</div>}</div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{fontSize:11,color:C.muted,margin:"8px 2px 18px"}}>Gaps count the stages everyone has ridden.</div>
+            </>}
+            <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,margin:"0 0 8px"}}>Stages</div>
+            {stages.map(st=>{
+              const isOpen=open===st.stage_id;
+              const runs=st.runs||[];
+              const have=new Set(runs.map(r=>r.user_id));
+              const missing=joined.filter(m=>!have.has(m.user_id));
+              const first=runs[0]?Number(runs[0].time_ms):0;
+              return(
+                <div key={st.stage_id} style={{border:`${isOpen?1.5:1}px solid ${isOpen?C.blue:C.border}`,borderRadius:12,padding:"12px 14px",marginBottom:8}}>
+                  <button className="tap" onClick={()=>setOpen(isOpen?null:st.stage_id)} style={{width:"100%",background:"none",border:"none",padding:0,display:"flex",alignItems:"center",gap:10,textAlign:"left"}}>
+                    <div style={{flex:1,fontSize:14,fontWeight:600,color:C.text}}>{st.name}</div>
+                    {st.counted?tick:<div style={{fontSize:12,fontWeight:700,color:C.muted,flexShrink:0}}>{runs.length}/{joined.length}</div>}
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={isOpen?C.muted:C.mutedL} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d={isOpen?"M6 15l6-6 6 6":"M6 9l6 6 6-6"}/></svg>
+                  </button>
+                  {isOpen&&<div style={{borderTop:`1px solid ${C.border}`,marginTop:12,paddingTop:6}}>
+                    {runs.map((r,i)=>(
+                      <div key={r.user_id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0"}}>
+                        <Avatar size={26} url={byId[r.user_id]?.avatar_url}/>
+                        <div style={{flex:1,fontSize:13,fontWeight:r.user_id===me?700:500,color:C.text}}>{nameOf(r.user_id)}</div>
+                        <div style={{textAlign:"right",fontVariantNumeric:"tabular-nums"}}>
+                          <div style={{fontSize:14,fontWeight:700,color:i===0?C.green:C.text}}>{formatTime(Number(r.time_ms))}</div>
+                          {i>0&&<div style={{fontSize:10,color:C.red,fontWeight:600}}>{gapTxt(Number(r.time_ms)-first)}</div>}
+                        </div>
+                      </div>
+                    ))}
+                    {missing.map(m=>(
+                      <div key={m.user_id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",opacity:0.5}}>
+                        <Avatar size={26} url={m.avatar_url}/>
+                        <div style={{flex:1,fontSize:13,color:C.text}}>{nameOf(m.user_id)}</div>
+                        <div style={{fontSize:14,color:C.mutedL}}>–</div>
+                      </div>
+                    ))}
+                  </div>}
+                </div>
+              );
+            })}
+          </>
+        )}
+      </div>
+      {!finished&&(
+        stages.length===0
+          ?<div style={{padding:"14px 16px 36px",borderTop:`1px solid ${C.border}`,textAlign:"center",fontSize:12,color:C.muted}}>{isCreator?"Ride a stage to add it":`${creator?.display_name||"The host"} picks the stages by riding them`}</div>
+          :isCreator
+            ?<div style={{padding:"12px 16px 36px",borderTop:`1px solid ${C.border}`}}>
+              {ready
+                ?<><div style={{textAlign:"center",fontSize:12,color:C.green,fontWeight:600,marginBottom:8}}>Everyone has ridden every stage</div>
+                  <button className="tap" onClick={doFinish} disabled={busy} style={{width:"100%",background:"rgba(37,99,235,0.10)",border:`1.5px solid ${C.blue}`,borderRadius:12,padding:14,color:C.text,fontSize:14,fontWeight:700}}>{busy?"Finishing…":"Finish ride"}</button></>
+                :<><div style={{textAlign:"center",fontSize:12,color:C.muted,marginBottom:8,lineHeight:1.4}}>Waiting for {waitTxt}</div>
+                  <button className="tap" disabled style={{width:"100%",background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:14,color:C.mutedL,fontSize:14,fontWeight:600}}>Finish ride</button></>}
+            </div>
+            :<div style={{padding:"14px 16px 36px",borderTop:`1px solid ${C.border}`,textAlign:"center",fontSize:12,color:C.muted}}>{creator?.display_name||"The host"} finishes the ride once everyone has ridden every stage</div>
+      )}
+    </div>
+  );
+}
+
 function ChallengeIcon({type,count,bg,size=44}){
   const h=type==="h2h";
   return(
@@ -3412,6 +3558,9 @@ function H2hScreen({user,onBack,onActivity}){
     </div>
   );
 
+  // ── group ride detail
+  if(view.name==="group")return <GroupRideDetail id={view.id} user={user} onBack={()=>{setView({name:"home"});reload();}} onReload={reload}/>;
+
   // ── pick riders for a group ride
   if(view.name==="gpick"){
     const q=gQuery.trim().toLowerCase();
@@ -3539,7 +3688,7 @@ function H2hScreen({user,onBack,onActivity}){
                 {hReq.map(c=>invite(c.id,"h2h",2,`${c.other_name||"Rider"} challenged you`,"24 hours to ride",()=>respond(c,true),()=>respond(c,false),false))}
               </>}
               {nAct>0&&<>{label("Active",nInv?14:0)}
-                {gAct.map(g=>box(g.id,"group",g.rider_count,gTitle(g),h2hLeft(g.ends_at),gRight(g),{noPress:true}))}
+                {gAct.map(g=>box(g.id,"group",g.rider_count,gTitle(g),h2hLeft(g.ends_at),gRight(g),{onPress:()=>setView({name:"group",id:g.id})}))}
                 {hAct.map(c=>box(c.id,"h2h",2,`You vs ${c.other_name||"Rider"}`,h2hLeft(c.ends_at),leadText(c,sums[c.id]),{onPress:()=>setView({name:"detail",id:c.id})}))}
               </>}
               {nSent>0&&<>{label("Sent",(nInv||nAct)?14:0)}
