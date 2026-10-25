@@ -5123,6 +5123,8 @@ function NewStageSheet({onClose,onSave}){
   const trackRef=useRef(null);
   const simulatePlace=()=>{if(!navigator.geolocation){alert("GPS not available");return;}navigator.geolocation.getCurrentPosition(pos=>{const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};if(!start){setStart(loc);setLineCoords([loc]);setRecording(true);trackRef.current=navigator.geolocation.watchPosition(p=>setLineCoords(prev=>[...prev,{lat:p.coords.latitude,lng:p.coords.longitude}]),err=>console.log(err),{enableHighAccuracy:true,maximumAge:0});}else if(!finish){setFinish(loc);setRecording(false);navigator.geolocation.clearWatch(trackRef.current);const fullLine=[...lineCoords,loc];let total=0;for(let i=0;i<fullLine.length-1;i++)total+=haversine(fullLine[i],fullLine[i+1]);if(total>25){const trimmed=trimLineFromStart(fullLine,25);if(trimmed&&trimmed.length>0){setStart(trimmed[0]);setLineCoords(trimmed);}else{setLineCoords(fullLine);}}else{setLineCoords(fullLine);}}},err=>alert("Could not get location — make sure GPS is on"),{enableHighAccuracy:true,timeout:10000});};
   const redoGates=()=>{if(trackRef.current!==null&&navigator.geolocation)navigator.geolocation.clearWatch(trackRef.current);trackRef.current=null;setStart(null);setFinish(null);setLineCoords([]);setRecording(false);};
+  const [gateLocked,setGateLocked]=useState(false);
+  useEffect(()=>{if(start&&!finish)setGateLocked(true);},[start]);
   const canSave=!!(name.trim()&&start&&finish);
   const dist=start&&finish?haversine(start,finish):null;
   let live=0;for(let i=0;i<lineCoords.length-1;i++)live+=haversine(lineCoords[i],lineCoords[i+1]);
@@ -5142,6 +5144,7 @@ function NewStageSheet({onClose,onSave}){
   return(
     <div style={{padding:"0 16px 74px"}}>
       <style>{"@keyframes gatePulse{0%{box-shadow:0 0 0 0 rgba(37,99,235,.45)}100%{box-shadow:0 0 0 9px rgba(37,99,235,0)}}"}</style>
+      {gateLocked&&<TouchLock dim title="Start gate placed" sub="Screen locked while you ride the trail, so rain can't move anything." label="Hold to unlock and place finish gate" onUnlock={()=>setGateLocked(false)}/>}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0 16px"}}>
         <div style={{fontSize:19,fontWeight:800,letterSpacing:-0.3,color:C.text}}>New Stage</div>
         <button className="tap" onClick={onClose} style={{background:C.surface,borderRadius:8,padding:"6px 14px",color:C.text,fontSize:13,fontWeight:500,border:`1px solid ${C.border}`}}>Cancel</button>
