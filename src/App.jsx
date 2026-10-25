@@ -4061,6 +4061,34 @@ function TrophyCabinetScreen({user,onBack}){
 }
 
 const HOWTO_KEY=uid=>`gate_howto_seen_${uid||"anon"}`;
+function TouchLock({title,sub,label,foot,dim,onUnlock}){
+  const timer=useRef(null);
+  const [holding,setHolding]=useState(false);
+  const begin=e=>{e.preventDefault();setHolding(true);clearTimeout(timer.current);timer.current=setTimeout(()=>{setHolding(false);onUnlock&&onUnlock();},1500);};
+  const end=()=>{setHolding(false);clearTimeout(timer.current);};
+  useEffect(()=>()=>clearTimeout(timer.current),[]);
+  return(
+    <div onContextMenu={e=>e.preventDefault()} style={{position:"fixed",inset:0,zIndex:9000,background:dim?"rgba(26,26,26,0.18)":"transparent",display:"flex",flexDirection:"column",justifyContent:"flex-end",padding:"0 12px calc(env(safe-area-inset-bottom, 0px) + 34px)",touchAction:"none",userSelect:"none",WebkitUserSelect:"none",WebkitTouchCallout:"none"}}>
+      <div style={{background:"#262626",border:"1px solid rgba(255,255,255,0.14)",borderRadius:20,padding:16,boxShadow:"0 10px 30px rgba(0,0,0,0.35)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
+          <div style={{width:42,height:42,borderRadius:12,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.16)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+          </div>
+          <div>
+            <div style={{fontSize:16,fontWeight:800,color:"#fff"}}>{title}</div>
+            <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginTop:2,lineHeight:1.35}}>{sub}</div>
+          </div>
+        </div>
+        <div onPointerDown={begin} onPointerUp={end} onPointerLeave={end} onPointerCancel={end} style={{position:"relative",overflow:"hidden",width:"100%",background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.24)",borderRadius:12,padding:14,color:"#fff",fontSize:14,fontWeight:700,textAlign:"center",touchAction:"none"}}>
+          <div style={{position:"absolute",left:0,top:0,bottom:0,width:holding?"100%":"0%",background:"rgba(255,255,255,0.28)",transition:holding?"width 1.5s linear":"none"}}/>
+          <span style={{position:"relative"}}>{label||"Hold to unlock"}</span>
+        </div>
+        {foot&&<div style={{fontSize:11,color:"rgba(255,255,255,0.45)",textAlign:"center",marginTop:10}}>{foot}</div>}
+      </div>
+    </div>
+  );
+}
+
 function HowItWorksScreen({onClose}){
   const steps=[
     {Ic:Icon.Location,t:"Make a stage",b:"Stand at the top and tap Place Start Gate. Ride the trail, then tap Place Finish Gate at the bottom. Name it and tap Create Stage."},
