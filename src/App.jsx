@@ -5682,7 +5682,7 @@ function RaceScreen({course,stages,user,onFinish,onActivity}){
   const [bestPerStage,setBestPerStage]=useState(savedProgress?savedProgress.bestPerStage:{}); // mashup: best time per stage id
   const [runCount,setRunCount]=useState(savedProgress?savedProgress.runCount:0); // how many full runs completed
   const [gateStatus,setGateStatus]=useState("waiting");
-  const [distToGate,setDistToGate]=useState(null); const [armed,setArmed]=useState(false); const [gpsAcc,setGpsAcc]=useState(null); const timerRef=useRef(null); const finishTimeoutRef=useRef(null);
+  const [distToGate,setDistToGate]=useState(null); const [armed,setArmed]=useState(false); const [touchLocked,setTouchLocked]=useState(false); const [gpsAcc,setGpsAcc]=useState(null); const timerRef=useRef(null); const finishTimeoutRef=useRef(null);
   const countRef=useRef(null);
   const gpsRef=useRef(null);
   const startTimeRef=useRef(0);
@@ -5752,9 +5752,10 @@ function RaceScreen({course,stages,user,onFinish,onActivity}){
   return()=>{done=true;navigator.geolocation.clearWatch(id);};
 },[phase,stageIndex,armed]);
 
+useEffect(()=>{if(!armed||phase==="split"||phase==="done"||phase==="modeIntro")setTouchLocked(false);},[armed,phase]);
 const armCheckRef=useRef(false);
 const tryArm=()=>{
-  const go=()=>{setGateStatus("waiting");setDistToGate(null);setArmed(true);};
+  const go=()=>{setGateStatus("waiting");setDistToGate(null);setArmed(true);setTouchLocked(true);};
   if(armCheckRef.current)return;
   if(!navigator.geolocation||!currentStage||!currentStage.start){go();return;}
   armCheckRef.current=true;
@@ -6001,6 +6002,7 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
 <div style={{fontSize:13,color:C.muted,marginBottom:16}}>{isPractice?"Timer won't start — just ride it for feel":"Timer starts automatically when you enter the gate"}</div>
 <GpsPill acc={gpsAcc}/>
 <button className="tap" onClick={()=>{setArmed(false);setGateStatus("waiting");setDistToGate(null);}} style={{marginTop:16,background:"none",border:"none",color:C.muted,fontSize:12,textDecoration:"underline"}}>Disarm</button>
+{touchLocked&&<TouchLock title="Start gate armed" sub="Screen locked so rain can't change anything. Ride through the start gate to begin." foot="Stays locked until your run finishes" onUnlock={()=>setTouchLocked(false)}/>}
 </>
 )}
 </div>
