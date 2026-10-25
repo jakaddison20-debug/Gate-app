@@ -4061,6 +4061,34 @@ function TrophyCabinetScreen({user,onBack}){
 }
 
 const HOWTO_KEY=uid=>`gate_howto_seen_${uid||"anon"}`;
+function TouchLock({title,sub,label,foot,dim,onUnlock}){
+  const timer=useRef(null);
+  const [holding,setHolding]=useState(false);
+  const begin=e=>{e.preventDefault();setHolding(true);clearTimeout(timer.current);timer.current=setTimeout(()=>{setHolding(false);onUnlock&&onUnlock();},1500);};
+  const end=()=>{setHolding(false);clearTimeout(timer.current);};
+  useEffect(()=>()=>clearTimeout(timer.current),[]);
+  return(
+    <div onContextMenu={e=>e.preventDefault()} style={{position:"fixed",inset:0,zIndex:9000,background:dim?"rgba(26,26,26,0.18)":"transparent",display:"flex",flexDirection:"column",justifyContent:"flex-end",padding:"0 12px calc(env(safe-area-inset-bottom, 0px) + 34px)",touchAction:"none",userSelect:"none",WebkitUserSelect:"none",WebkitTouchCallout:"none"}}>
+      <div style={{background:"#262626",border:"1px solid rgba(255,255,255,0.14)",borderRadius:20,padding:16,boxShadow:"0 10px 30px rgba(0,0,0,0.35)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
+          <div style={{width:42,height:42,borderRadius:12,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.16)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+          </div>
+          <div>
+            <div style={{fontSize:16,fontWeight:800,color:"#fff"}}>{title}</div>
+            <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginTop:2,lineHeight:1.35}}>{sub}</div>
+          </div>
+        </div>
+        <div onPointerDown={begin} onPointerUp={end} onPointerLeave={end} onPointerCancel={end} style={{position:"relative",overflow:"hidden",width:"100%",background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.24)",borderRadius:12,padding:14,color:"#fff",fontSize:14,fontWeight:700,textAlign:"center",touchAction:"none"}}>
+          <div style={{position:"absolute",left:0,top:0,bottom:0,width:holding?"100%":"0%",background:"rgba(255,255,255,0.28)",transition:holding?"width 1.5s linear":"none"}}/>
+          <span style={{position:"relative"}}>{label||"Hold to unlock"}</span>
+        </div>
+        {foot&&<div style={{fontSize:11,color:"rgba(255,255,255,0.45)",textAlign:"center",marginTop:10}}>{foot}</div>}
+      </div>
+    </div>
+  );
+}
+
 function HowItWorksScreen({onClose}){
   const steps=[
     {Ic:Icon.Location,t:"Make a stage",b:"Stand at the top and tap Place Start Gate. Ride the trail, then tap Place Finish Gate at the bottom. Name it and tap Create Stage."},
@@ -5095,6 +5123,8 @@ function NewStageSheet({onClose,onSave}){
   const trackRef=useRef(null);
   const simulatePlace=()=>{if(!navigator.geolocation){alert("GPS not available");return;}navigator.geolocation.getCurrentPosition(pos=>{const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};if(!start){setStart(loc);setLineCoords([loc]);setRecording(true);trackRef.current=navigator.geolocation.watchPosition(p=>setLineCoords(prev=>[...prev,{lat:p.coords.latitude,lng:p.coords.longitude}]),err=>console.log(err),{enableHighAccuracy:true,maximumAge:0});}else if(!finish){setFinish(loc);setRecording(false);navigator.geolocation.clearWatch(trackRef.current);const fullLine=[...lineCoords,loc];let total=0;for(let i=0;i<fullLine.length-1;i++)total+=haversine(fullLine[i],fullLine[i+1]);if(total>25){const trimmed=trimLineFromStart(fullLine,25);if(trimmed&&trimmed.length>0){setStart(trimmed[0]);setLineCoords(trimmed);}else{setLineCoords(fullLine);}}else{setLineCoords(fullLine);}}},err=>alert("Could not get location — make sure GPS is on"),{enableHighAccuracy:true,timeout:10000});};
   const redoGates=()=>{if(trackRef.current!==null&&navigator.geolocation)navigator.geolocation.clearWatch(trackRef.current);trackRef.current=null;setStart(null);setFinish(null);setLineCoords([]);setRecording(false);};
+  const [gateLocked,setGateLocked]=useState(false);
+  useEffect(()=>{if(start&&!finish)setGateLocked(true);},[start]);
   const canSave=!!(name.trim()&&start&&finish);
   const dist=start&&finish?haversine(start,finish):null;
   let live=0;for(let i=0;i<lineCoords.length-1;i++)live+=haversine(lineCoords[i],lineCoords[i+1]);
@@ -5114,6 +5144,7 @@ function NewStageSheet({onClose,onSave}){
   return(
     <div style={{padding:"0 16px 74px"}}>
       <style>{"@keyframes gatePulse{0%{box-shadow:0 0 0 0 rgba(37,99,235,.45)}100%{box-shadow:0 0 0 9px rgba(37,99,235,0)}}"}</style>
+      {gateLocked&&<TouchLock dim title="Start gate placed" sub="Screen locked while you ride the trail, so rain can't move anything." label="Hold to unlock and place finish gate" onUnlock={()=>setGateLocked(false)}/>}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0 16px"}}>
         <div style={{fontSize:19,fontWeight:800,letterSpacing:-0.3,color:C.text}}>New Stage</div>
         <button className="tap" onClick={onClose} style={{background:C.surface,borderRadius:8,padding:"6px 14px",color:C.text,fontSize:13,fontWeight:500,border:`1px solid ${C.border}`}}>Cancel</button>
@@ -5654,7 +5685,7 @@ function RaceScreen({course,stages,user,onFinish,onActivity}){
   const [bestPerStage,setBestPerStage]=useState(savedProgress?savedProgress.bestPerStage:{}); // mashup: best time per stage id
   const [runCount,setRunCount]=useState(savedProgress?savedProgress.runCount:0); // how many full runs completed
   const [gateStatus,setGateStatus]=useState("waiting");
-  const [distToGate,setDistToGate]=useState(null); const [armed,setArmed]=useState(false); const [gpsAcc,setGpsAcc]=useState(null); const timerRef=useRef(null); const finishTimeoutRef=useRef(null);
+  const [distToGate,setDistToGate]=useState(null); const [armed,setArmed]=useState(false); const [touchLocked,setTouchLocked]=useState(false); const [gpsAcc,setGpsAcc]=useState(null); const timerRef=useRef(null); const finishTimeoutRef=useRef(null);
   const countRef=useRef(null);
   const gpsRef=useRef(null);
   const startTimeRef=useRef(0);
@@ -5724,9 +5755,10 @@ function RaceScreen({course,stages,user,onFinish,onActivity}){
   return()=>{done=true;navigator.geolocation.clearWatch(id);};
 },[phase,stageIndex,armed]);
 
+useEffect(()=>{if(!armed||phase==="split"||phase==="done"||phase==="modeIntro")setTouchLocked(false);},[armed,phase]);
 const armCheckRef=useRef(false);
 const tryArm=()=>{
-  const go=()=>{setGateStatus("waiting");setDistToGate(null);setArmed(true);};
+  const go=()=>{setGateStatus("waiting");setDistToGate(null);setArmed(true);setTouchLocked(true);};
   if(armCheckRef.current)return;
   if(!navigator.geolocation||!currentStage||!currentStage.start){go();return;}
   armCheckRef.current=true;
@@ -5973,6 +6005,7 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
 <div style={{fontSize:13,color:C.muted,marginBottom:16}}>{isPractice?"Timer won't start — just ride it for feel":"Timer starts automatically when you enter the gate"}</div>
 <GpsPill acc={gpsAcc}/>
 <button className="tap" onClick={()=>{setArmed(false);setGateStatus("waiting");setDistToGate(null);}} style={{marginTop:16,background:"none",border:"none",color:C.muted,fontSize:12,textDecoration:"underline"}}>Disarm</button>
+{touchLocked&&<TouchLock title="Start gate armed" sub="Screen locked so rain can't change anything. Ride through the start gate to begin." foot="Stays locked until your run finishes" onUnlock={()=>setTouchLocked(false)}/>}
 </>
 )}
 </div>
@@ -6058,6 +6091,7 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
           {isPractice
             ?<button className="tap" onClick={()=>stopStage(false)} style={{width:"100%",background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:14,padding:18,color:"#fff",fontSize:16,fontWeight:700}}>✓  Finish Gate — Next Stage</button>
             :<div style={{textAlign:"center",fontSize:13,color:"rgba(255,255,255,0.4)",paddingBottom:8}}>Timer stops automatically at the finish gate</div>}
+        {touchLocked&&!isPractice&&<TouchLock title="Screen locked" sub="Taps and swipes are ignored, so rain can't change anything." foot="Unlocks by itself when your run finishes" onUnlock={()=>setTouchLocked(false)}/>}
         </div>
       </div>
     );
