@@ -6774,6 +6774,32 @@ export default function App(){
 
 useEffect(()=>{window.__gateBusy=!!activeRace;return()=>{window.__gateBusy=false;};},[activeRace]);
 useEffect(()=>{
+  const loaded=Array.from(document.scripts).map(s=>s.src).find(s=>/\/assets\/index-[^/]+\.js/.test(s))||"";
+  if(!loaded)return;
+  let checking=false;
+  const check=async()=>{
+    if(checking||document.visibilityState!=="visible")return;
+    checking=true;
+    try{
+      const res=await fetch("/?_c="+Date.now(),{cache:"no-store"});
+      const m=(await res.text()).match(/\/assets\/index-[^"'\s]+\.js/);
+      if(m&&!loaded.endsWith(m[0])&&!window.__gateBusy&&!document.querySelector(".slide-up")){
+        let last=0;try{last=Number(sessionStorage.getItem("gate_upd")||0);}catch(e){}
+        if(Date.now()-last>60000){
+          try{sessionStorage.setItem("gate_upd",String(Date.now()));}catch(e){}
+          const u=new URL(window.location.href);u.searchParams.set("_v",Date.now());window.location.replace(u.toString());
+        }
+      }
+    }catch(e){}
+    checking=false;
+  };
+  check();
+  document.addEventListener("visibilitychange",check);
+  window.addEventListener("pageshow",check);
+  const t=setInterval(check,300000);
+  return()=>{document.removeEventListener("visibilitychange",check);window.removeEventListener("pageshow",check);clearInterval(t);};
+},[]);
+useEffect(()=>{
   if(!activeRace)return;
   let stopped=false;
   const grab=async()=>{
