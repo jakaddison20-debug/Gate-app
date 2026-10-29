@@ -5035,7 +5035,11 @@ function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,cou
  } 
  return coords[coords.length-1];
  }
- function trimLineFromStart(coords,targetDist){
+ function trimLineFromEnd(coords,targetDist){
+  if(!coords||coords.length<2)return coords||[];
+  return trimLineFromStart([...coords].reverse(),targetDist).reverse();
+}
+function trimLineFromStart(coords,targetDist){
  if(!coords||coords.length<2)return coords||[];
  let acc=0;
  for(let i=0;i<coords.length-1;i++){
@@ -5061,7 +5065,7 @@ function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,cou
   const [recording,setRecording]=useState(false);
   const [lineCoords,setLineCoords]=useState([]);
   const trackRef=useRef(null);
-  const simulatePlace=()=>{if(!navigator.geolocation){alert("GPS not available");return;}navigator.geolocation.getCurrentPosition(pos=>{const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};if(!start){setStart(loc);setLineCoords([loc]);setRecording(true);trackRef.current=navigator.geolocation.watchPosition(p=>setLineCoords(prev=>[...prev,{lat:p.coords.latitude,lng:p.coords.longitude}]),err=>console.log(err),{enableHighAccuracy:true,maximumAge:0});}else if(!finish){setFinish(loc);setRecording(false);navigator.geolocation.clearWatch(trackRef.current);const fullLine=[...lineCoords,loc];let total=0;for(let i=0;i<fullLine.length-1;i++)total+=haversine(fullLine[i],fullLine[i+1]);if(total>25){const trimmed=trimLineFromStart(fullLine,25);if(trimmed&&trimmed.length>0){setStart(trimmed[0]);setLineCoords(trimmed);}else{setLineCoords(fullLine);}}else{setLineCoords(fullLine);}}},err=>alert("Could not get location — make sure GPS is on"),{enableHighAccuracy:true,timeout:10000});};
+  const simulatePlace=()=>{if(!navigator.geolocation){alert("GPS not available");return;}navigator.geolocation.getCurrentPosition(pos=>{const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};if(!start){setStart(loc);setLineCoords([loc]);setRecording(true);trackRef.current=navigator.geolocation.watchPosition(p=>setLineCoords(prev=>[...prev,{lat:p.coords.latitude,lng:p.coords.longitude}]),err=>console.log(err),{enableHighAccuracy:true,maximumAge:0});}else if(!finish){const rawLine=[...lineCoords,loc];let rawTotal=0;for(let i=0;i<rawLine.length-1;i++)rawTotal+=haversine(rawLine[i],rawLine[i+1]);const endTrim=rawTotal>60?trimLineFromEnd(rawLine,10):null;setFinish(endTrim&&endTrim.length?endTrim[endTrim.length-1]:loc);setRecording(false);navigator.geolocation.clearWatch(trackRef.current);const fullLine=endTrim&&endTrim.length?endTrim:[...lineCoords,loc];let total=0;for(let i=0;i<fullLine.length-1;i++)total+=haversine(fullLine[i],fullLine[i+1]);if(total>25){const trimmed=trimLineFromStart(fullLine,25);if(trimmed&&trimmed.length>0){setStart(trimmed[0]);setLineCoords(trimmed);}else{setLineCoords(fullLine);}}else{setLineCoords(fullLine);}}},err=>alert("Could not get location — make sure GPS is on"),{enableHighAccuracy:true,timeout:10000});};
 
     const canSave=name.trim()&&start&&finish;
   const dist=start&&finish?haversine(start,finish):null;
@@ -5121,7 +5125,7 @@ function NewStageSheet({onClose,onSave}){
   const [recording,setRecording]=useState(false);
   const [lineCoords,setLineCoords]=useState([]);
   const trackRef=useRef(null);
-  const simulatePlace=()=>{if(!navigator.geolocation){alert("GPS not available");return;}navigator.geolocation.getCurrentPosition(pos=>{const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};if(!start){setStart(loc);setLineCoords([loc]);setRecording(true);trackRef.current=navigator.geolocation.watchPosition(p=>setLineCoords(prev=>[...prev,{lat:p.coords.latitude,lng:p.coords.longitude}]),err=>console.log(err),{enableHighAccuracy:true,maximumAge:0});}else if(!finish){setFinish(loc);setRecording(false);navigator.geolocation.clearWatch(trackRef.current);const fullLine=[...lineCoords,loc];let total=0;for(let i=0;i<fullLine.length-1;i++)total+=haversine(fullLine[i],fullLine[i+1]);if(total>25){const trimmed=trimLineFromStart(fullLine,25);if(trimmed&&trimmed.length>0){setStart(trimmed[0]);setLineCoords(trimmed);}else{setLineCoords(fullLine);}}else{setLineCoords(fullLine);}}},err=>alert("Could not get location — make sure GPS is on"),{enableHighAccuracy:true,timeout:10000});};
+  const simulatePlace=()=>{if(!navigator.geolocation){alert("GPS not available");return;}navigator.geolocation.getCurrentPosition(pos=>{const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};if(!start){setStart(loc);setLineCoords([loc]);setRecording(true);trackRef.current=navigator.geolocation.watchPosition(p=>setLineCoords(prev=>[...prev,{lat:p.coords.latitude,lng:p.coords.longitude}]),err=>console.log(err),{enableHighAccuracy:true,maximumAge:0});}else if(!finish){const rawLine=[...lineCoords,loc];let rawTotal=0;for(let i=0;i<rawLine.length-1;i++)rawTotal+=haversine(rawLine[i],rawLine[i+1]);const endTrim=rawTotal>60?trimLineFromEnd(rawLine,10):null;setFinish(endTrim&&endTrim.length?endTrim[endTrim.length-1]:loc);setRecording(false);navigator.geolocation.clearWatch(trackRef.current);const fullLine=endTrim&&endTrim.length?endTrim:[...lineCoords,loc];let total=0;for(let i=0;i<fullLine.length-1;i++)total+=haversine(fullLine[i],fullLine[i+1]);if(total>25){const trimmed=trimLineFromStart(fullLine,25);if(trimmed&&trimmed.length>0){setStart(trimmed[0]);setLineCoords(trimmed);}else{setLineCoords(fullLine);}}else{setLineCoords(fullLine);}}},err=>alert("Could not get location — make sure GPS is on"),{enableHighAccuracy:true,timeout:10000});};
   const redoGates=()=>{if(trackRef.current!==null&&navigator.geolocation)navigator.geolocation.clearWatch(trackRef.current);trackRef.current=null;setStart(null);setFinish(null);setLineCoords([]);setRecording(false);};
   const [gateLocked,setGateLocked]=useState(false);
   useEffect(()=>{if(start&&!finish)setGateLocked(true);},[start]);
@@ -6773,6 +6777,32 @@ export default function App(){
   useEffect(()=>{if(!navigator.geolocation)return;let centered=false;const id=navigator.geolocation.watchPosition(pos=>{const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};setUserPos(loc);if(typeof pos.coords.heading==='number'&&!isNaN(pos.coords.heading))setUserHeading(pos.coords.heading);if(!centered){setMapCenter(loc);centered=true;}},err=>console.log(err),{enableHighAccuracy:true,maximumAge:2000,timeout:10000});return()=>navigator.geolocation.clearWatch(id);},[]);
 
 useEffect(()=>{window.__gateBusy=!!activeRace;return()=>{window.__gateBusy=false;};},[activeRace]);
+useEffect(()=>{
+  const loaded=Array.from(document.scripts).map(s=>s.src).find(s=>/\/assets\/index-[^/]+\.js/.test(s))||"";
+  if(!loaded)return;
+  let checking=false;
+  const check=async()=>{
+    if(checking||document.visibilityState!=="visible")return;
+    checking=true;
+    try{
+      const res=await fetch("/?_c="+Date.now(),{cache:"no-store"});
+      const m=(await res.text()).match(/\/assets\/index-[^"'\s]+\.js/);
+      if(m&&!loaded.endsWith(m[0])&&!window.__gateBusy&&!document.querySelector(".slide-up")){
+        let last=0;try{last=Number(sessionStorage.getItem("gate_upd")||0);}catch(e){}
+        if(Date.now()-last>60000){
+          try{sessionStorage.setItem("gate_upd",String(Date.now()));}catch(e){}
+          const u=new URL(window.location.href);u.searchParams.set("_v",Date.now());window.location.replace(u.toString());
+        }
+      }
+    }catch(e){}
+    checking=false;
+  };
+  check();
+  document.addEventListener("visibilitychange",check);
+  window.addEventListener("pageshow",check);
+  const t=setInterval(check,300000);
+  return()=>{document.removeEventListener("visibilitychange",check);window.removeEventListener("pageshow",check);clearInterval(t);};
+},[]);
 useEffect(()=>{
   if(!activeRace)return;
   let stopped=false;
