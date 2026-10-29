@@ -820,16 +820,40 @@ function pbSeriesFromRuns(runs){
 // Average gap to your best, as a % of your best time; 0% off = 100, 15%+ off = 0.
 function consistencyLabel(score){return score>=90?"Locked in":score>=75?"Solid":score>=55?"Variable":"Scattered";}
 function consistencyColor(score){return score>=90?C.green:score>=75?C.blue:score>=55?C.yellow:C.red;}
-function consistencyFromRuns(runs){
+const wetKey=iso=>{const d=new Date(iso);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;};
+// Days you marked as wet (table wet_days: user_id, day). Consistency and fatigue compare like with like.
+function useWetDays(user){
+  const [wet,setWet]=useState(()=>new Set());
+  useEffect(()=>{if(!user)return;supabase.from('wet_days').select('day').eq('user_id',user.id).then(({data,error})=>{if(!error&&Array.isArray(data))setWet(new Set(data.map(r=>r.day)));});},[user&&user.id]);
+  const toggle=async day=>{
+    const on=wet.has(day);
+    const{error}=on?await supabase.from('wet_days').delete().eq('user_id',user.id).eq('day',day):await supabase.from('wet_days').insert({user_id:user.id,day});
+    if(error){alert(error.message);return;}
+    setWet(prev=>{const n=new Set(prev);if(on)n.delete(day);else n.add(day);return n;});
+  };
+  return{wet,toggle};
+}
+const medianOf=a=>{const v=[...a].sort((x,y)=>x-y),m=Math.floor(v.length/2);return v.length%2?v[m]:(v[m-1]+v[m])/2;};
+// Uses your last 5 runs in the same conditions (wet or dry) as your latest run, min 3. Typical run = the median, and one run more than 10% slower than the rest is left out.
+function consistencyFromRuns(runs,wet){
   if(!runs||runs.length<3)return null;
   const sorted=[...runs].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
-  const last=sorted.slice(-5).map(r=>r.time_ms);
+  const isWet=r=>!!(wet&&wet.has(wetKey(r.created_at)));
+  const latestWet=isWet(sorted[sorted.length-1]);
+  let isWetBasis=latestWet,same=sorted.filter(r=>isWet(r)===latestWet);
+  if(same.length<3){isWetBasis=!latestWet;same=sorted.filter(r=>isWet(r)===isWetBasis);}
+  if(same.length<3)return null;
+  let last=same.slice(-5).map(r=>r.time_ms),dropped=0;
+  if(last.length>=4){
+    const slow=Math.max(...last),rest=last.filter((t,i)=>i!==last.indexOf(slow));
+    if(slow>medianOf(rest)*1.1){last=rest;dropped=1;}
+  }
   const best=Math.min(...last);
   const worst=Math.max(...last);
-  const avg=last.reduce((s,t)=>s+t,0)/last.length;
-  const avgGapMs=avg-best;
+  const typical=medianOf(last);
+  const avgGapMs=typical-best;
   const score=Math.max(0,Math.min(100,Math.round(100*(1-(avgGapMs/best)/0.15))));
-  return{score,label:consistencyLabel(score),avgGapMs,best,avg,worst,runsUsed:last.length,totalRuns:runs.length};
+  return{score,label:consistencyLabel(score),avgGapMs,best,avg:typical,worst,runsUsed:last.length,totalRuns:runs.length,dropped,wet:isWetBasis};
 }
 const fmtSecs=ms=>(ms/1000).toFixed(1)+"s";
 function ConsistencyRing({score,size=54,stroke=5,fontSize=18,label}){
@@ -847,10 +871,10 @@ function ConsistencyRing({score,size=54,stroke=5,fontSize=18,label}){
     </div>
   );
 }
-function StageConsistencyCard({runs}){
+function StageConsistencyCard({runs,wet,onToggleWet}){
   const [open,setOpen]=useState(false);
   if(!runs||runs.length===0)return null;
-  const res=consistencyFromRuns(runs);
+  const res=consistencyFromRuns(runs,wet);
   if(!res)return(
     <div style={{margin:"16px 16px 0",background:C.surface,borderRadius:14,padding:"14px 16px",border:`1px solid ${C.border}`,fontSize:13,color:C.muted}}>Ride this stage 3 times to get your consistency score</div>
   );
@@ -861,21 +885,22 @@ function StageConsistencyCard({runs}){
         <ConsistencyRing score={res.score}/>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontSize:15,fontWeight:700,color:C.text}}>Consistency</div>
-          <div style={{fontSize:12,color:C.muted,marginTop:2}}><span style={{color,fontWeight:600}}>{res.label}</span> · last {res.runsUsed} runs</div>
+          <div style={{fontSize:12,color:C.muted,marginTop:2}}><span style={{color,fontWeight:600}}>{res.label}</span> · last {res.runsUsed} {res.wet?"wet ":""}runs</div>
         </div>
         <div style={{transform:open?"rotate(180deg)":"none",transition:"transform 0.15s",display:"flex"}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.mutedL} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
       </button>
       {open&&(
         <div style={{padding:"0 16px 14px"}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-            {[{l:"Best",v:formatTime(res.best)},{l:"Average",v:formatTime(Math.round(res.avg))},{l:"Slowest",v:formatTime(res.worst)}].map(x=>(
+            {[{l:"Best",v:formatTime(res.best)},{l:"Typical",v:formatTime(Math.round(res.avg))},{l:"Slowest",v:formatTime(res.worst)}].map(x=>(
               <div key={x.l} style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 6px",textAlign:"center"}}>
                 <div style={{fontSize:13,fontWeight:700,color:C.text}}>{x.v}</div>
                 <div style={{fontSize:10,color:C.muted,marginTop:2}}>{x.l}</div>
               </div>
             ))}
           </div>
-          <div style={{fontSize:12,color:C.muted,marginTop:10,lineHeight:1.45}}>Your last {res.runsUsed} runs are {fmtSecs(res.avgGapMs)} off your best on average. Closer to your best every run means a higher score.</div>
+          <div style={{fontSize:12,color:C.muted,marginTop:10,lineHeight:1.45}}>Your typical {res.wet?"wet ":""}run is {fmtSecs(res.avgGapMs)} off your best. Closer to your best every run means a higher score.{res.dropped?" One much slower run was left out.":""}</div>
+          {onToggleWet&&(()=>{const days=[];[...runs].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).forEach(r=>{const k=wetKey(r.created_at);if(!days.includes(k))days.push(k);});return(<div style={{marginTop:12}}><div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:6}}>Mark wet days</div><div style={{display:"flex",flexWrap:"wrap",gap:6}}>{days.slice(0,6).map(k=>{const on=wet&&wet.has(k);const[yy,mm,dd]=k.split("-").map(Number);return <button key={k} className="tap" onClick={()=>onToggleWet(k)} style={{padding:"6px 10px",borderRadius:10,border:`1px solid ${on?C.blue:C.border}`,background:on?"#EFF6FF":"#fff",fontSize:12,fontWeight:600,color:on?C.blue:C.muted}}>{new Date(yy,mm-1,dd).toLocaleDateString("en-GB",{day:"numeric",month:"short"})}{on?" · Wet":""}</button>;})}</div></div>);})()}
         </div>
       )}
     </div>
@@ -1879,6 +1904,7 @@ const [rank,setRank]=useState({total:0,myPos:0});
     const [lbPeriod,setLbPeriod]=useState("all");
     const [lbCat,setLbCat]=useState("all");
 const [myAttempts,setMyAttempts]=useState([]);
+const {wet:wetDays,toggle:toggleWetDay}=useWetDays(user);
 const [editingName,setEditingName]=useState(false);
 const [nameVal,setNameVal]=useState(stage.name);
 const [savingName,setSavingName]=useState(false);
@@ -1996,7 +2022,7 @@ if(lbFiltered){
             <StageInfoRow stage={stage} units={units} heightUnit={heightUnit}/>
             <StageLeaderboardCard lb={lbView.lb} rank={lbView.rank} user={user} stage={stage} period={lbPeriod} onPeriod={setLbPeriod} cat={lbCat} onCat={setLbCat}/>
             <StageProgressCard stage={stage} user={user} lb={lb} myAttempts={myAttempts}/>
-<StageConsistencyCard runs={myAttempts}/>
+<StageConsistencyCard runs={myAttempts} wet={wetDays} onToggleWet={toggleWetDay}/>
 <StageTimeDeltaCard stage={stage} lb={lb} all={lbAll} myAttempts={myAttempts} user={user} units={units} heightUnit={heightUnit}/>
 <StageSpeedCard stage={stage} user={user}/>
 <StageImprovementCard myAttempts={myAttempts}/>
@@ -4450,6 +4476,7 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
   const [expandedCRCourse,setExpandedCRCourse]=useState(null);
   const titles={hub:"Statistics",stages:"Stages",courses:"Courses",fastest:"Stage records",records:"Course Records",myStages:"Your Stages",myCourses:"Your Courses",consistency:"Consistency",improvement:"Improvement",fatigue:"Fatigue"};
   const [myRuns,setMyRuns]=useState(null);
+  const {wet:wetDays}=useWetDays(user);
   const [consistencySort,setConsistencySort]=useState('most');
   const [showHowScored,setShowHowScored]=useState(false);
   useEffect(()=>{
@@ -4465,7 +4492,8 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
   },[myRuns]);
   const impRows=useMemo(()=>improvementRows(runsByStage,stages),[runsByStage,stages]);
   const descents=useStageDescents(runsByStage,stages);
-  const fatModel=useMemo(()=>fatigueModel(runsByStage,descents,'day'),[runsByStage,descents]);
+  const dryByStage=useMemo(()=>{if(!runsByStage)return null;const o={};Object.keys(runsByStage).forEach(id=>{o[id]=runsByStage[id].filter(r=>!wetDays.has(wetKey(r.created_at)));});return o;},[runsByStage,wetDays]);
+  const fatModel=useMemo(()=>fatigueModel(dryByStage,descents,'day'),[dryByStage,descents]);
   const consistency=useMemo(()=>{
     if(!myRuns)return null;
     const byStage={};
@@ -4473,14 +4501,14 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
     const rows=[];
     Object.keys(byStage).forEach(id=>{
       const stage=stages.find(s=>String(s.id)===String(id));
-      const res=consistencyFromRuns(byStage[id]);
+      const res=consistencyFromRuns(byStage[id],wetDays);
       if(!stage||!res)return;
       rows.push({id:stage.id,name:stage.name,difficulty:stage.difficulty||'blue',...res});
     });
     if(rows.length===0)return{rows,overall:null};
     const overall=Math.round(rows.reduce((s,r)=>s+r.score,0)/rows.length);
     return{rows,overall};
-  },[myRuns,stages]);
+  },[myRuns,stages,wetDays]);
   const myStages=useMemo(()=>stages.filter(s=>s.created_by===user.id),[stages,user.id]);
   const myCourses=useMemo(()=>courses.filter(c=>c.created_by===user.id),[courses,user.id]);
   const [creatorStats,setCreatorStats]=useState(null);
@@ -4645,7 +4673,7 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
           </div>
         )}
         {view==='improvement'&&<ImprovementScreen rows={impRows}/>}
-        {view==='fatigue'&&<FatigueScreen grouped={runsByStage} descents={descents}/>}
+        {view==='fatigue'&&<FatigueScreen grouped={dryByStage} descents={descents}/>}
         {view==='myStages'&&(
           <div style={{padding:"16px 16px 40px"}}>
             {creatorStats===null?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>:creatorStats.stageRows.length===0?(
