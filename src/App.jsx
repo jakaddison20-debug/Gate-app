@@ -2925,6 +2925,96 @@ function GroupsScreen({user,onBack,onOpenGroup,h2h,onOpenH2h}){
 }
 
 
+function TeamHomeScreen({group,user,onBack,onOpenMap}){
+  const [d,setD]=useState(null);
+  const [err,setErr]=useState(false);
+  useEffect(()=>{
+    supabase.rpc("team_month",{p_group_id:group.id}).then(({data,error})=>{
+      if(error||!data){console.log(error);setErr(true);return;}
+      setD(data);
+    });
+  },[group.id]);
+  const ord=n=>{const s=["th","st","nd","rd"],v=n%100;return n+(s[(v-20)%10]||s[v]||s[0]);};
+  const shareTeam=()=>{
+    const shareText=`Join my team "${group.name}" on Rivl. Code: ${group.code}`;
+    if(navigator.share){navigator.share({title:group.name,text:shareText}).catch(()=>{});}
+    else if(navigator.clipboard){navigator.clipboard.writeText(group.code).then(()=>alert("Code copied to clipboard"));}
+  };
+  const copyCode=()=>{if(navigator.clipboard)navigator.clipboard.writeText(group.code).then(()=>alert("Code copied"));};
+  const members=d?d.members:[];
+  const topId=members.length>0&&members[0].runs>0?members[0].user_id:null;
+  const maxRuns=Math.max(1,...members.map(m=>m.runs));
+  const tiles=[
+    {key:"map",title:"Team map",sub:"Where you've ridden",icon:<Icon.Map size={20} color={C.blue}/>,onPress:onOpenMap}
+  ];
+  const label=t=><div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>{t}</div>;
+  return(
+    <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
+      <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+        <button className="tap" onClick={onBack} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:19,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{group.name}</div>
+          <div style={{fontSize:12,color:C.muted}}>{d?d.riders:"…"} member{d&&d.riders===1?"":"s"}</div>
+        </div>
+        <button className="tap" onClick={shareTeam} style={{background:"none",border:"none",padding:6}}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></button>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"16px 16px 28px"}}>
+        {err?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Could not load the team. Go back and try again.</div>
+        :!d?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>
+        :(<>
+          <div style={{border:`1px solid ${C.border}`,borderRadius:14,padding:14,marginBottom:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+              <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5}}>This month</div>
+              <div style={{fontSize:11,color:C.muted}}>{d.days_left<=1?"Resets tomorrow":`Resets in ${d.days_left} days`}</div>
+            </div>
+            <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",marginTop:8,gap:8}}>
+              <div><span style={{fontSize:34,fontWeight:800,color:C.text,lineHeight:1}}>{d.runs}</span><span style={{fontSize:13,color:C.muted,marginLeft:6}}>stage run{d.runs===1?"":"s"}</span></div>
+              <div style={{padding:"5px 11px",borderRadius:999,background:d.rank?`${C.blue}14`:C.surface,color:d.rank?C.blue:C.muted,fontSize:12,fontWeight:800,whiteSpace:"nowrap"}}>{d.rank?`${ord(d.rank)} of ${d.teams} teams`:"Needs 3 riders"}</div>
+            </div>
+            {d.rank&&d.lead_runs>0?(
+              <>
+                <div style={{height:6,borderRadius:3,background:C.surface,marginTop:12,overflow:"hidden"}}><div style={{width:`${Math.min(100,d.runs/d.lead_runs*100)}%`,height:"100%",background:C.blue,borderRadius:3}}/></div>
+                <div style={{fontSize:12,color:C.muted,marginTop:7}}>{d.rank===1?"You are leading this month":`${d.lead_name} lead with ${d.lead_runs} · you need ${d.lead_runs-d.runs+1} more`}</div>
+              </>
+            ):!d.rank?(
+              <div style={{fontSize:12,color:C.muted,marginTop:10}}>A team needs 3 riders to enter the monthly contest</div>
+            ):null}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:22}}>
+            {tiles.map(t=>(
+              <button key={t.key} className="tap" onClick={t.onPress} style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:14,padding:14,textAlign:"left",display:"flex",flexDirection:"column",gap:10}}>
+                <div style={{width:36,height:36,borderRadius:10,background:`${C.blue}12`,display:"flex",alignItems:"center",justifyContent:"center"}}>{t.icon}</div>
+                <div><div style={{fontSize:15,fontWeight:700,color:C.text}}>{t.title}</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>{t.sub}</div></div>
+              </button>
+            ))}
+          </div>
+          {label("Members · runs this month")}
+          <div style={{border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden",marginBottom:22}}>
+            {members.map((m,i)=>(
+              <div key={m.user_id} style={{display:"flex",alignItems:"center",gap:12,padding:"11px 14px",borderTop:i?`1px solid ${C.border}`:"none"}}>
+                <Avatar size={34} url={m.avatar_url}/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:14,fontWeight:600,color:C.text}}>{m.name||"Rider"}{m.user_id===user.id&&<span style={{color:C.muted,fontWeight:500}}> (you)</span>}</div>
+                  <div style={{height:5,borderRadius:3,background:C.surface,marginTop:6,overflow:"hidden"}}><div style={{width:`${m.runs/maxRuns*100}%`,height:"100%",background:m.user_id===user.id?C.blue:"#93B4F5",borderRadius:3}}/></div>
+                </div>
+                <div style={{fontSize:14,fontWeight:800,color:C.text,minWidth:26,textAlign:"right"}}>{m.runs}</div>
+                <div style={{width:16,display:"flex",justifyContent:"center"}}>{m.user_id===topId&&<TrophyCrown size={16} color="#C9A227"/>}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:C.surface,border:`1px dashed ${C.border}`,borderRadius:12,padding:"12px 14px"}}>
+            <div>
+              <div style={{fontSize:10,fontWeight:700,color:C.muted,letterSpacing:0.6,textTransform:"uppercase"}}>Team code</div>
+              <div style={{fontSize:20,fontWeight:800,color:C.text,letterSpacing:3,marginTop:2}}>{group.code}</div>
+            </div>
+            <button className="tap" onClick={copyCode} style={{background:"none",border:"none",padding:6}}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>
+          </div>
+        </>)}
+      </div>
+    </div>
+  );
+}
+
 function GroupDetailScreen({group,user,onBack,onOpenMap}){
   const [members,setMembers]=useState(null);
   const [groupStageIds,setGroupStageIds]=useState(null);
