@@ -2930,7 +2930,7 @@ function TeamHomeScreen({group,user,onBack,onOpenMap}){
   const [err,setErr]=useState(false);
   useEffect(()=>{
     supabase.rpc("team_month",{p_group_id:group.id}).then(({data,error})=>{
-      if(error||!data){console.log(error);setErr(true);return;}
+      if(error||!data){console.log(error);setErr(error?error.message:"No data came back");return;}
       setD(data);
     });
   },[group.id]);
@@ -2959,7 +2959,7 @@ function TeamHomeScreen({group,user,onBack,onOpenMap}){
         <button className="tap" onClick={shareTeam} style={{background:"none",border:"none",padding:6}}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></button>
       </div>
       <div style={{flex:1,overflowY:"auto",padding:"16px 16px 28px"}}>
-        {err?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Could not load the team. Go back and try again.</div>
+        {err?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Could not load the team. {String(err)}</div>
         :!d?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>
         :(<>
           <div style={{border:`1px solid ${C.border}`,borderRadius:14,padding:14,marginBottom:12}}>
