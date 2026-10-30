@@ -2925,7 +2925,234 @@ function GroupsScreen({user,onBack,onOpenGroup,h2h,onOpenH2h}){
 }
 
 
-function TeamHomeScreen({group,user,onBack,onOpenMap}){
+const CAL_MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
+const CAL_DAYS=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const calHM=d=>d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
+function calNextLabel(next){
+  if(!next)return "Plan a ride";
+  const d=new Date(next.starts_at);
+  return `${CAL_DAYS[d.getDay()]} ${d.getDate()} ${CAL_MONTHS[d.getMonth()].slice(0,3)} · ${calHM(d)}`;
+}
+function TeamCalendarScreen({group,user,stages,onBack}){
+  const [rides,setRides]=useState(null);
+  const [err,setErr]=useState(null);
+  const [view,setView]=useState(()=>{const n=new Date();return new Date(n.getFullYear(),n.getMonth(),1);});
+  const [plan,setPlan]=useState(false);
+  const load=()=>{
+    supabase.rpc("team_rides",{p_group_id:group.id}).then(({data,error})=>{
+      if(error||!data){setErr(error?error.message:"No data came back");return;}
+      setErr(null);setRides(data);
+    });
+  };
+  useEffect(()=>{load();},[group.id]);
+  const rsvp=(r,status)=>{
+    const next=r.mine===status?null:status;
+    setRides(rs=>rs.map(x=>x.id!==r.id?x:{...x,mine:next,cant:x.cant+(next==="no"?1:0)-(x.mine==="no"?1:0),going:next==="going"?[...x.going.filter(g=>g.user_id!==user.id),{user_id:user.id,name:null,avatar_url:null}]:x.going.filter(g=>g.user_id!==user.id)}));
+    supabase.rpc("team_ride_rsvp",{p_ride_id:r.id,p_status:next}).then(({error})=>{if(error)alert(error.message);load();});
+  };
+  const cancel=r=>{
+    if(!window.confirm("Cancel this ride?"))return;
+    supabase.rpc("team_ride_delete",{p_ride_id:r.id}).then(({error})=>{if(error)alert(error.message);load();});
+  };
+  const y=view.getFullYear(),mo=view.getMonth();
+  const first=(new Date(y,mo,1).getDay()+6)%7;
+  const dim=new Date(y,mo+1,0).getDate();
+  const byDay={};
+  (rides||[]).forEach(r=>{const d=new Date(r.starts_at);if(d.getFullYear()===y&&d.getMonth()===mo){(byDay[d.getDate()]=byDay[d.getDate()]||[]).push(r);}});
+  const upcoming=(rides||[]).filter(r=>new Date(r.starts_at).getTime()>=Date.now()-3*3600*1000);
+  const chev=(pts)=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points={pts}/></svg>;
+  const small=p=><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{p}</svg>;
+  const cells=[];
+  for(let i=0;i<first;i++)cells.push(<div key={"b"+i}/>);
+  for(let d=1;d<=dim;d++){
+    const rs=byDay[d]||[];
+    const has=rs.length>0,mine=rs.some(r=>r.mine==="going");
+    cells.push(
+      <div key={d} style={{height:38,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:has?700:500,color:has?C.text:C.muted}}>
+        <div style={{width:30,height:30,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:mine?C.blue:"transparent",color:mine?"#fff":"inherit"}}>{d}</div>
+        {has&&!mine&&<div style={{width:5,height:5,borderRadius:"50%",background:C.blue,marginTop:-3}}/>}
+      </div>
+    );
+  }
+  const card=r=>{
+    const d=new Date(r.starts_at);
+    const g=r.mine==="going",no=r.mine==="no";
+    const going=r.going||[];
+    const st=r.stages||[];
+    const canCancel=r.created_by===user.id||group.created_by===user.id;
+    const hasPin=r.place_lat!=null&&r.place_lng!=null;
+    return(
+      <div key={r.id} style={{border:g?`1.5px solid ${C.blue}`:`1px solid ${C.border}`,borderRadius:14,padding:"13px 14px",marginBottom:10}}>
+        <div style={{display:"flex",gap:12,alignItems:"center"}}>
+          <div style={{width:46,borderRadius:10,background:`${C.blue}12`,textAlign:"center",padding:"6px 0",flexShrink:0}}>
+            <div style={{fontSize:10,fontWeight:800,color:C.blue,letterSpacing:0.5}}>{CAL_MONTHS[d.getMonth()].slice(0,3).toUpperCase()}</div>
+            <div style={{fontSize:20,fontWeight:800,lineHeight:1.1,color:C.text}}>{d.getDate()}</div>
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:15,fontWeight:700,color:C.text}}>{r.title}</div>
+            <div style={{fontSize:12,color:C.muted,marginTop:3,display:"flex",alignItems:"center",gap:5}}>{small(<><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>)}{CAL_DAYS[d.getDay()]} · {calHM(d)}</div>
+            {(r.place||hasPin)&&(hasPin
+              ?<a href={`https://www.google.com/maps/search/?api=1&query=${r.place_lat},${r.place_lng}`} target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:C.blue,marginTop:2,display:"flex",alignItems:"center",gap:5,textDecoration:"none",fontWeight:600}}>{small(<><path d="M12 21.5s-6.5-5.6-6.5-10.8a6.5 6.5 0 0113 0c0 5.2-6.5 10.8-6.5 10.8z"/><circle cx="12" cy="10.5" r="2.4"/></>)}{r.place||"Pinned location"}</a>
+              :<div style={{fontSize:12,color:C.muted,marginTop:2,display:"flex",alignItems:"center",gap:5}}>{small(<><path d="M12 21.5s-6.5-5.6-6.5-10.8a6.5 6.5 0 0113 0c0 5.2-6.5 10.8-6.5 10.8z"/><circle cx="12" cy="10.5" r="2.4"/></>)}{r.place}</div>)}
+            {st.length>0&&<div style={{fontSize:12,color:C.muted,marginTop:2,display:"flex",alignItems:"center",gap:5,minWidth:0}}><Icon.Lightning size={12} color={C.muted}/><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{st.map(s=>s.name).join(" · ")}</span></div>}
+          </div>
+        </div>
+        {r.note&&<div style={{fontSize:12,color:C.muted,marginTop:10,lineHeight:1.4,whiteSpace:"pre-wrap"}}>{r.note}</div>}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:12,gap:8}}>
+          <div style={{display:"flex",alignItems:"center",minWidth:0}}>
+            {going.slice(0,4).map((m,i)=><div key={m.user_id} style={{marginLeft:i?-8:0,borderRadius:"50%",boxShadow:"0 0 0 2px #fff"}}><Avatar size={26} url={m.avatar_url}/></div>)}
+            <span style={{fontSize:12,color:C.muted,marginLeft:going.length?8:0,whiteSpace:"nowrap"}}>{going.length?`${going.length} going`:"Nobody yet"}</span>
+          </div>
+          <div style={{display:"flex",gap:8,flexShrink:0}}>
+            <button className="tap" onClick={()=>rsvp(r,"no")} style={{border:`1px solid ${C.border}`,background:no?C.text:"#fff",color:no?"#fff":C.muted,borderRadius:999,padding:"6px 12px",fontSize:12,fontWeight:700}}>Can't go</button>
+            <button className="tap" onClick={()=>rsvp(r,"going")} style={{border:g?"none":`1.5px solid ${C.blue}`,background:g?C.green:"#fff",color:g?"#fff":C.blue,borderRadius:999,padding:"6px 13px",fontSize:12,fontWeight:700}}>{g?"Going ✓":"Going"}</button>
+          </div>
+        </div>
+        {canCancel&&<button className="tap" onClick={()=>cancel(r)} style={{marginTop:10,background:"none",border:"none",padding:0,fontSize:12,color:C.muted}}>Cancel ride</button>}
+      </div>
+    );
+  };
+  return(
+    <div style={{position:"relative",height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
+      <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+        <button className="tap" onClick={onBack} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
+        <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>Calendar</div>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"16px 16px 100px"}}>
+        {err?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Could not load the calendar. {String(err)}</div>
+        :!rides?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>
+        :(<>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+            <div style={{fontSize:16,fontWeight:800,color:C.text}}>{CAL_MONTHS[mo]} {y}</div>
+            <div style={{display:"flex",gap:6}}>
+              <button className="tap" onClick={()=>setView(new Date(y,mo-1,1))} style={{width:30,height:30,border:`1px solid ${C.border}`,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>{chev("15 18 9 12 15 6")}</button>
+              <button className="tap" onClick={()=>setView(new Date(y,mo+1,1))} style={{width:30,height:30,border:`1px solid ${C.border}`,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>{chev("9 18 15 12 9 6")}</button>
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",textAlign:"center",fontSize:11,fontWeight:600,color:C.mutedL,marginBottom:2}}>{["M","T","W","T","F","S","S"].map((x,i)=><div key={i}>{x}</div>)}</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",textAlign:"center",marginBottom:20}}>{cells}</div>
+          <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>Upcoming</div>
+          {upcoming.length===0
+            ?<div style={{padding:"28px 20px",textAlign:"center",color:C.muted}}>
+               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={C.mutedL} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+               <div style={{fontSize:15,fontWeight:500,marginTop:12,marginBottom:4,color:C.text}}>No rides planned</div>
+               <div style={{fontSize:13,color:C.mutedL}}>Tap Plan a ride to get the team out</div>
+             </div>
+            :upcoming.map(card)}
+        </>)}
+      </div>
+      <div style={{position:"absolute",left:0,right:0,bottom:0,padding:"12px 16px 24px",background:"linear-gradient(rgba(255,255,255,0),#fff 35%)"}}>
+        <button className="tap" onClick={()=>setPlan(true)} style={{width:"100%",background:C.blue,border:"none",borderRadius:14,padding:15,color:"#fff",fontSize:15,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><Icon.Plus size={18} color="#fff"/>Plan a ride</button>
+      </div>
+      {plan&&<PlanRideSheet group={group} stages={stages} onClose={()=>setPlan(false)} onPosted={()=>{setPlan(false);load();}}/>}
+    </div>
+  );
+}
+function PlanRideSheet({group,stages,onClose,onPosted}){
+  const pad=n=>String(n).padStart(2,"0");
+  const ymd=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const [title,setTitle]=useState("");
+  const [date,setDate]=useState(()=>{const d=new Date();d.setDate(d.getDate()+((6-d.getDay()+7)%7||7));return ymd(d);});
+  const [time,setTime]=useState("10:00");
+  const [place,setPlace]=useState("");
+  const [lat,setLat]=useState(null);
+  const [lng,setLng]=useState(null);
+  const [locBusy,setLocBusy]=useState(false);
+  const [pickedIds,setPickedIds]=useState([]);
+  const [picking,setPicking]=useState(false);
+  const [q,setQ]=useState("");
+  const [note,setNote]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [err,setErr]=useState("");
+  const picked=pickedIds.map(id=>stages.find(s=>s.id===id)).filter(Boolean);
+  const dd=new Date(date+"T12:00:00");
+  const dateLabel=isNaN(dd.getTime())?"Pick a date":`${CAL_DAYS[dd.getDay()]} ${dd.getDate()} ${CAL_MONTHS[dd.getMonth()].slice(0,3)}`;
+  const dcol=s=>(DIFFICULTIES.find(d=>d.val===(s.difficulty||"blue"))||DIFFICULTIES[0]).color;
+  const tog=id=>setPickedIds(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
+  const here=()=>{
+    if(!navigator.geolocation){setErr("Location is not available on this device");return;}
+    setLocBusy(true);setErr("");
+    navigator.geolocation.getCurrentPosition(p=>{setLat(p.coords.latitude);setLng(p.coords.longitude);setLocBusy(false);setPlace(v=>v.trim()?v:"Pinned location");},()=>{setLocBusy(false);setErr("Could not get your location");},{enableHighAccuracy:true,timeout:10000});
+  };
+  const post=()=>{
+    if(!title.trim()||busy)return;
+    const when=new Date(`${date}T${time}`);
+    if(isNaN(when.getTime())){setErr("Pick a date and time");return;}
+    setBusy(true);setErr("");
+    supabase.rpc("team_ride_create",{p_group_id:group.id,p_title:title.trim(),p_starts_at:when.toISOString(),p_place:place.trim()||null,p_lat:lat,p_lng:lng,p_note:note.trim()||null,p_stages:picked.map(s=>({id:s.id,name:s.name,difficulty:s.difficulty||"blue"}))}).then(({error})=>{
+      setBusy(false);
+      if(error){setErr(error.message);return;}
+      onPosted();
+    });
+  };
+  const lab=t=><div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:7}}>{t}</div>;
+  const fld={width:"100%",border:`1px solid ${C.border}`,borderRadius:12,padding:"13px 14px",fontSize:16,outline:"none",background:"#fff",color:C.text,fontFamily:"inherit"};
+  const hdr=(t,back)=>(
+    <div style={{padding:"16px 16px 12px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+      <button className="tap" onClick={back} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
+      <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>{t}</div>
+    </div>
+  );
+  const svg=(p,c,s)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{p}</svg>;
+  const shell={position:"absolute",inset:0,zIndex:60,background:"#fff",display:"flex",flexDirection:"column"};
+  if(picking){
+    const list=stages.filter(s=>!q.trim()||s.name.toLowerCase().includes(q.trim().toLowerCase())).sort((a,b)=>a.name.localeCompare(b.name));
+    return(
+      <div className="slide-up" style={shell}>
+        {hdr("Add stages",()=>setPicking(false))}
+        <div style={{padding:"12px 16px 4px"}}><div style={{display:"flex",alignItems:"center",gap:10,background:C.surface,borderRadius:12,padding:"11px 14px"}}><Icon.Search size={18} color={C.mutedL}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search your stages" style={{flex:1,minWidth:0,border:"none",background:"none",outline:"none",fontSize:16,color:C.text,fontFamily:"inherit"}}/></div></div>
+        <div style={{flex:1,overflowY:"auto"}}>
+          {list.length===0&&<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>No stages found</div>}
+          {list.map(s=>{const on=pickedIds.includes(s.id);return(
+            <button key={s.id} className="tap" onClick={()=>tog(s.id)} style={{width:"100%",background:"none",border:"none",borderBottom:`1px solid ${C.border}`,padding:"13px 16px",display:"flex",alignItems:"center",gap:12,textAlign:"left"}}>
+              <DifficultyDiamond color={dcol(s)} size={16}/>
+              <div style={{flex:1,minWidth:0}}><div style={{fontSize:15,fontWeight:600,color:C.text}}>{s.name}</div><div style={{fontSize:12,color:C.muted,marginTop:1}}>{formatDist(stageLengthM(s))}</div></div>
+              <div style={{width:24,height:24,borderRadius:"50%",background:on?C.blue:"#fff",border:on?"none":`1.5px solid ${C.mutedL}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{on&&<Icon.Check size={14} color="#fff"/>}</div>
+            </button>
+          );})}
+        </div>
+        <div style={{padding:"12px 16px 24px",borderTop:`1px solid ${C.border}`,background:"#fff"}}><button className="tap" onClick={()=>setPicking(false)} style={{width:"100%",background:C.blue,border:"none",borderRadius:14,padding:15,color:"#fff",fontSize:15,fontWeight:700}}>Done · {pickedIds.length} selected</button></div>
+      </div>
+    );
+  }
+  return(
+    <div className="slide-up" style={shell}>
+      <style>{`.rfld:focus{border-color:${C.blue}!important}`}</style>
+      {hdr("Plan a ride",onClose)}
+      <div style={{flex:1,overflowY:"auto",padding:"18px 16px 28px"}}>
+        <div style={{marginBottom:18}}>{lab("Ride name")}<input className="rfld" value={title} onChange={e=>setTitle(e.target.value)} maxLength={80} placeholder="e.g. Saturday laps" style={fld}/></div>
+        <div style={{marginBottom:18}}>{lab("Date and time")}
+          <div style={{display:"flex",gap:10}}>
+            <label style={{position:"relative",flex:1.25,display:"flex",alignItems:"center",gap:10,border:`1px solid ${C.border}`,borderRadius:12,padding:"13px 14px",fontSize:15,fontWeight:600,color:C.text}}>{svg(<><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></>,C.blue,19)}{dateLabel}<input type="date" value={date} min={ymd(new Date())} onChange={e=>e.target.value&&setDate(e.target.value)} style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0,fontSize:16}}/></label>
+            <label style={{position:"relative",flex:1,display:"flex",alignItems:"center",gap:10,border:`1px solid ${C.border}`,borderRadius:12,padding:"13px 14px",fontSize:15,fontWeight:600,color:C.text}}>{svg(<><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>,C.blue,19)}{time}<input type="time" value={time} onChange={e=>e.target.value&&setTime(e.target.value)} style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0,fontSize:16}}/></label>
+          </div>
+        </div>
+        <div style={{marginBottom:18}}>{lab("Meeting place")}
+          <div style={{position:"relative"}}><span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",display:"flex"}}>{svg(<><path d="M12 21.5s-6.5-5.6-6.5-10.8a6.5 6.5 0 0113 0c0 5.2-6.5 10.8-6.5 10.8z"/><circle cx="12" cy="10.5" r="2.4"/></>,C.muted,18)}</span><input className="rfld" value={place} onChange={e=>setPlace(e.target.value)} maxLength={120} placeholder="Car park, cafe, trail head" style={{...fld,paddingLeft:42}}/></div>
+          {lat==null
+            ?<button className="tap" onClick={here} style={{background:"none",border:"none",color:C.blue,fontSize:13,fontWeight:600,padding:"8px 2px 0"}}>{locBusy?"Finding you…":"Use my current location"}</button>
+            :<div style={{display:"flex",alignItems:"center",gap:12,padding:"8px 2px 0"}}><span style={{fontSize:13,fontWeight:600,color:C.green}}>✓ Location pinned</span><button className="tap" onClick={()=>{setLat(null);setLng(null);}} style={{background:"none",border:"none",color:C.muted,fontSize:13,padding:0}}>Remove</button></div>}
+        </div>
+        <div style={{marginBottom:18}}>{lab("Stages to ride · optional")}
+          <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+            {picked.map(s=>(
+              <div key={s.id} style={{display:"flex",alignItems:"center",gap:7,border:`1px solid ${C.border}`,borderRadius:999,padding:"7px 8px 7px 11px",fontSize:13,fontWeight:600,color:C.text}}>
+                <DifficultyDiamond color={dcol(s)} size={13}/>{s.name}
+                <button className="tap" onClick={()=>tog(s.id)} style={{background:"none",border:"none",padding:0,display:"flex"}}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.mutedL} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+              </div>
+            ))}
+            <button className="tap" onClick={()=>setPicking(true)} style={{display:"flex",alignItems:"center",gap:6,border:`1.5px dashed ${C.mutedL}`,background:"#fff",borderRadius:999,padding:"7px 13px",fontSize:13,fontWeight:600,color:C.muted}}><Icon.Plus size={15} color={C.muted}/>Add stages</button>
+          </div>
+        </div>
+        <div style={{marginBottom:22}}>{lab("Note · optional")}<textarea className="rfld" value={note} onChange={e=>setNote(e.target.value)} maxLength={500} rows={3} placeholder="Anything to bring?" style={{...fld,resize:"none",lineHeight:1.4}}/></div>
+        <button className="tap" onClick={post} style={{width:"100%",background:C.blue,border:"none",borderRadius:14,padding:16,color:"#fff",fontSize:15,fontWeight:700,opacity:title.trim()&&!busy?1:0.4}}>{busy?"Posting…":"Post to team"}</button>
+        {err&&<div style={{fontSize:12,color:C.red,textAlign:"center",marginTop:10}}>{err}</div>}
+        <div style={{fontSize:12,color:C.muted,textAlign:"center",marginTop:10,lineHeight:1.4}}>Goes on the team calendar. You're marked as going.<br/>Everyone else taps Going or Can't go.</div>
+      </div>
+    </div>
+  );
+}
+function TeamHomeScreen({group,user,onBack,onOpenMap,onOpenCal}){
   const [d,setD]=useState(null);
   const [err,setErr]=useState(false);
   useEffect(()=>{
@@ -2945,6 +3172,7 @@ function TeamHomeScreen({group,user,onBack,onOpenMap}){
   const topId=members.length>0&&members[0].runs>0?members[0].user_id:null;
   const maxRuns=Math.max(1,...members.map(m=>m.runs));
   const tiles=[
+    {key:"cal",title:"Calendar",sub:calNextLabel(d&&d.next_ride),icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>,onPress:onOpenCal},
     {key:"map",title:"Team map",sub:"Where you've ridden",icon:<Icon.Map size={20} color={C.blue}/>,onPress:onOpenMap}
   ];
   const label=t=><div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>{t}</div>;
@@ -6818,6 +7046,7 @@ export default function App(){
   const [followerCount,setFollowerCount]=useState(null);
   const [h2hList,setH2hList]=useState([]);
   const [groupMapOpen,setGroupMapOpen]=useState(false);
+  const [teamCalOpen,setTeamCalOpen]=useState(false);
   const [pickingGroup,setPickingGroup]=useState(null);
   const [pickingExistingIds,setPickingExistingIds]=useState([]);
   const [showBikeSetup,setShowBikeSetup]=useState(false);
@@ -7302,7 +7531,7 @@ if(showBikeSetup)return(
                 setShowGroups(false);
                 setTab('map');
               }}/>
-            :<TeamHomeScreen group={activeGroup} user={user} onBack={()=>setActiveGroup(null)} onOpenMap={()=>setGroupMapOpen(true)}/>)
+            :teamCalOpen?<TeamCalendarScreen group={activeGroup} user={user} stages={stages} onBack={()=>setTeamCalOpen(false)}/>:<TeamHomeScreen group={activeGroup} user={user} onBack={()=>setActiveGroup(null)} onOpenMap={()=>setGroupMapOpen(true)} onOpenCal={()=>setTeamCalOpen(true)}/>)
         :<GroupsScreen user={user} onBack={()=>setShowGroups(false)} onOpenGroup={g=>setActiveGroup(g)} h2h={{requests:h2hRequests+gInvites,active:h2hActive+gActiveCount}} onOpenH2h={()=>{setH2hFromFeed(false);setShowGroups(false);setShowH2h(true);}}/>}
     </div>
   );
