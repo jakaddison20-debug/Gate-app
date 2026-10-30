@@ -3152,7 +3152,87 @@ function PlanRideSheet({group,stages,onClose,onPosted}){
     </div>
   );
 }
-function TeamHomeScreen({group,user,onBack,onOpenMap,onOpenCal}){
+function trophyOrd(n){const s=["th","st","nd","rd"],v=n%100;return n+(s[(v-20)%10]||s[v]||s[0]);}
+function trophySub(m){
+  if(!m)return "Monthly league";
+  const p=[];
+  if(m.gold)p.push(`${m.gold} gold`);
+  if(m.silver)p.push(`${m.silver} silver`);
+  if(m.bronze)p.push(`${m.bronze} bronze`);
+  return p.length?p.slice(0,2).join(" · "):"Monthly league";
+}
+function TeamTrophiesScreen({group,user,onBack}){
+  const [d,setD]=useState(null);
+  const [err,setErr]=useState(null);
+  useEffect(()=>{
+    supabase.rpc("team_trophies",{p_group_id:group.id}).then(({data,error})=>{
+      if(error||!data){setErr(error?error.message:"No data came back");return;}
+      setD(data);
+    });
+  },[group.id]);
+  const label=t=><div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>{t}</div>;
+  const medal=(pos,n,big)=>{
+    const m=TROPHY_MEDAL[pos],has=n>0,sz=big?52:44;
+    return(
+      <div key={pos} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",paddingTop:big?0:6}}>
+        <div style={{width:sz,height:sz,borderRadius:"50%",border:has?`2.5px solid ${m.col}`:`1.5px dashed ${C.mutedL}`,background:has?m.bg:"#fff",display:"flex",alignItems:"center",justifyContent:"center"}}><TrophyCrown size={big?24:20} color={has?m.col:C.mutedL}/></div>
+        <div style={{display:"flex",alignItems:"baseline",gap:5,marginTop:7}}>
+          <span style={{fontSize:big?18:16,fontWeight:800,color:has?C.text:C.mutedL,lineHeight:1}}>{n}</span>
+          <span style={{fontSize:10,fontWeight:600,color:has?C.muted:C.mutedL}}>{m.name}</span>
+        </div>
+      </div>
+    );
+  };
+  const monthName=s=>{const dt=new Date(s+"T12:00:00");const nm=CAL_MONTHS[dt.getMonth()];return dt.getFullYear()===new Date().getFullYear()?nm:`${nm} ${dt.getFullYear()}`;};
+  const thisMonth=CAL_MONTHS[new Date().getMonth()];
+  return(
+    <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
+      <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+        <button className="tap" onClick={onBack} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
+        <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>Team trophies</div>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"16px 16px 28px"}}>
+        {err?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Could not load the trophies. {String(err)}</div>
+        :!d?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>
+        :(<>
+          <div style={{border:`1px solid ${C.border}`,borderRadius:14,padding:"18px 10px 16px",display:"flex",alignItems:"flex-end",marginBottom:22}}>
+            {medal(2,d.medals.silver)}{medal(1,d.medals.gold,true)}{medal(3,d.medals.bronze)}
+          </div>
+          {label(`Most stage runs · ${thisMonth}`)}
+          <div style={{fontSize:12,color:C.muted,margin:"-4px 0 10px"}}>Every timed stage run counts. Resets on the 1st. Teams need 3 riders to enter.</div>
+          <div style={{border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden",marginBottom:22}}>
+            {d.table.length===0&&<div style={{padding:"18px 14px",textAlign:"center",color:C.muted,fontSize:13}}>No teams in the league yet</div>}
+            {d.table.map((t,i)=>(
+              <div key={t.id} style={{display:"flex",alignItems:"center",gap:12,padding:"11px 14px",borderTop:i?`1px solid ${C.border}`:"none",background:t.you?`${C.blue}0F`:"transparent"}}>
+                <div style={{width:22,fontSize:14,fontWeight:800,color:t.runs>0&&t.rank<=3?C.text:C.muted,textAlign:"center"}}>{t.runs>0?t.rank:"–"}</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:14,fontWeight:t.you?800:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.name}{t.you&&<span style={{color:C.blue,fontWeight:700}}> · you</span>}</div>
+                  <div style={{fontSize:12,color:C.muted,marginTop:1}}>{t.riders} riders</div>
+                </div>
+                <div style={{fontSize:15,fontWeight:800,color:C.text}}>{t.runs}</div>
+              </div>
+            ))}
+            {!d.table.some(t=>t.you)&&<div style={{padding:"12px 14px",textAlign:"center",background:C.surface,borderTop:d.table.length?`1px solid ${C.border}`:"none",color:C.muted,fontSize:12}}>{group.name} needs 3 riders to enter the league</div>}
+          </div>
+          {label("Past months")}
+          <div style={{border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden"}}>
+            {d.past.length===0&&<div style={{padding:"18px 14px",textAlign:"center",color:C.muted,fontSize:13}}>No finished months yet. Your first result lands on the 1st.</div>}
+            {d.past.map((p,i)=>(
+              <div key={p.month} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",borderTop:i?`1px solid ${C.border}`:"none"}}>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:14,fontWeight:600,color:C.text}}>{monthName(p.month)}</div>
+                  <div style={{fontSize:12,color:C.muted,marginTop:1}}>{trophyOrd(p.place)} · {p.runs} runs</div>
+                </div>
+                {p.place<=3&&<TrophyDot pos={p.place}/>}
+              </div>
+            ))}
+          </div>
+        </>)}
+      </div>
+    </div>
+  );
+}
+function TeamHomeScreen({group,user,onBack,onOpenMap,onOpenCal,onOpenTroph}){
   const [d,setD]=useState(null);
   const [err,setErr]=useState(false);
   useEffect(()=>{
@@ -3173,7 +3253,8 @@ function TeamHomeScreen({group,user,onBack,onOpenMap,onOpenCal}){
   const maxRuns=Math.max(1,...members.map(m=>m.runs));
   const tiles=[
     {key:"cal",title:"Calendar",sub:calNextLabel(d&&d.next_ride),icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>,onPress:onOpenCal},
-    {key:"map",title:"Team map",sub:"Where you've ridden",icon:<Icon.Map size={20} color={C.blue}/>,onPress:onOpenMap}
+    {key:"map",title:"Team map",sub:"Where you've ridden",icon:<Icon.Map size={20} color={C.blue}/>,onPress:onOpenMap},
+    {key:"troph",title:"Trophies",sub:trophySub(d&&d.medals),icon:<TrophyCrown size={21} color={C.blue}/>,onPress:onOpenTroph}
   ];
   const label=t=><div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>{t}</div>;
   return(
@@ -7047,6 +7128,7 @@ export default function App(){
   const [h2hList,setH2hList]=useState([]);
   const [groupMapOpen,setGroupMapOpen]=useState(false);
   const [teamCalOpen,setTeamCalOpen]=useState(false);
+  const [teamTrophOpen,setTeamTrophOpen]=useState(false);
   const [pickingGroup,setPickingGroup]=useState(null);
   const [pickingExistingIds,setPickingExistingIds]=useState([]);
   const [showBikeSetup,setShowBikeSetup]=useState(false);
@@ -7531,7 +7613,7 @@ if(showBikeSetup)return(
                 setShowGroups(false);
                 setTab('map');
               }}/>
-            :teamCalOpen?<TeamCalendarScreen group={activeGroup} user={user} stages={stages} onBack={()=>setTeamCalOpen(false)}/>:<TeamHomeScreen group={activeGroup} user={user} onBack={()=>setActiveGroup(null)} onOpenMap={()=>setGroupMapOpen(true)} onOpenCal={()=>setTeamCalOpen(true)}/>)
+            :teamCalOpen?<TeamCalendarScreen group={activeGroup} user={user} stages={stages} onBack={()=>setTeamCalOpen(false)}/>:teamTrophOpen?<TeamTrophiesScreen group={activeGroup} user={user} onBack={()=>setTeamTrophOpen(false)}/>:<TeamHomeScreen group={activeGroup} user={user} onBack={()=>setActiveGroup(null)} onOpenMap={()=>setGroupMapOpen(true)} onOpenCal={()=>setTeamCalOpen(true)} onOpenTroph={()=>setTeamTrophOpen(true)}/>)
         :<GroupsScreen user={user} onBack={()=>setShowGroups(false)} onOpenGroup={g=>setActiveGroup(g)} h2h={{requests:h2hRequests+gInvites,active:h2hActive+gActiveCount}} onOpenH2h={()=>{setH2hFromFeed(false);setShowGroups(false);setShowH2h(true);}}/>}
     </div>
   );
