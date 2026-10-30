@@ -2871,7 +2871,7 @@ function GroupsScreen({user,onBack,onOpenGroup,h2h,onOpenH2h}){
         {view==='list'&&<button className="tap" onClick={()=>setView('create')} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"7px 12px",color:C.blue,fontSize:13,fontWeight:600}}><Icon.Plus size={14} color={C.blue}/>New</button>}
       </div>
       <div style={{flex:1,overflowY:"auto"}}>
-        {view==='list'&&onOpenH2h&&(
+        {false&&view==='list'&&onOpenH2h&&(
           <button className="tap" onClick={onOpenH2h} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"14px 16px",borderBottom:`1px solid ${C.border}`,background:"white",textAlign:"left"}}>
             <ChallengeIcon type="h2h" size={40}/>
             <div style={{flex:1,minWidth:0}}>
@@ -7302,7 +7302,7 @@ if(showBikeSetup)return(
                 setShowGroups(false);
                 setTab('map');
               }}/>
-            :<GroupDetailScreen group={activeGroup} user={user} onBack={()=>setActiveGroup(null)} onOpenMap={()=>setGroupMapOpen(true)}/>)
+            :<TeamHomeScreen group={activeGroup} user={user} onBack={()=>setActiveGroup(null)} onOpenMap={()=>setGroupMapOpen(true)}/>)
         :<GroupsScreen user={user} onBack={()=>setShowGroups(false)} onOpenGroup={g=>setActiveGroup(g)} h2h={{requests:h2hRequests+gInvites,active:h2hActive+gActiveCount}} onOpenH2h={()=>{setH2hFromFeed(false);setShowGroups(false);setShowH2h(true);}}/>}
     </div>
   );
