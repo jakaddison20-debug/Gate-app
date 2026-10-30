@@ -2810,7 +2810,7 @@ function GroupRow({group,onPress}){
       <div style={{width:40,height:40,borderRadius:10,background:`${C.blue}12`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.Users size={20} color={C.blue}/></div>
       <div style={{flex:1,minWidth:0}}>
         <div style={{fontSize:14,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{group.name}</div>
-        <div style={{fontSize:12,color:C.muted,marginTop:2}}>{group.memberCount} members</div>
+        <div style={{fontSize:12,color:C.muted,marginTop:2}}>{group.memberCount} member{group.memberCount===1?"":"s"}</div>
       </div>
       <Icon.ChevronRight size={16} color={C.mutedL}/>
     </button>
@@ -2851,7 +2851,7 @@ function GroupsScreen({user,onBack,onOpenGroup,h2h,onOpenH2h}){
     if(code.length!==6)return;
     setJoinError("");
     const{data,error}=await supabase.rpc('preview_group_by_code',{p_code:code});
-    if(error||!data||data.length===0){setJoinError("No group found with that code");setJoinPreview(null);return;}
+    if(error||!data||data.length===0){setJoinError("No team found with that code");setJoinPreview(null);return;}
     setJoinPreview(data[0]);
   };
 
@@ -2867,7 +2867,7 @@ function GroupsScreen({user,onBack,onOpenGroup,h2h,onOpenH2h}){
     <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
       <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
         <button className="tap" onClick={()=>view==='list'?onBack():setView('list')} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
-        <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>{view==='list'?'Groups':view==='create'?'New Group':'Join Group'}</div>
+        <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>{view==='list'?'Teams':view==='create'?'New Team':'Join Team'}</div>
         {view==='list'&&<button className="tap" onClick={()=>setView('create')} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"7px 12px",color:C.blue,fontSize:13,fontWeight:600}}><Icon.Plus size={14} color={C.blue}/>New</button>}
       </div>
       <div style={{flex:1,overflowY:"auto"}}>
@@ -2886,19 +2886,19 @@ function GroupsScreen({user,onBack,onOpenGroup,h2h,onOpenH2h}){
           groups.length===0?(
             <div style={{textAlign:"center",padding:"48px 20px",color:C.muted}}>
               <Icon.Users size={36} color={C.mutedL}/>
-              <div style={{fontSize:15,fontWeight:500,marginBottom:4,marginTop:12}}>No groups yet</div>
+              <div style={{fontSize:15,fontWeight:500,marginBottom:4,marginTop:12}}>No teams yet</div>
               <div style={{fontSize:13,color:C.mutedL,marginBottom:16}}>Create one or join with a code</div>
             </div>
           ):groups.map(g=><GroupRow key={g.id} group={g} onPress={onOpenGroup}/>))}
         {view==='list'&&(
           <div style={{padding:"16px"}}>
-            <button className="tap" onClick={()=>setView('join')} style={{width:"100%",background:C.surface,border:`1px dashed ${C.border}`,borderRadius:10,padding:12,fontSize:13,color:C.muted,fontWeight:500}}>Have a code? Join a group</button>
+            <button className="tap" onClick={()=>setView('join')} style={{width:"100%",background:C.surface,border:`1px dashed ${C.border}`,borderRadius:10,padding:12,fontSize:13,color:C.muted,fontWeight:500}}>Have a code? Join a team</button>
           </div>
         )}
         {view==='create'&&(
           <div style={{padding:"20px 16px"}}>
-            <input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="Group name e.g. Sunday Grinders" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"13px 14px",fontSize:15,color:C.text,background:C.surface,marginBottom:16,boxSizing:"border-box"}}/>
-            <button className="tap" onClick={createGroup} disabled={!newName.trim()||creating} style={{width:"100%",background:newName.trim()?C.blue:C.surface,border:"none",borderRadius:12,padding:15,color:newName.trim()?"#fff":C.muted,fontSize:15,fontWeight:700}}>{creating?"Creating…":"Create Group"}</button>
+            <input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="Team name e.g. Sunday Grinders" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"13px 14px",fontSize:15,color:C.text,background:C.surface,marginBottom:16,boxSizing:"border-box"}}/>
+            <button className="tap" onClick={createGroup} disabled={!newName.trim()||creating} style={{width:"100%",background:newName.trim()?C.blue:C.surface,border:"none",borderRadius:12,padding:15,color:newName.trim()?"#fff":C.muted,fontSize:15,fontWeight:700}}>{creating?"Creating…":"Create Team"}</button>
           </div>
         )}
         {view==='join'&&(
@@ -2907,14 +2907,14 @@ function GroupsScreen({user,onBack,onOpenGroup,h2h,onOpenH2h}){
             <input value={joinCode} onChange={e=>{setJoinCode(e.target.value.toUpperCase());setJoinPreview(null);setJoinError("");}} placeholder="ABC123" maxLength={6} style={{width:"100%",border:`1.5px solid ${joinCode.length===6?C.blue:C.border}`,borderRadius:12,padding:"18px",fontSize:28,fontWeight:800,color:C.blue,textAlign:"center",letterSpacing:6,background:C.surface,marginBottom:14,boxSizing:"border-box"}}/>
             {joinError&&<div style={{fontSize:13,color:C.red,textAlign:"center",marginBottom:14}}>{joinError}</div>}
             {!joinPreview?(
-              <button className="tap" onClick={lookupCode} disabled={joinCode.length!==6} style={{width:"100%",background:joinCode.length===6?C.blue:C.surface,border:"none",borderRadius:12,padding:15,color:joinCode.length===6?"#fff":C.muted,fontSize:15,fontWeight:700}}>Find Group</button>
+              <button className="tap" onClick={lookupCode} disabled={joinCode.length!==6} style={{width:"100%",background:joinCode.length===6?C.blue:C.surface,border:"none",borderRadius:12,padding:15,color:joinCode.length===6?"#fff":C.muted,fontSize:15,fontWeight:700}}>Find Team</button>
             ):(
               <>
                 <div style={{background:C.surface,borderRadius:12,padding:"14px",border:`1px solid ${C.border}`,marginBottom:14,textAlign:"center"}}>
                   <div style={{fontSize:15,fontWeight:700,color:C.text}}>{joinPreview.name}</div>
                   <div style={{fontSize:12,color:C.muted,marginTop:2}}>{joinPreview.member_count} members</div>
                 </div>
-                <button className="tap" onClick={confirmJoin} disabled={joining} style={{width:"100%",background:C.blue,border:"none",borderRadius:12,padding:15,color:"#fff",fontSize:15,fontWeight:700}}>{joining?"Joining…":"Join Group"}</button>
+                <button className="tap" onClick={confirmJoin} disabled={joining} style={{width:"100%",background:C.blue,border:"none",borderRadius:12,padding:15,color:"#fff",fontSize:15,fontWeight:700}}>{joining?"Joining…":"Join Team"}</button>
               </>
             )}
           </div>
