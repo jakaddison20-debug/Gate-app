@@ -3480,7 +3480,98 @@ function TeamChatScreen({group,user,stages,onBack,onViewStage}){
     </div>
   );
 }
-function TeamHomeScreen({group,user,onBack,onOpenMap,onOpenCal,onOpenTroph,onOpenChat}){
+// ── Team invite links: rivl.uk/?join=CODE ──
+const INVITE_KEY="gate_invite";
+function inviteRead(){
+  try{
+    const u=new URL(window.location.href);
+    const p=u.searchParams.get("join");
+    if(p){
+      u.searchParams.delete("join");
+      window.history.replaceState(null,"",u.pathname+u.search+u.hash);
+      if(/^[A-Za-z0-9]{6}$/.test(p))localStorage.setItem(INVITE_KEY,JSON.stringify({c:p.toUpperCase(),t:Date.now()}));
+    }
+    const v=JSON.parse(localStorage.getItem(INVITE_KEY)||"null");
+    if(v&&v.c&&Date.now()-v.t<7*86400000)return v.c;
+    localStorage.removeItem(INVITE_KEY);
+  }catch(e){}
+  return null;
+}
+function inviteClear(){try{localStorage.removeItem(INVITE_KEY);}catch(e){}}
+function InviteToast({msg,onDone}){
+  useEffect(()=>{const t=setTimeout(onDone,3200);return()=>clearTimeout(t);},[msg]);
+  return(
+    <div style={{position:"fixed",left:16,right:16,top:"calc(env(safe-area-inset-top, 0px) + 70px)",zIndex:400,background:C.text,color:"#fff",borderRadius:14,padding:"13px 14px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 8px 28px rgba(0,0,0,0.25)",animation:"gateToast .35s cubic-bezier(.32,.72,0,1)"}}>
+      <style>{"@keyframes gateToast{from{transform:translateY(-120%);opacity:0}to{transform:translateY(0);opacity:1}}"}</style>
+      <div style={{width:22,height:22,borderRadius:"50%",background:C.green,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.Check size={13} color="#fff"/></div>
+      <div style={{fontSize:14,fontWeight:600}}>{msg}</div>
+    </div>
+  );
+}
+function TeamInviteSheet({code,onClose,onOpenTeam}){
+  const [st,setSt]=useState("loading");
+  const [info,setInfo]=useState(null);
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState("");
+  const load=()=>{
+    setSt("loading");
+    supabase.rpc("team_invite_preview",{p_code:code}).then(({data,error})=>{
+      if(error){setSt("err");return;}
+      if(!data){setSt("bad");return;}
+      if(data.joined&&data.group){onOpenTeam(data.group,`You're already in ${data.name}`);return;}
+      setInfo(data);setSt("ready");
+    });
+  };
+  useEffect(()=>{load();},[code]);
+  const join=()=>{
+    if(busy)return;
+    setBusy(true);setMsg("");
+    supabase.rpc("join_group_by_code",{p_code:code}).then(({error})=>{
+      if(error){setBusy(false);setMsg(error.message);return;}
+      supabase.rpc("team_invite_preview",{p_code:code}).then(({data})=>{
+        setBusy(false);
+        if(data&&data.group)onOpenTeam(data.group,`You joined ${data.name}`);
+        else onClose();
+      });
+    });
+  };
+  if(st==="loading")return null;
+  const n=info?info.member_count:0;
+  return(
+    <>
+      <div onClick={onClose} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.3)",zIndex:300,animation:"fadeIn .2s"}}/>
+      <div className="slide-up" style={{position:"absolute",left:0,right:0,bottom:0,zIndex:301,background:"#fff",borderRadius:"16px 16px 0 0",padding:"0 20px max(34px, env(safe-area-inset-bottom, 0px))",boxShadow:"0 -8px 30px rgba(0,0,0,0.12)"}}>
+        <div style={{display:"flex",justifyContent:"center",padding:"10px 0 14px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div>
+        {st==="ready"?(
+          <>
+            <div style={{display:"inline-block",background:"#EFF4FF",color:C.blue,fontSize:11,fontWeight:800,letterSpacing:0.6,padding:"5px 10px",borderRadius:999}}>TEAM INVITE</div>
+            <div style={{fontSize:26,fontWeight:800,color:C.text,marginTop:12,letterSpacing:-0.3}}>Join {info.name}?</div>
+            <div style={{display:"flex",alignItems:"center",gap:12,margin:"16px 0 8px"}}>
+              <div style={{display:"flex"}}>{(info.members||[]).slice(0,4).map((m,i)=><div key={i} style={{marginLeft:i?-10:0,border:"2px solid #fff",borderRadius:"50%",display:"flex"}}><Avatar size={44} url={m.avatar_url}/></div>)}</div>
+              <div style={{flex:1,fontSize:14,color:C.muted,lineHeight:1.35}}>{n} rider{n===1?"":"s"} so far. Your stage runs count towards the team's monthly total.</div>
+            </div>
+            <div style={{margin:"14px 0 18px",borderTop:`1px solid ${C.border}`}}/>
+            <button className="tap" onClick={join} style={{width:"100%",background:C.blue,border:"none",borderRadius:14,padding:16,color:"#fff",fontSize:15,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",minHeight:52,fontFamily:"inherit"}}>
+              {busy?<span style={{width:18,height:18,border:"2.5px solid rgba(255,255,255,0.4)",borderTopColor:"#fff",borderRadius:"50%",display:"inline-block",animation:"gateSpin .7s linear infinite"}}/>:"Join team"}
+            </button>
+            {msg&&<div style={{fontSize:12,color:C.red,textAlign:"center",marginTop:10}}>{msg}</div>}
+            <button className="tap" onClick={onClose} style={{width:"100%",background:"none",border:"none",padding:"14px 0 0",color:C.muted,fontSize:14,fontWeight:600,fontFamily:"inherit"}}>Not now</button>
+          </>
+        ):(
+          <>
+            <div style={{width:48,height:48,borderRadius:14,background:C.surface,display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 007.07 0l3-3a5 5 0 00-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 00-7.07 0l-3 3a5 5 0 007.07 7.07l1.5-1.5"/></svg></div>
+            <div style={{fontSize:24,fontWeight:800,color:C.text,marginTop:14,letterSpacing:-0.3}}>{st==="bad"?"This invite isn't valid":"Couldn't open this invite"}</div>
+            <div style={{fontSize:14,color:C.muted,marginTop:6,lineHeight:1.4}}>{st==="bad"?"The link may be wrong, or the team no longer exists. Ask for a fresh link, or type the 6-letter code under Teams.":"Check your connection and try again."}</div>
+            <button className="tap" onClick={st==="bad"?onClose:load} style={{width:"100%",background:C.blue,border:"none",borderRadius:14,padding:16,color:"#fff",fontSize:15,fontWeight:700,marginTop:22,fontFamily:"inherit"}}>{st==="bad"?"Got it":"Try again"}</button>
+            {st==="err"&&<button className="tap" onClick={onClose} style={{width:"100%",background:"none",border:"none",padding:"14px 0 0",color:C.muted,fontSize:14,fontWeight:600,fontFamily:"inherit"}}>Not now</button>}
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
+function TeamHomeScreen({group,user,onBack,onOpenMap,onOpenCal,onOpenTroph,onOpenChat,toast,onToastDone}){
   const [d,setD]=useState(null);
   const [err,setErr]=useState(false);
   useEffect(()=>{
@@ -3491,9 +3582,9 @@ function TeamHomeScreen({group,user,onBack,onOpenMap,onOpenCal,onOpenTroph,onOpe
   },[group.id]);
   const ord=n=>{const s=["th","st","nd","rd"],v=n%100;return n+(s[(v-20)%10]||s[v]||s[0]);};
   const shareTeam=()=>{
-    const shareText=`Join my team "${group.name}" on Rivl. Code: ${group.code}`;
+    const shareText=`Join ${group.name} on Rivl. Ride stages, plan rides and take on other teams. ${window.location.origin}/?join=${group.code}`;
     if(navigator.share){navigator.share({title:group.name,text:shareText}).catch(()=>{});}
-    else if(navigator.clipboard){navigator.clipboard.writeText(group.code).then(()=>alert("Code copied to clipboard"));}
+    else if(navigator.clipboard){navigator.clipboard.writeText(shareText).then(()=>alert("Invite link copied"));}
   };
   const copyCode=()=>{if(navigator.clipboard)navigator.clipboard.writeText(group.code).then(()=>alert("Code copied"));};
   const members=d?d.members:[];
@@ -3517,6 +3608,7 @@ function TeamHomeScreen({group,user,onBack,onOpenMap,onOpenCal,onOpenTroph,onOpe
         <button className="tap" onClick={shareTeam} style={{background:"none",border:"none",padding:6}}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></button>
       </div>
       <div style={{flex:1,overflowY:"auto",padding:"16px 16px 28px"}}>
+        {toast&&<InviteToast msg={toast} onDone={onToastDone}/>}
         {err?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Could not load the team. {String(err)}</div>
         :!d?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>
         :(<>
@@ -3538,6 +3630,19 @@ function TeamHomeScreen({group,user,onBack,onOpenMap,onOpenCal,onOpenTroph,onOpe
               <div style={{fontSize:12,color:C.muted,marginTop:10}}>A team needs 3 riders to enter the monthly contest</div>
             ):null}
           </div>
+          {d.riders<3&&(
+            <div style={{border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:12}}>
+              <div style={{display:"flex",alignItems:"center"}}>
+                {members.slice(0,3).map((m,i)=><div key={m.user_id} style={{marginLeft:i?-8:0,border:"2px solid #fff",borderRadius:"50%",display:"flex"}}><Avatar size={34} url={m.avatar_url}/></div>)}
+                <div style={{width:34,height:34,borderRadius:"50%",border:`1.5px dashed ${C.mutedL}`,marginLeft:members.length?-8:0,display:"flex",alignItems:"center",justifyContent:"center",background:"#fff"}}><Icon.Plus size={16} color={C.mutedL}/></div>
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:14,fontWeight:700,color:C.text}}>Invite {3-d.riders} more rider{3-d.riders===1?"":"s"}</div>
+                <div style={{fontSize:12,color:C.muted,marginTop:1}}>{d.riders} of 3 riders needed</div>
+              </div>
+              <button className="tap" onClick={shareTeam} style={{background:C.blue,border:"none",borderRadius:999,padding:"8px 16px",color:"#fff",fontSize:13,fontWeight:700,fontFamily:"inherit"}}>Invite</button>
+            </div>
+          )}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:22}}>
             {tiles.map(t=>(
               <button key={t.key} className="tap" onClick={t.onPress} style={{position:"relative",background:"#fff",border:`1px solid ${C.border}`,borderRadius:14,padding:14,textAlign:"left",display:"flex",flexDirection:"column",gap:10}}>
@@ -6956,7 +7061,7 @@ function LobbySheet({onClose}){
     </div>
   );
 }
-function AuthScreen({onAuth}){
+function AuthScreen({onAuth,invited}){
   const [mode,setMode]=useState("login");
   const [email,setEmail]=useState("");
   const [password,setPassword]=useState("");
@@ -6986,6 +7091,12 @@ function AuthScreen({onAuth}){
         <div style={{fontSize:13,color:C.muted}}>Enduro timing for every trail</div>
       </div>
       <div style={{flex:1,padding:"8px 24px 24px",overflowY:"auto"}}>
+        {invited&&(
+          <div style={{background:"#EFF4FF",borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:10,marginBottom:18}}>
+            <div style={{width:32,height:32,borderRadius:9,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.Users size={18} color={C.blue}/></div>
+            <div style={{fontSize:13,color:C.text,lineHeight:1.35,fontWeight:600}}>You've been invited to join a team. {mode==="login"?"Log in":"Sign up"} and you'll be asked to join.</div>
+          </div>
+        )}
         <div style={{display:"flex",background:C.surface,borderRadius:10,padding:3,marginBottom:22}}>
           {["login","signup"].map(m=><button key={m} onClick={()=>setMode(m)} style={{flex:1,padding:"9px",borderRadius:8,background:mode===m?"#fff":"none",border:"none",color:mode===m?C.text:C.muted,fontSize:14,fontWeight:mode===m?600:400,boxShadow:mode===m?"0 1px 4px rgba(0,0,0,0.08)":"none"}}>{m==="login"?"Log In":"Sign Up"}</button>)}
         </div>
@@ -7485,6 +7596,8 @@ export default function App(){
   const saveSettings=async(s)=>{setSettings(s);if(!user)return;await supabase.from('profiles').update({category:(s.category==="men"||s.category==="women")?s.category:null,app_settings:{units:s.units,heightUnit:s.heightUnit,gpsAccuracy:s.gpsAccuracy,notifications:s.notifications,privacy:s.privacy}}).eq('id',user.id);};
   const [user,setUser]=useState(null);
   const updUi=useAppUpdates(user);
+  const [inviteCode,setInviteCode]=useState(inviteRead);
+  const [inviteMsg,setInviteMsg]=useState("");
     const goToStage=(stageId)=>{
   const stage=stages.find(s=>String(s.id)===String(stageId));
   if(!stage){alert("Couldn't find that stage");return;}
@@ -7878,7 +7991,7 @@ const weekStats=weekStatsByType.all;
     <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",overflow:"hidden"}}>
       <style>{STYLES}</style>
       <Analytics/>
-      <AuthScreen/>
+      <AuthScreen invited={!!inviteCode}/>
     </div>
   );
 
@@ -7964,7 +8077,7 @@ if(showBikeSetup)return(
                 setShowGroups(false);
                 setTab('map');
               }}/>
-            :teamCalOpen?<TeamCalendarScreen group={activeGroup} user={user} stages={stages} onBack={()=>setTeamCalOpen(false)}/>:teamTrophOpen?<TeamTrophiesScreen group={activeGroup} user={user} onBack={()=>setTeamTrophOpen(false)}/>:teamChatOpen?<TeamChatScreen group={activeGroup} user={user} stages={stages} onBack={()=>setTeamChatOpen(false)} onViewStage={id=>{setShowGroups(false);goToStage(id);}}/>:<TeamHomeScreen group={activeGroup} user={user} onBack={()=>setActiveGroup(null)} onOpenMap={()=>setGroupMapOpen(true)} onOpenCal={()=>setTeamCalOpen(true)} onOpenTroph={()=>setTeamTrophOpen(true)} onOpenChat={()=>setTeamChatOpen(true)}/>)
+            :teamCalOpen?<TeamCalendarScreen group={activeGroup} user={user} stages={stages} onBack={()=>setTeamCalOpen(false)}/>:teamTrophOpen?<TeamTrophiesScreen group={activeGroup} user={user} onBack={()=>setTeamTrophOpen(false)}/>:teamChatOpen?<TeamChatScreen group={activeGroup} user={user} stages={stages} onBack={()=>setTeamChatOpen(false)} onViewStage={id=>{setShowGroups(false);goToStage(id);}}/>:<TeamHomeScreen group={activeGroup} user={user} onBack={()=>setActiveGroup(null)} onOpenMap={()=>setGroupMapOpen(true)} onOpenCal={()=>setTeamCalOpen(true)} onOpenTroph={()=>setTeamTrophOpen(true)} onOpenChat={()=>setTeamChatOpen(true)} toast={inviteMsg} onToastDone={()=>setInviteMsg("")}/>)
         :<GroupsScreen user={user} onBack={()=>setShowGroups(false)} onOpenGroup={g=>setActiveGroup(g)} h2h={{requests:h2hRequests+gInvites,active:h2hActive+gActiveCount}} onOpenH2h={()=>{setH2hFromFeed(false);setShowGroups(false);setShowH2h(true);}}/>}
     </div>
   );
@@ -7987,6 +8100,7 @@ if(showBikeSetup)return(
   return(
         <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",background:"#fff",overflow:"hidden",fontFamily:"'Inter',sans-serif"}}>
       {updUi}
+      {user&&inviteCode&&<TeamInviteSheet code={inviteCode} onClose={()=>{inviteClear();setInviteCode(null);}} onOpenTeam={(g,m)=>{inviteClear();setInviteCode(null);setTeamChatOpen(false);setTeamCalOpen(false);setTeamTrophOpen(false);setGroupMapOpen(false);setActiveGroup(g);setInviteMsg(m);setShowGroups(true);}}/>}
       <style>{STYLES}</style>
       <Analytics/>
       <div style={{height:"env(safe-area-inset-top, 0px)",background:tab==="map"?"transparent":"#fff",position:"relative",zIndex:10}}/>
