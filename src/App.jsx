@@ -7228,6 +7228,104 @@ function DayRecapPreviewSheet({recap,name,posting,onPost,onDismiss}){
   );
 }
 
+// ── App updates: "New update ready" banner + What's new sheet ──
+// For each big update: change WHATS_NEW (id + text) AND public/version.json (same id).
+const WHATS_NEW={
+  id:"teams-1",
+  title:"Teams are here",
+  sub:"Ride together, plan sessions and take on other teams.",
+  items:[
+    {k:"chat",t:"Team chat",s:"Message your team"},
+    {k:"cal",t:"Calendar",s:"Plan rides and see who is in"},
+    {k:"crown",t:"Monthly league",s:"Most stage runs wins. Medals every month"},
+    {k:"map",t:"Team map",s:"Everywhere your team has ridden"}
+  ]
+};
+function WnIcon({k}){
+  const p={width:22,height:22,viewBox:"0 0 24 24",fill:"none",stroke:C.blue,strokeWidth:1.8,strokeLinecap:"round",strokeLinejoin:"round"};
+  if(k==="crown")return <TrophyCrown size={22} color={C.blue}/>;
+  if(k==="map")return <Icon.Map size={22} color={C.blue}/>;
+  if(k==="cal")return <svg {...p}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>;
+  return <svg {...p}><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>;
+}
+function useAppUpdates(user){
+  const [pending,setPending]=useState(null);
+  const [busy,setBusy]=useState(false);
+  const [showNew,setShowNew]=useState(false);
+  const uid=user?user.id:null;
+  const uidRef=useRef(null);
+  uidRef.current=uid;
+  useEffect(()=>{
+    window.__gateMajorCheck=async()=>{
+      try{
+        const res=await fetch("/version.json?_c="+Date.now(),{cache:"no-store"});
+        if(!res.ok)return;
+        const v=await res.json();
+        const newer=!!(v&&v.major&&v.major!==WHATS_NEW.id);
+        window.__gateMajorPending=newer&&!!uidRef.current;
+        setPending(newer?{note:String(v.note||"")}:null);
+      }catch(e){}
+    };
+    return()=>{window.__gateMajorCheck=null;window.__gateMajorPending=false;};
+  },[]);
+  useEffect(()=>{if(!pending||!uid)window.__gateMajorPending=false;else window.__gateMajorPending=true;},[pending,uid]);
+  useEffect(()=>{
+    if(!uid)return;
+    let seen=null;
+    try{seen=localStorage.getItem("gate_seen_major");}catch(e){return;}
+    if(seen===WHATS_NEW.id)return;
+    const mark=()=>{try{localStorage.setItem("gate_seen_major",WHATS_NEW.id);}catch(e){}};
+    if(!seen&&user.created_at&&Date.now()-new Date(user.created_at).getTime()<86400000){mark();return;}
+    const t=setTimeout(()=>{mark();setShowNew(true);},700);
+    return()=>clearTimeout(t);
+  },[uid]);
+  const doUpdate=()=>{
+    if(busy||navigator.onLine===false)return;
+    setBusy(true);
+    setTimeout(()=>{
+      try{sessionStorage.setItem("gate_upd",String(Date.now()));}catch(e){}
+      const u=new URL(window.location.href);u.searchParams.set("_v",Date.now());window.location.replace(u.toString());
+    },500);
+  };
+  return(
+    <>
+      <style>{"@keyframes gateDrop{from{transform:translateY(-120%);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes gateSpin{to{transform:rotate(360deg)}}"}</style>
+      {pending&&uid&&(
+        <div style={{position:"absolute",left:12,right:12,top:"calc(env(safe-area-inset-top, 0px) + 6px)",zIndex:250,background:C.text,borderRadius:16,padding:"12px 12px 12px 14px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 8px 28px rgba(0,0,0,0.25)",animation:"gateDrop .35s cubic-bezier(.32,.72,0,1)"}}>
+          <div style={{width:36,height:36,borderRadius:10,background:"rgba(255,255,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.Lightning size={19} color="#fff"/></div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>New update ready</div>
+            {pending.note&&<div style={{fontSize:12,color:"rgba(255,255,255,0.65)",marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{pending.note}</div>}
+          </div>
+          <button className="tap" onClick={doUpdate} style={{background:C.blue,border:"none",borderRadius:999,padding:"8px 16px",color:"#fff",fontSize:13,fontWeight:700,minWidth:78,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontFamily:"inherit"}}>
+            {busy?<span style={{width:14,height:14,border:"2px solid rgba(255,255,255,0.4)",borderTopColor:"#fff",borderRadius:"50%",display:"inline-block",animation:"gateSpin .7s linear infinite"}}/>:"Update"}
+          </button>
+        </div>
+      )}
+      {showNew&&(
+        <>
+          <div onClick={()=>setShowNew(false)} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.3)",zIndex:300,animation:"fadeIn .2s"}}/>
+          <div className="slide-up" style={{position:"absolute",left:0,right:0,bottom:0,zIndex:301,background:"#fff",borderRadius:"16px 16px 0 0",padding:"0 20px max(34px, env(safe-area-inset-bottom, 0px))",boxShadow:"0 -8px 30px rgba(0,0,0,0.12)"}}>
+            <div style={{display:"flex",justifyContent:"center",padding:"10px 0 14px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div>
+            <div style={{display:"inline-block",background:"#EFF4FF",color:C.blue,fontSize:11,fontWeight:800,letterSpacing:0.6,padding:"5px 10px",borderRadius:999}}>WHAT'S NEW</div>
+            <div style={{fontSize:26,fontWeight:800,color:C.text,marginTop:12,letterSpacing:-0.3}}>{WHATS_NEW.title}</div>
+            <div style={{fontSize:14,color:C.muted,marginTop:5,lineHeight:1.4}}>{WHATS_NEW.sub}</div>
+            <div style={{margin:"14px 0 18px",borderTop:`1px solid ${C.border}`,paddingTop:6}}>
+              {WHATS_NEW.items.map(it=>(
+                <div key={it.k} style={{display:"flex",alignItems:"center",gap:14,padding:"11px 0"}}>
+                  <div style={{width:42,height:42,borderRadius:12,background:"#EFF4FF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><WnIcon k={it.k}/></div>
+                  <div><div style={{fontSize:15,fontWeight:700,color:C.text}}>{it.t}</div><div style={{fontSize:13,color:C.muted,marginTop:2,lineHeight:1.3}}>{it.s}</div></div>
+                </div>
+              ))}
+            </div>
+            <button className="tap" onClick={()=>setShowNew(false)} style={{width:"100%",background:C.blue,border:"none",borderRadius:14,padding:16,color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Let's ride</button>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
 export default function App(){
   const [tab,setTab]=useState("home");
   const [mapCenter,setMapCenter]=useState(DEFAULT_CENTER);
@@ -7260,6 +7358,7 @@ export default function App(){
   const [settings,setSettings]=useState(DEFAULT_SETTINGS);
   const saveSettings=async(s)=>{setSettings(s);if(!user)return;await supabase.from('profiles').update({category:(s.category==="men"||s.category==="women")?s.category:null,app_settings:{units:s.units,heightUnit:s.heightUnit,gpsAccuracy:s.gpsAccuracy,notifications:s.notifications,privacy:s.privacy}}).eq('id',user.id);};
   const [user,setUser]=useState(null);
+  const updUi=useAppUpdates(user);
     const goToStage=(stageId)=>{
   const stage=stages.find(s=>String(s.id)===String(stageId));
   if(!stage){alert("Couldn't find that stage");return;}
@@ -7341,7 +7440,8 @@ useEffect(()=>{
     try{
       const res=await fetch("/?_c="+Date.now(),{cache:"no-store"});
       const m=(await res.text()).match(/\/assets\/index-[^"'\s]+\.js/);
-      if(m&&!loaded.endsWith(m[0])&&!window.__gateBusy&&!document.querySelector(".slide-up")){
+      if(window.__gateMajorCheck)await window.__gateMajorCheck();
+      if(m&&!loaded.endsWith(m[0])&&!window.__gateBusy&&!window.__gateMajorPending&&!document.querySelector(".slide-up")){
         let last=0;try{last=Number(sessionStorage.getItem("gate_upd")||0);}catch(e){}
         if(Date.now()-last>60000){
           try{sessionStorage.setItem("gate_upd",String(Date.now()));}catch(e){}
@@ -7760,6 +7860,7 @@ if(showBikeSetup)return(
 
   return(
         <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",background:"#fff",overflow:"hidden",fontFamily:"'Inter',sans-serif"}}>
+      {updUi}
       <style>{STYLES}</style>
       <Analytics/>
       <div style={{height:"env(safe-area-inset-top, 0px)",background:tab==="map"?"transparent":"#fff",position:"relative",zIndex:10}}/>
