@@ -2804,13 +2804,21 @@ function GarageScreen({user,settings,setSettings,bikes,setBikes,activeBikeId,set
   );
 }
 
+function teamRowSub(g){
+  const n=g.memberCount;
+  const base=`${n} member${n===1?"":"s"}`;
+  if(n<3)return `${base} · needs 3 riders to enter the monthly contest`;
+  if(g.runs===null||g.runs===undefined)return base;
+  if(g.runs>0&&g.rank)return `${base} · ${trophyOrd(g.rank)} this month`;
+  return `${base} · No runs yet this month`;
+}
 function GroupRow({group,onPress}){
   return(
     <button className="tap" onClick={()=>onPress(group)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"14px 16px",borderBottom:`1px solid ${C.border}`,background:"white",textAlign:"left"}}>
-      <div style={{width:40,height:40,borderRadius:10,background:`${C.blue}12`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.Users size={20} color={C.blue}/></div>
+      <div style={{width:40,height:40,borderRadius:12,background:"#EFF4FF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.Users size={22} color={C.blue}/></div>
       <div style={{flex:1,minWidth:0}}>
-        <div style={{fontSize:14,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{group.name}</div>
-        <div style={{fontSize:12,color:C.muted,marginTop:2}}>{group.memberCount} member{group.memberCount===1?"":"s"}</div>
+        <div style={{fontSize:15,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{group.name}</div>
+        <div style={{fontSize:13,color:C.muted,marginTop:2}}>{teamRowSub(group)}</div>
       </div>
       <Icon.ChevronRight size={16} color={C.mutedL}/>
     </button>
@@ -2826,10 +2834,16 @@ function GroupsScreen({user,onBack,onOpenGroup,h2h,onOpenH2h}){
   const [joinError,setJoinError]=useState("");
   const [joining,setJoining]=useState(false);
 
-  const loadGroups=()=>{
+  const loadGroupsOld=()=>{
     supabase.from('groups').select('id,name,code,created_by,group_members(count)').then(({data,error})=>{
       if(error){console.log(error);setGroups([]);return;}
-      setGroups((data||[]).map(g=>({id:g.id,name:g.name,code:g.code,created_by:g.created_by,memberCount:g.group_members?.[0]?.count||0})));
+      setGroups((data||[]).map(g=>({id:g.id,name:g.name,code:g.code,created_by:g.created_by,memberCount:g.group_members?.[0]?.count||0,runs:null,rank:null})));
+    });
+  };
+  const loadGroups=()=>{
+    supabase.rpc('my_teams').then(({data,error})=>{
+      if(error||!Array.isArray(data)){loadGroupsOld();return;}
+      setGroups(data.map(g=>({id:g.id,name:g.name,code:g.code,created_by:g.created_by,memberCount:g.member_count,runs:g.runs,rank:g.rank,teams:g.teams})));
     });
   };
   useEffect(()=>{loadGroups();},[]);
@@ -2912,7 +2926,7 @@ function GroupsScreen({user,onBack,onOpenGroup,h2h,onOpenH2h}){
               <>
                 <div style={{background:C.surface,borderRadius:12,padding:"14px",border:`1px solid ${C.border}`,marginBottom:14,textAlign:"center"}}>
                   <div style={{fontSize:15,fontWeight:700,color:C.text}}>{joinPreview.name}</div>
-                  <div style={{fontSize:12,color:C.muted,marginTop:2}}>{joinPreview.member_count} members</div>
+                  <div style={{fontSize:12,color:C.muted,marginTop:2}}>{joinPreview.member_count} member{joinPreview.member_count===1?"":"s"}</div>
                 </div>
                 <button className="tap" onClick={confirmJoin} disabled={joining} style={{width:"100%",background:C.blue,border:"none",borderRadius:12,padding:15,color:"#fff",fontSize:15,fontWeight:700}}>{joining?"Joining…":"Join Team"}</button>
               </>
@@ -8078,7 +8092,7 @@ if(showBikeSetup)return(
                 setTab('map');
               }}/>
             :teamCalOpen?<TeamCalendarScreen group={activeGroup} user={user} stages={stages} onBack={()=>setTeamCalOpen(false)}/>:teamTrophOpen?<TeamTrophiesScreen group={activeGroup} user={user} onBack={()=>setTeamTrophOpen(false)}/>:teamChatOpen?<TeamChatScreen group={activeGroup} user={user} stages={stages} onBack={()=>setTeamChatOpen(false)} onViewStage={id=>{setShowGroups(false);goToStage(id);}}/>:<TeamHomeScreen group={activeGroup} user={user} onBack={()=>setActiveGroup(null)} onOpenMap={()=>setGroupMapOpen(true)} onOpenCal={()=>setTeamCalOpen(true)} onOpenTroph={()=>setTeamTrophOpen(true)} onOpenChat={()=>setTeamChatOpen(true)} toast={inviteMsg} onToastDone={()=>setInviteMsg("")}/>)
-        :<GroupsScreen user={user} onBack={()=>setShowGroups(false)} onOpenGroup={g=>setActiveGroup(g)} h2h={{requests:h2hRequests+gInvites,active:h2hActive+gActiveCount}} onOpenH2h={()=>{setH2hFromFeed(false);setShowGroups(false);setShowH2h(true);}}/>}
+        :<GroupsScreen user={user} onBack={()=>setShowGroups(false)} onOpenGroup={g=>setActiveGroup(g)}/>}
     </div>
   );
 
