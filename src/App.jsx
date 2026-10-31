@@ -479,7 +479,7 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
         <Section title="Help">
           <button className="tap" onClick={onHowTo} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"14px 16px",background:"none",border:"none",textAlign:"left"}}>
             <Icon.Lightning size={18} color={C.blue}/>
-            <div style={{flex:1,fontSize:14,fontWeight:500,color:C.text}}>How GATE works</div>
+            <div style={{flex:1,fontSize:14,fontWeight:500,color:C.text}}>How Rivl works</div>
             <Icon.ChevronRight/>
           </button>
         </Section>
@@ -494,7 +494,7 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
         </Section>
 
         <div style={{textAlign:"center",padding:"8px 0 32px"}}>
-          <div style={{fontSize:12,color:C.muted}}>GATE v1.0.0 · Made for mountain bikers</div>
+          <div style={{fontSize:12,color:C.muted}}>Rivl v1.0.0 · Made for mountain bikers</div>
         </div>
       </div>
     </div>
@@ -2074,7 +2074,7 @@ function ShareStageSheet({stage,onShare,onDismiss}){
   return(
     <div style={{padding:"0 20px 20px"}}>
       <div style={{fontSize:17,fontWeight:700,color:C.text,marginBottom:4}}>Share to feed?</div>
-      <div style={{fontSize:13,color:C.muted,marginBottom:14}}>Other riders on GATE will see this in their feed.</div>
+      <div style={{fontSize:13,color:C.muted,marginBottom:14}}>Other riders on Rivl will see this in their feed.</div>
       <div style={{borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`,marginBottom:16}}>
         <RouteThumbSvg stage={stage}/>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",background:C.surface}}>
@@ -3738,7 +3738,7 @@ function GroupDetailScreen({group,user,onBack,onOpenMap}){
   },[members,times,groupStageIds]);
 
   const shareGroup=()=>{
-    const shareText=`Join my GATE group "${group.name}" — code: ${group.code}`;
+    const shareText=`Join my Rivl team "${group.name}" — code: ${group.code}`;
     if(navigator.share){navigator.share({title:group.name,text:shareText}).catch(()=>{});}
     else if(navigator.clipboard){navigator.clipboard.writeText(group.code).then(()=>alert('Code copied to clipboard'));}
   };
@@ -3969,8 +3969,8 @@ function H2hDetail({c,user,meAvatar,onBack,onReload,onActivity}){
     setShared(true);onActivity&&onActivity();
   };
   const shareText=()=>{
-    const t=`GATE head to head: me ${scoreText} ${name}`;
-    if(navigator.share){navigator.share({title:"GATE head to head",text:t}).catch(()=>{});}
+    const t=`Rivl head to head: me ${scoreText} ${name}`;
+    if(navigator.share){navigator.share({title:"Rivl head to head",text:t}).catch(()=>{});}
     else if(navigator.clipboard){navigator.clipboard.writeText(t).then(()=>alert("Copied"));}
   };
   const leadPill=sum.both>0?<H2hPill d={sum.gap}/>:null;
@@ -4879,10 +4879,10 @@ function HowItWorksScreen({onClose}){
     <div style={{position:"fixed",inset:0,zIndex:9999,background:"#fff",display:"flex",flexDirection:"column",overflowY:"auto"}}>
       <div style={{padding:"calc(env(safe-area-inset-top, 0px) + 40px) 20px 0",display:"flex",alignItems:"center",gap:7}}>
         <svg width="18" height="18" viewBox="0 0 24 24"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10" fill={C.blue}/></svg>
-        <span style={{fontSize:17,fontWeight:800,letterSpacing:1.5,color:C.text}}>GATE</span>
+        <span style={{fontSize:17,fontWeight:800,letterSpacing:1.5,color:C.text}}>Rivl</span>
       </div>
       <div style={{padding:"22px 20px 0"}}>
-        <div style={{fontSize:26,fontWeight:800,color:C.text}}>How GATE works</div>
+        <div style={{fontSize:26,fontWeight:800,color:C.text}}>How Rivl works</div>
         <div style={{fontSize:14,color:C.muted,marginTop:6}}>Make a stage, then race it.</div>
       </div>
       <div style={{padding:"22px 20px 0",display:"flex",flexDirection:"column",gap:12}}>
@@ -7087,7 +7087,7 @@ function AuthScreen({onAuth,invited}){
     <div style={{position:"fixed",inset:0,background:"#fff",zIndex:200,display:"flex",flexDirection:"column"}}>
       <div style={{padding:"72px 24px 28px",textAlign:"center"}}>
         <svg width="30" height="30" viewBox="0 0 24 24" style={{margin:"0 auto 14px"}}><polygon points="13,2 3,14 12,14 11,22 21,10 12,10" fill={C.blue}/></svg>
-        <div style={{fontSize:30,fontWeight:800,color:C.text,letterSpacing:-1,marginBottom:4}}>GATE</div>
+        <div style={{fontSize:30,fontWeight:800,color:C.text,letterSpacing:-1,marginBottom:4}}>Rivl</div>
         <div style={{fontSize:13,color:C.muted}}>Enduro timing for every trail</div>
       </div>
       <div style={{flex:1,padding:"8px 24px 24px",overflowY:"auto"}}>
@@ -7367,7 +7367,7 @@ async function drawRecapImage(recap,name){
   let y=P;
   // header: bolt + GATE, date
   ctx.save();ctx.translate(P,y);ctx.scale(2.4,2.4);ctx.beginPath();[[13,2],[3,14],[12,14],[11,22],[21,10],[12,10]].forEach(([a,b],i)=>i?ctx.lineTo(a,b):ctx.moveTo(a,b));ctx.closePath();ctx.fillStyle=C.blue;ctx.fill();ctx.restore();
-  ctx.textBaseline='alphabetic';ctx.fillStyle=C.text;ctx.font=`800 46px ${F}`;if('letterSpacing' in ctx)ctx.letterSpacing='4px';ctx.fillText('GATE',P+72,y+46);if('letterSpacing' in ctx)ctx.letterSpacing='0px';
+  ctx.textBaseline='alphabetic';ctx.fillStyle=C.text;ctx.font=`800 46px ${F}`;if('letterSpacing' in ctx)ctx.letterSpacing='4px';ctx.fillText('Rivl',P+72,y+46);if('letterSpacing' in ctx)ctx.letterSpacing='0px';
   ctx.textAlign='right';ctx.fillStyle=C.muted;ctx.font=`600 32px ${F}`;ctx.fillText(recap.days?weekRange(recap.from,recap.date):new Date(recap.date).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}),W-P,y+44);ctx.textAlign='left';
   y+=70+40;
   ctx.fillStyle=C.text;ctx.font=`800 68px ${F}`;ctx.fillText(recap.days?`${name}'s week`:`${name}'s ride`,P,y+54);y+=80+30;
@@ -7421,7 +7421,7 @@ async function shareRecapImage(recap,name){
   if(!blob)return;
   const file=new File([blob],recap.days?'gate-week.png':'gate-ride.png',{type:'image/png'});
   if(navigator.canShare&&navigator.canShare({files:[file]})){
-    try{await navigator.share({files:[file],title:'My GATE ride'});return;}catch(e){if(e&&e.name==='AbortError')return;}
+    try{await navigator.share({files:[file],title:'My Rivl ride'});return;}catch(e){if(e&&e.name==='AbortError')return;}
   }
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=recap.days?'gate-week.png':'gate-ride.png';a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),4000);
@@ -7454,7 +7454,7 @@ function DayRecapPreviewSheet({recap,name,posting,onPost,onDismiss}){
   return(
     <div style={{padding:"0 16px 22px"}}>
       <div style={{fontSize:17,fontWeight:700,color:C.text,marginBottom:4,padding:"0 4px"}}>{recap.days?"Share this week's ride?":"Share today's ride?"}</div>
-      <div style={{fontSize:13,color:C.muted,marginBottom:12,padding:"0 4px"}}>Other riders on GATE will see this in their feed.</div>
+      <div style={{fontSize:13,color:C.muted,marginBottom:12,padding:"0 4px"}}>Other riders on Rivl will see this in their feed.</div>
       <div style={{marginBottom:14}}><DayRecapCard recap={recap}/></div>
       <div style={{display:"flex",gap:10}}>
         <button className="tap" onClick={onDismiss} style={{flex:"0 0 auto",whiteSpace:"nowrap",background:"#fff",border:`1px solid ${C.border}`,borderRadius:12,padding:"13px 16px",color:C.muted,fontSize:14,fontWeight:600}}>Not now</button>
@@ -8131,7 +8131,7 @@ if(showBikeSetup)return(
           )}
           {pushState==='ios'&&(
             <div style={{margin:"14px 16px 0",background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:14,display:"flex",alignItems:"center",gap:12}}>
-              <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700,color:C.text}}>Get alerts on your iPhone</div><div style={{fontSize:12,color:C.muted,marginTop:2,lineHeight:1.35}}>Tap Share, then Add to Home Screen, and open GATE from the new icon.</div></div>
+              <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700,color:C.text}}>Get alerts on your iPhone</div><div style={{fontSize:12,color:C.muted,marginTop:2,lineHeight:1.35}}>Tap Share, then Add to Home Screen, and open Rivl from the new icon.</div></div>
               <button className="tap" onClick={dismissIosHint} style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:9,padding:"8px 12px",color:C.text,fontSize:12,fontWeight:600}}>Got it</button>
             </div>
           )}
