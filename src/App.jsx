@@ -3079,10 +3079,10 @@ function PlanRideSheet({group,stages,onClose,onPosted}){
     const when=new Date(`${date}T${time}`);
     if(isNaN(when.getTime())){setErr("Pick a date and time");return;}
     setBusy(true);setErr("");
-    supabase.rpc("team_ride_create",{p_group_id:group.id,p_title:title.trim(),p_starts_at:when.toISOString(),p_place:place.trim()||null,p_lat:lat,p_lng:lng,p_note:note.trim()||null,p_stages:picked.map(s=>({id:s.id,name:s.name,difficulty:s.difficulty||"blue"}))}).then(({error})=>{
+    supabase.rpc("team_ride_create",{p_group_id:group.id,p_title:title.trim(),p_starts_at:when.toISOString(),p_place:place.trim()||null,p_lat:lat,p_lng:lng,p_note:note.trim()||null,p_stages:picked.map(s=>({id:s.id,name:s.name,difficulty:s.difficulty||"blue"}))}).then(({data,error})=>{
       setBusy(false);
       if(error){setErr(error.message);return;}
-      onPosted();
+      onPosted(data);
     });
   };
   const lab=t=><div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:7}}>{t}</div>;
@@ -3232,6 +3232,93 @@ function TeamTrophiesScreen({group,user,onBack}){
     </div>
   );
 }
+function ChatStageCard({m,stages,onToggle,onView}){
+  const st=m.stage||{};
+  const full=(stages||[]).find(s=>String(s.id)===String(st.id));
+  const col=(DIFFICULTIES.find(d=>d.val===(st.difficulty||"blue"))||DIFFICULTIES[0]).color;
+  const len=full?formatDist(stageLengthM(full)):null;
+  const best=st.best;
+  return(
+    <div style={{display:"inline-block",textAlign:"left",background:"#fff",border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 12px",minWidth:220,maxWidth:"100%"}}>
+      <div onClick={onToggle}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <DifficultyDiamond color={col} size={14}/>
+          <div style={{fontSize:14,fontWeight:700,color:C.text,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{st.name||"Stage"}</div>
+          <Icon.Lightning size={15} color={C.blue}/>
+        </div>
+        {len&&<div style={{fontSize:12,color:C.muted,marginTop:4}}>{len}</div>}
+        <div style={{fontSize:12,color:C.muted,marginTop:2}}>{best?`Fastest: ${best.name||"Rider"} ${formatTime(best.time_ms)}`:"No times yet"}</div>
+      </div>
+      <div style={{marginTop:8,borderTop:`1px solid ${C.border}`,paddingTop:8}}>
+        <button className="tap" onClick={onView} style={{background:"none",border:"none",padding:0,fontSize:13,fontWeight:700,color:C.blue,fontFamily:"inherit"}}>View stage ›</button>
+      </div>
+    </div>
+  );
+}
+function ChatRideCard({m,onToggle,onRsvp}){
+  const r=m.ride;
+  if(!r)return <div onClick={onToggle} style={{display:"inline-block",textAlign:"left",background:C.surface,borderRadius:12,padding:"10px 12px",fontSize:13,color:C.muted}}>This ride was cancelled</div>;
+  const d=new Date(r.starts_at);
+  const past=d.getTime()<Date.now();
+  const going=r.mine==="going";
+  const n=Number(r.going)||0;
+  return(
+    <div style={{display:"inline-block",textAlign:"left",background:"#fff",border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 12px",minWidth:230,maxWidth:"100%"}}>
+      <div onClick={onToggle} style={{display:"flex",alignItems:"center",gap:10}}>
+        <div style={{width:36,flexShrink:0,borderRadius:8,background:"#EFF4FF",textAlign:"center",padding:"4px 0"}}>
+          <div style={{fontSize:9,fontWeight:800,color:C.blue,letterSpacing:0.5}}>{CAL_MONTHS[d.getMonth()].slice(0,3).toUpperCase()}</div>
+          <div style={{fontSize:16,fontWeight:800,color:C.text,lineHeight:1.1}}>{d.getDate()}</div>
+        </div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:14,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.title}</div>
+          <div style={{fontSize:12,color:C.muted,marginTop:1}}>{CAL_DAYS[d.getDay()]} · {calHM(d)}{r.place?` · ${r.place}`:""}</div>
+        </div>
+      </div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:9,borderTop:`1px solid ${C.border}`,paddingTop:9}}>
+        <div style={{fontSize:12,color:C.muted}}>{n} going</div>
+        {!past&&<button className="tap" onClick={onRsvp} style={{border:going?"none":`1.5px solid ${C.blue}`,background:going?C.green:"#fff",color:going?"#fff":C.blue,borderRadius:999,padding:"5px 13px",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>{going?"Going ✓":"I'm in"}</button>}
+      </div>
+    </div>
+  );
+}
+function ChatStagePicker({user,stages,onClose,onPick}){
+  const [ids,setIds]=useState(null);
+  const [q,setQ]=useState("");
+  useEffect(()=>{
+    let dead=false;
+    supabase.from("stage_times").select("stage_id").eq("user_id",user.id).limit(3000).then(({data,error})=>{
+      if(dead)return;
+      setIds(new Set(error||!data?[]:data.map(r=>String(r.stage_id))));
+    });
+    return()=>{dead=true;};
+  },[user.id]);
+  const dcol=s=>(DIFFICULTIES.find(d=>d.val===(s.difficulty||"blue"))||DIFFICULTIES[0]).color;
+  const list=ids?stages
+    .filter(s=>(s.privacy||"public")!=="private"&&(s.created_by===user.id||ids.has(String(s.id))))
+    .filter(s=>!q.trim()||s.name.toLowerCase().includes(q.trim().toLowerCase()))
+    .sort((a,b)=>a.name.localeCompare(b.name)):[];
+  return(
+    <div className="slide-up" style={{position:"absolute",inset:0,zIndex:60,background:"#fff",display:"flex",flexDirection:"column"}}>
+      <div style={{padding:"16px 16px 12px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+        <button className="tap" onClick={onClose} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
+        <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>Share a stage</div>
+      </div>
+      <div style={{padding:"12px 16px 4px"}}><div style={{display:"flex",alignItems:"center",gap:10,background:C.surface,borderRadius:12,padding:"11px 14px"}}><Icon.Search size={18} color={C.mutedL}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search your stages" style={{flex:1,minWidth:0,border:"none",background:"none",outline:"none",fontSize:16,color:C.text,fontFamily:"inherit"}}/></div></div>
+      <div style={{flex:1,overflowY:"auto"}}>
+        {!ids&&<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>}
+        {ids&&list.length===0&&<div style={{padding:"40px 24px",textAlign:"center",color:C.muted,fontSize:13,lineHeight:1.4}}>{q.trim()?"No stages found":"Ride or make a public stage and it will show up here."}</div>}
+        {list.map(s=>(
+          <button key={s.id} className="tap" onClick={()=>onPick(s)} style={{width:"100%",background:"none",border:"none",borderBottom:`1px solid ${C.border}`,padding:"13px 16px",display:"flex",alignItems:"center",gap:12,textAlign:"left"}}>
+            <DifficultyDiamond color={dcol(s)} size={16}/>
+            <div style={{flex:1,minWidth:0}}><div style={{fontSize:15,fontWeight:600,color:C.text}}>{s.name}</div><div style={{fontSize:12,color:C.muted,marginTop:1}}>{formatDist(stageLengthM(s))}</div></div>
+            <Icon.Lightning size={18} color={C.mutedL}/>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function chatDayLabel(iso){
   const d=new Date(iso),n=new Date(),y=new Date();
   y.setDate(n.getDate()-1);
@@ -3241,7 +3328,10 @@ function chatDayLabel(iso){
   return `${CAL_DAYS[d.getDay()]} ${d.getDate()} ${CAL_MONTHS[d.getMonth()].slice(0,3)}`;
 }
 function chatSub(n){return n>0?`${n} new message${n===1?"":"s"}`:"Say something";}
-function TeamChatScreen({group,user,onBack}){
+function TeamChatScreen({group,user,stages,onBack,onViewStage}){
+  const [plusOpen,setPlusOpen]=useState(false);
+  const [sharing,setSharing]=useState(false);
+  const [planning,setPlanning]=useState(false);
   const [msgs,setMsgs]=useState(null);
   const [err,setErr]=useState(null);
   const [text,setText]=useState("");
@@ -3291,6 +3381,24 @@ function TeamChatScreen({group,user,onBack}){
     setOpenId(null);
     supabase.rpc("team_chat_report",{p_message_id:m.id,p_reason:null}).then(({error})=>{alert(error?error.message:"Reported. Thanks.");});
   };
+  const sendKind=args=>{
+    stick.current=true;
+    supabase.rpc("team_chat_send",{p_group_id:group.id,...args}).then(({error})=>{
+      if(error){alert(error.message);return;}
+      fetchMsgs(false);
+    });
+  };
+  const shareStage=s=>{setSharing(false);sendKind({p_stage_id:String(s.id)});};
+  const postedRide=id=>{setPlanning(false);if(id)sendKind({p_ride_id:id});};
+  const rsvp=m=>{
+    const r=m.ride;if(!r)return;
+    const was=r.mine,next=was==="going"?null:"going",delta=next==="going"?1:-1;
+    const bump=(mine,d)=>setMsgs(l=>(l||[]).map(x=>x.id===m.id&&x.ride?{...x,ride:{...x.ride,mine,going:Math.max(0,Number(x.ride.going||0)+d)}}:x));
+    bump(next,delta);
+    supabase.rpc("team_ride_rsvp",{p_ride_id:r.id,p_status:next}).then(({error})=>{
+      if(error){alert(error.message);bump(was,-delta);}
+    });
+  };
   const list=msgs||[];
   const rows=[];
   let lastDay="";
@@ -3303,7 +3411,7 @@ function TeamChatScreen({group,user,onBack}){
     const first=!near(prev,m),last=!near(m,next);
     const open=openId===m.id;
     const canDelete=mine||group.created_by===user.id;
-    const bubble=(
+    const bubble=m.kind==="stage"?<ChatStageCard m={m} stages={stages} onToggle={()=>setOpenId(open?null:m.id)} onView={()=>onViewStage&&onViewStage(m.stage&&m.stage.id)}/>:m.kind==="ride"?<ChatRideCard m={m} onToggle={()=>setOpenId(open?null:m.id)} onRsvp={()=>rsvp(m)}/>:(
       <div onClick={()=>setOpenId(open?null:m.id)} style={{display:"inline-block",textAlign:"left",background:mine?C.blue:C.surface,color:mine?"#fff":C.text,borderRadius:mine?"16px 16px 4px 16px":"16px 16px 16px 4px",padding:"9px 13px",fontSize:14,lineHeight:1.35,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{m.body}</div>
     );
     const actions=open&&(
@@ -3347,7 +3455,25 @@ function TeamChatScreen({group,user,onBack}){
           </div>
         ):rows}
       </div>
-      <div style={{borderTop:`1px solid ${C.border}`,padding:"10px 12px calc(env(safe-area-inset-bottom, 0px) + 12px)",display:"flex",alignItems:"center",gap:10,background:"#fff",flexShrink:0}}>
+      {planning&&<PlanRideSheet group={group} stages={stages||[]} onClose={()=>setPlanning(false)} onPosted={postedRide}/>}
+      {sharing&&<ChatStagePicker user={user} stages={stages||[]} onClose={()=>setSharing(false)} onPick={shareStage}/>}
+      <div style={{position:"relative",borderTop:`1px solid ${C.border}`,padding:"10px 12px calc(env(safe-area-inset-bottom, 0px) + 12px)",display:"flex",alignItems:"center",gap:10,background:"#fff",flexShrink:0}}>
+        {plusOpen&&(
+          <>
+            <div onClick={()=>setPlusOpen(false)} style={{position:"fixed",inset:0,background:"rgba(26,26,26,0.25)",zIndex:20,animation:"fadeIn .15s"}}/>
+            <div style={{position:"absolute",left:12,right:12,bottom:"calc(100% + 8px)",zIndex:21,background:"#fff",borderRadius:16,boxShadow:"0 8px 30px rgba(0,0,0,0.18)",overflow:"hidden"}}>
+              {[{k:"stage",t:"Share a stage",s:"Pick one you have ridden or made",go:()=>{setPlusOpen(false);setSharing(true);}},{k:"ride",t:"Plan a ride",s:"Date, time and meeting place",go:()=>{setPlusOpen(false);setPlanning(true);}}].map((r,i)=>(
+                <button key={r.k} className="tap" onClick={r.go} style={{width:"100%",background:"none",border:"none",...(i?{borderTop:`1px solid ${C.border}`}:{}),padding:"13px 14px",display:"flex",alignItems:"center",gap:12,textAlign:"left",fontFamily:"inherit"}}>
+                  <div style={{width:36,height:36,borderRadius:10,background:"#EFF4FF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    {r.k==="stage"?<Icon.Lightning size={19} color={C.blue}/>:<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>}
+                  </div>
+                  <div><div style={{fontSize:14,fontWeight:700,color:C.text}}>{r.t}</div><div style={{fontSize:12,color:C.muted,marginTop:1}}>{r.s}</div></div>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+        <button className="tap" onMouseDown={e=>e.preventDefault()} onClick={()=>setPlusOpen(o=>!o)} style={{width:38,height:38,borderRadius:"50%",background:plusOpen?C.text:C.surface,border:"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.Plus size={19} color={plusOpen?"#fff":C.text}/></button>
         <input value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();send();}}} onBlur={()=>window.scrollTo(0,0)} maxLength={1000} enterKeyHint="send" placeholder="Message team" style={{flex:1,minWidth:0,background:C.surface,border:"none",borderRadius:20,padding:"10px 14px",fontSize:16,color:C.text,outline:"none",fontFamily:"inherit"}}/>
         <button onMouseDown={e=>e.preventDefault()} onClick={send} style={{width:38,height:38,borderRadius:"50%",background:C.blue,border:"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,opacity:text.trim()&&!sending?1:0.45}}><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
       </div>
@@ -7235,7 +7361,7 @@ const WHATS_NEW={
   title:"Teams are here",
   sub:"Ride together, plan sessions and take on other teams.",
   items:[
-    {k:"chat",t:"Team chat",s:"Message your team"},
+    {k:"chat",t:"Team chat",s:"Message your team and share stages"},
     {k:"cal",t:"Calendar",s:"Plan rides and see who is in"},
     {k:"crown",t:"Monthly league",s:"Most stage runs wins. Medals every month"},
     {k:"map",t:"Team map",s:"Everywhere your team has ridden"}
@@ -7838,7 +7964,7 @@ if(showBikeSetup)return(
                 setShowGroups(false);
                 setTab('map');
               }}/>
-            :teamCalOpen?<TeamCalendarScreen group={activeGroup} user={user} stages={stages} onBack={()=>setTeamCalOpen(false)}/>:teamTrophOpen?<TeamTrophiesScreen group={activeGroup} user={user} onBack={()=>setTeamTrophOpen(false)}/>:teamChatOpen?<TeamChatScreen group={activeGroup} user={user} onBack={()=>setTeamChatOpen(false)}/>:<TeamHomeScreen group={activeGroup} user={user} onBack={()=>setActiveGroup(null)} onOpenMap={()=>setGroupMapOpen(true)} onOpenCal={()=>setTeamCalOpen(true)} onOpenTroph={()=>setTeamTrophOpen(true)} onOpenChat={()=>setTeamChatOpen(true)}/>)
+            :teamCalOpen?<TeamCalendarScreen group={activeGroup} user={user} stages={stages} onBack={()=>setTeamCalOpen(false)}/>:teamTrophOpen?<TeamTrophiesScreen group={activeGroup} user={user} onBack={()=>setTeamTrophOpen(false)}/>:teamChatOpen?<TeamChatScreen group={activeGroup} user={user} stages={stages} onBack={()=>setTeamChatOpen(false)} onViewStage={id=>{setShowGroups(false);goToStage(id);}}/>:<TeamHomeScreen group={activeGroup} user={user} onBack={()=>setActiveGroup(null)} onOpenMap={()=>setGroupMapOpen(true)} onOpenCal={()=>setTeamCalOpen(true)} onOpenTroph={()=>setTeamTrophOpen(true)} onOpenChat={()=>setTeamChatOpen(true)}/>)
         :<GroupsScreen user={user} onBack={()=>setShowGroups(false)} onOpenGroup={g=>setActiveGroup(g)} h2h={{requests:h2hRequests+gInvites,active:h2hActive+gActiveCount}} onOpenH2h={()=>{setH2hFromFeed(false);setShowGroups(false);setShowH2h(true);}}/>}
     </div>
   );
