@@ -3232,7 +3232,129 @@ function TeamTrophiesScreen({group,user,onBack}){
     </div>
   );
 }
-function TeamHomeScreen({group,user,onBack,onOpenMap,onOpenCal,onOpenTroph}){
+function chatDayLabel(iso){
+  const d=new Date(iso),n=new Date(),y=new Date();
+  y.setDate(n.getDate()-1);
+  const k=x=>x.getFullYear()*10000+x.getMonth()*100+x.getDate();
+  if(k(d)===k(n))return "Today";
+  if(k(d)===k(y))return "Yesterday";
+  return `${CAL_DAYS[d.getDay()]} ${d.getDate()} ${CAL_MONTHS[d.getMonth()].slice(0,3)}`;
+}
+function chatSub(n){return n>0?`${n} new message${n===1?"":"s"}`:"Say something";}
+function TeamChatScreen({group,user,onBack}){
+  const [msgs,setMsgs]=useState(null);
+  const [err,setErr]=useState(null);
+  const [text,setText]=useState("");
+  const [sending,setSending]=useState(false);
+  const [openId,setOpenId]=useState(null);
+  const lastId=useRef(0);
+  const busy=useRef(false);
+  const box=useRef(null);
+  const stick=useRef(true);
+  const fetchMsgs=async initial=>{
+    if(busy.current)return;
+    busy.current=true;
+    try{
+      const {data,error}=await supabase.rpc("team_chat",{p_group_id:group.id,p_after:initial?null:(lastId.current||null)});
+      if(error||!data){if(initial)setErr(error?error.message:"No data came back");return;}
+      if(initial)setMsgs(data);
+      else if(data.length)setMsgs(m=>{const have=new Set((m||[]).map(x=>x.id));return [...(m||[]),...data.filter(x=>!have.has(x.id))];});
+      if(data.length)lastId.current=Math.max(lastId.current,data[data.length-1].id);
+    }catch(e){if(initial)setErr(String(e&&e.message||e));}
+    finally{busy.current=false;}
+  };
+  useEffect(()=>{
+    fetchMsgs(true);
+    const t=setInterval(()=>{if(!document.hidden)fetchMsgs(false);},3000);
+    const vis=()=>{if(!document.hidden)fetchMsgs(false);};
+    document.addEventListener("visibilitychange",vis);
+    return()=>{clearInterval(t);document.removeEventListener("visibilitychange",vis);};
+  },[group.id]);
+  useEffect(()=>{const el=box.current;if(el&&stick.current)el.scrollTop=el.scrollHeight;},[msgs]);
+  const send=()=>{
+    const t=text.trim();
+    if(!t||sending)return;
+    setSending(true);
+    supabase.rpc("team_chat_send",{p_group_id:group.id,p_body:t}).then(({error})=>{
+      setSending(false);
+      if(error){alert(error.message);return;}
+      setText("");stick.current=true;fetchMsgs(false);
+    });
+  };
+  const del=m=>{
+    if(!window.confirm("Delete this message?"))return;
+    setMsgs(l=>l.filter(x=>x.id!==m.id));setOpenId(null);
+    supabase.rpc("team_chat_delete",{p_message_id:m.id}).then(({error})=>{if(error)alert(error.message);});
+  };
+  const report=m=>{
+    if(!window.confirm("Report this message to Rivl?"))return;
+    setOpenId(null);
+    supabase.rpc("team_chat_report",{p_message_id:m.id,p_reason:null}).then(({error})=>{alert(error?error.message:"Reported. Thanks.");});
+  };
+  const list=msgs||[];
+  const rows=[];
+  let lastDay="";
+  list.forEach((m,i)=>{
+    const day=chatDayLabel(m.created_at);
+    if(day!==lastDay){rows.push(<div key={"d"+m.id} style={{textAlign:"center",fontSize:11,fontWeight:600,color:C.muted,margin:"4px 0 12px"}}>{day}</div>);lastDay=day;}
+    const mine=m.user_id===user.id;
+    const prev=list[i-1],next=list[i+1];
+    const near=(a,b)=>a&&b&&a.user_id===b.user_id&&chatDayLabel(a.created_at)===chatDayLabel(b.created_at)&&Math.abs(new Date(b.created_at)-new Date(a.created_at))<5*60000;
+    const first=!near(prev,m),last=!near(m,next);
+    const open=openId===m.id;
+    const canDelete=mine||group.created_by===user.id;
+    const bubble=(
+      <div onClick={()=>setOpenId(open?null:m.id)} style={{display:"inline-block",textAlign:"left",background:mine?C.blue:C.surface,color:mine?"#fff":C.text,borderRadius:mine?"16px 16px 4px 16px":"16px 16px 16px 4px",padding:"9px 13px",fontSize:14,lineHeight:1.35,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{m.body}</div>
+    );
+    const actions=open&&(
+      <div style={{display:"flex",alignItems:"center",gap:12,margin:"4px 4px 0",justifyContent:mine?"flex-end":"flex-start",fontSize:11,color:C.muted}}>
+        <span>{calHM(new Date(m.created_at))}</span>
+        {canDelete&&<button className="tap" onClick={()=>del(m)} style={{background:"none",border:"none",padding:0,fontSize:11,fontWeight:600,color:C.red}}>Delete</button>}
+        {!mine&&<button className="tap" onClick={()=>report(m)} style={{background:"none",border:"none",padding:0,fontSize:11,fontWeight:600,color:C.muted}}>Report</button>}
+      </div>
+    );
+    rows.push(mine?(
+      <div key={m.id} style={{display:"flex",justifyContent:"flex-end",marginBottom:last?10:3}}>
+        <div style={{maxWidth:"78%",textAlign:"right"}}>{bubble}{actions}</div>
+      </div>
+    ):(
+      <div key={m.id} style={{display:"flex",gap:8,alignItems:"flex-end",marginBottom:last?10:3}}>
+        <div style={{width:28,flexShrink:0}}>{last&&<Avatar size={28} url={m.avatar_url}/>}</div>
+        <div style={{maxWidth:"78%"}}>
+          {first&&<div style={{fontSize:11,color:C.muted,margin:"0 0 3px 4px",fontWeight:600}}>{m.name||"Rider"}</div>}
+          {bubble}{actions}
+        </div>
+      </div>
+    ));
+  });
+  return(
+    <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
+      <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+        <button className="tap" onClick={onBack} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:19,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{group.name}</div>
+          <div style={{fontSize:12,color:C.muted}}>Team chat</div>
+        </div>
+      </div>
+      <div ref={box} onScroll={e=>{const el=e.currentTarget;stick.current=el.scrollHeight-el.scrollTop-el.clientHeight<80;}} style={{flex:1,overflowY:"auto",padding:"14px 14px 10px"}}>
+        {err?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Could not load the chat. {String(err)}</div>
+        :!msgs?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>
+        :list.length===0?(
+          <div style={{padding:"60px 20px",textAlign:"center",color:C.muted}}>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={C.mutedL} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+            <div style={{fontSize:15,fontWeight:500,marginTop:12,marginBottom:4,color:C.text}}>No messages yet</div>
+            <div style={{fontSize:13,color:C.mutedL}}>Say hello to the team</div>
+          </div>
+        ):rows}
+      </div>
+      <div style={{borderTop:`1px solid ${C.border}`,padding:"10px 12px calc(env(safe-area-inset-bottom, 0px) + 12px)",display:"flex",alignItems:"center",gap:10,background:"#fff",flexShrink:0}}>
+        <input value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();send();}}} onBlur={()=>window.scrollTo(0,0)} maxLength={1000} enterKeyHint="send" placeholder="Message team" style={{flex:1,minWidth:0,background:C.surface,border:"none",borderRadius:20,padding:"10px 14px",fontSize:16,color:C.text,outline:"none",fontFamily:"inherit"}}/>
+        <button onMouseDown={e=>e.preventDefault()} onClick={send} style={{width:38,height:38,borderRadius:"50%",background:C.blue,border:"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,opacity:text.trim()&&!sending?1:0.45}}><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+      </div>
+    </div>
+  );
+}
+function TeamHomeScreen({group,user,onBack,onOpenMap,onOpenCal,onOpenTroph,onOpenChat}){
   const [d,setD]=useState(null);
   const [err,setErr]=useState(false);
   useEffect(()=>{
@@ -3252,6 +3374,7 @@ function TeamHomeScreen({group,user,onBack,onOpenMap,onOpenCal,onOpenTroph}){
   const topId=members.length>0&&members[0].runs>0?members[0].user_id:null;
   const maxRuns=Math.max(1,...members.map(m=>m.runs));
   const tiles=[
+    {key:"chat",title:"Chat",sub:chatSub(d&&d.chat_unread),badge:d?d.chat_unread:0,icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>,onPress:onOpenChat},
     {key:"cal",title:"Calendar",sub:calNextLabel(d&&d.next_ride),icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>,onPress:onOpenCal},
     {key:"map",title:"Team map",sub:"Where you've ridden",icon:<Icon.Map size={20} color={C.blue}/>,onPress:onOpenMap},
     {key:"troph",title:"Trophies",sub:trophySub(d&&d.medals),icon:<TrophyCrown size={21} color={C.blue}/>,onPress:onOpenTroph}
@@ -3291,9 +3414,10 @@ function TeamHomeScreen({group,user,onBack,onOpenMap,onOpenCal,onOpenTroph}){
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:22}}>
             {tiles.map(t=>(
-              <button key={t.key} className="tap" onClick={t.onPress} style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:14,padding:14,textAlign:"left",display:"flex",flexDirection:"column",gap:10}}>
+              <button key={t.key} className="tap" onClick={t.onPress} style={{position:"relative",background:"#fff",border:`1px solid ${C.border}`,borderRadius:14,padding:14,textAlign:"left",display:"flex",flexDirection:"column",gap:10}}>
                 <div style={{width:36,height:36,borderRadius:10,background:`${C.blue}12`,display:"flex",alignItems:"center",justifyContent:"center"}}>{t.icon}</div>
                 <div><div style={{fontSize:15,fontWeight:700,color:C.text}}>{t.title}</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>{t.sub}</div></div>
+                {t.badge>0&&<div style={{position:"absolute",top:12,right:12,minWidth:20,height:20,borderRadius:10,background:C.blue,color:"#fff",fontSize:11,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 6px"}}>{t.badge>9?"9+":t.badge}</div>}
               </button>
             ))}
           </div>
@@ -7129,6 +7253,7 @@ export default function App(){
   const [groupMapOpen,setGroupMapOpen]=useState(false);
   const [teamCalOpen,setTeamCalOpen]=useState(false);
   const [teamTrophOpen,setTeamTrophOpen]=useState(false);
+  const [teamChatOpen,setTeamChatOpen]=useState(false);
   const [pickingGroup,setPickingGroup]=useState(null);
   const [pickingExistingIds,setPickingExistingIds]=useState([]);
   const [showBikeSetup,setShowBikeSetup]=useState(false);
@@ -7613,7 +7738,7 @@ if(showBikeSetup)return(
                 setShowGroups(false);
                 setTab('map');
               }}/>
-            :teamCalOpen?<TeamCalendarScreen group={activeGroup} user={user} stages={stages} onBack={()=>setTeamCalOpen(false)}/>:teamTrophOpen?<TeamTrophiesScreen group={activeGroup} user={user} onBack={()=>setTeamTrophOpen(false)}/>:<TeamHomeScreen group={activeGroup} user={user} onBack={()=>setActiveGroup(null)} onOpenMap={()=>setGroupMapOpen(true)} onOpenCal={()=>setTeamCalOpen(true)} onOpenTroph={()=>setTeamTrophOpen(true)}/>)
+            :teamCalOpen?<TeamCalendarScreen group={activeGroup} user={user} stages={stages} onBack={()=>setTeamCalOpen(false)}/>:teamTrophOpen?<TeamTrophiesScreen group={activeGroup} user={user} onBack={()=>setTeamTrophOpen(false)}/>:teamChatOpen?<TeamChatScreen group={activeGroup} user={user} onBack={()=>setTeamChatOpen(false)}/>:<TeamHomeScreen group={activeGroup} user={user} onBack={()=>setActiveGroup(null)} onOpenMap={()=>setGroupMapOpen(true)} onOpenCal={()=>setTeamCalOpen(true)} onOpenTroph={()=>setTeamTrophOpen(true)} onOpenChat={()=>setTeamChatOpen(true)}/>)
         :<GroupsScreen user={user} onBack={()=>setShowGroups(false)} onOpenGroup={g=>setActiveGroup(g)} h2h={{requests:h2hRequests+gInvites,active:h2hActive+gActiveCount}} onOpenH2h={()=>{setH2hFromFeed(false);setShowGroups(false);setShowH2h(true);}}/>}
     </div>
   );
