@@ -479,7 +479,7 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
         <Section title="Help">
           <button className="tap" onClick={onHowTo} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"14px 16px",background:"none",border:"none",textAlign:"left"}}>
             <Icon.Lightning size={18} color={C.blue}/>
-            <div style={{flex:1,fontSize:14,fontWeight:500,color:C.text}}>How GATE works</div>
+            <div style={{flex:1,fontSize:14,fontWeight:500,color:C.text}}>How Rivl works</div>
             <Icon.ChevronRight/>
           </button>
         </Section>
@@ -494,7 +494,7 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
         </Section>
 
         <div style={{textAlign:"center",padding:"8px 0 32px"}}>
-          <div style={{fontSize:12,color:C.muted}}>GATE v1.0.0 · Made for mountain bikers</div>
+          <div style={{fontSize:12,color:C.muted}}>Rivl v1.0.0 · Made for mountain bikers</div>
         </div>
       </div>
     </div>
@@ -2074,7 +2074,7 @@ function ShareStageSheet({stage,onShare,onDismiss}){
   return(
     <div style={{padding:"0 20px 20px"}}>
       <div style={{fontSize:17,fontWeight:700,color:C.text,marginBottom:4}}>Share to feed?</div>
-      <div style={{fontSize:13,color:C.muted,marginBottom:14}}>Other riders on GATE will see this in their feed.</div>
+      <div style={{fontSize:13,color:C.muted,marginBottom:14}}>Other riders on Rivl will see this in their feed.</div>
       <div style={{borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`,marginBottom:16}}>
         <RouteThumbSvg stage={stage}/>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",background:C.surface}}>
@@ -3079,10 +3079,10 @@ function PlanRideSheet({group,stages,onClose,onPosted}){
     const when=new Date(`${date}T${time}`);
     if(isNaN(when.getTime())){setErr("Pick a date and time");return;}
     setBusy(true);setErr("");
-    supabase.rpc("team_ride_create",{p_group_id:group.id,p_title:title.trim(),p_starts_at:when.toISOString(),p_place:place.trim()||null,p_lat:lat,p_lng:lng,p_note:note.trim()||null,p_stages:picked.map(s=>({id:s.id,name:s.name,difficulty:s.difficulty||"blue"}))}).then(({error})=>{
+    supabase.rpc("team_ride_create",{p_group_id:group.id,p_title:title.trim(),p_starts_at:when.toISOString(),p_place:place.trim()||null,p_lat:lat,p_lng:lng,p_note:note.trim()||null,p_stages:picked.map(s=>({id:s.id,name:s.name,difficulty:s.difficulty||"blue"}))}).then(({data,error})=>{
       setBusy(false);
       if(error){setErr(error.message);return;}
-      onPosted();
+      onPosted(data);
     });
   };
   const lab=t=><div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:7}}>{t}</div>;
@@ -3232,6 +3232,93 @@ function TeamTrophiesScreen({group,user,onBack}){
     </div>
   );
 }
+function ChatStageCard({m,stages,onToggle,onView}){
+  const st=m.stage||{};
+  const full=(stages||[]).find(s=>String(s.id)===String(st.id));
+  const col=(DIFFICULTIES.find(d=>d.val===(st.difficulty||"blue"))||DIFFICULTIES[0]).color;
+  const len=full?formatDist(stageLengthM(full)):null;
+  const best=st.best;
+  return(
+    <div style={{display:"inline-block",textAlign:"left",background:"#fff",border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 12px",minWidth:220,maxWidth:"100%"}}>
+      <div onClick={onToggle}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <DifficultyDiamond color={col} size={14}/>
+          <div style={{fontSize:14,fontWeight:700,color:C.text,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{st.name||"Stage"}</div>
+          <Icon.Lightning size={15} color={C.blue}/>
+        </div>
+        {len&&<div style={{fontSize:12,color:C.muted,marginTop:4}}>{len}</div>}
+        <div style={{fontSize:12,color:C.muted,marginTop:2}}>{best?`Fastest: ${best.name||"Rider"} ${formatTime(best.time_ms)}`:"No times yet"}</div>
+      </div>
+      <div style={{marginTop:8,borderTop:`1px solid ${C.border}`,paddingTop:8}}>
+        <button className="tap" onClick={onView} style={{background:"none",border:"none",padding:0,fontSize:13,fontWeight:700,color:C.blue,fontFamily:"inherit"}}>View stage ›</button>
+      </div>
+    </div>
+  );
+}
+function ChatRideCard({m,onToggle,onRsvp}){
+  const r=m.ride;
+  if(!r)return <div onClick={onToggle} style={{display:"inline-block",textAlign:"left",background:C.surface,borderRadius:12,padding:"10px 12px",fontSize:13,color:C.muted}}>This ride was cancelled</div>;
+  const d=new Date(r.starts_at);
+  const past=d.getTime()<Date.now();
+  const going=r.mine==="going";
+  const n=Number(r.going)||0;
+  return(
+    <div style={{display:"inline-block",textAlign:"left",background:"#fff",border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 12px",minWidth:230,maxWidth:"100%"}}>
+      <div onClick={onToggle} style={{display:"flex",alignItems:"center",gap:10}}>
+        <div style={{width:36,flexShrink:0,borderRadius:8,background:"#EFF4FF",textAlign:"center",padding:"4px 0"}}>
+          <div style={{fontSize:9,fontWeight:800,color:C.blue,letterSpacing:0.5}}>{CAL_MONTHS[d.getMonth()].slice(0,3).toUpperCase()}</div>
+          <div style={{fontSize:16,fontWeight:800,color:C.text,lineHeight:1.1}}>{d.getDate()}</div>
+        </div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:14,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.title}</div>
+          <div style={{fontSize:12,color:C.muted,marginTop:1}}>{CAL_DAYS[d.getDay()]} · {calHM(d)}{r.place?` · ${r.place}`:""}</div>
+        </div>
+      </div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:9,borderTop:`1px solid ${C.border}`,paddingTop:9}}>
+        <div style={{fontSize:12,color:C.muted}}>{n} going</div>
+        {!past&&<button className="tap" onClick={onRsvp} style={{border:going?"none":`1.5px solid ${C.blue}`,background:going?C.green:"#fff",color:going?"#fff":C.blue,borderRadius:999,padding:"5px 13px",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>{going?"Going ✓":"I'm in"}</button>}
+      </div>
+    </div>
+  );
+}
+function ChatStagePicker({user,stages,onClose,onPick}){
+  const [ids,setIds]=useState(null);
+  const [q,setQ]=useState("");
+  useEffect(()=>{
+    let dead=false;
+    supabase.from("stage_times").select("stage_id").eq("user_id",user.id).limit(3000).then(({data,error})=>{
+      if(dead)return;
+      setIds(new Set(error||!data?[]:data.map(r=>String(r.stage_id))));
+    });
+    return()=>{dead=true;};
+  },[user.id]);
+  const dcol=s=>(DIFFICULTIES.find(d=>d.val===(s.difficulty||"blue"))||DIFFICULTIES[0]).color;
+  const list=ids?stages
+    .filter(s=>(s.privacy||"public")!=="private"&&(s.created_by===user.id||ids.has(String(s.id))))
+    .filter(s=>!q.trim()||s.name.toLowerCase().includes(q.trim().toLowerCase()))
+    .sort((a,b)=>a.name.localeCompare(b.name)):[];
+  return(
+    <div className="slide-up" style={{position:"absolute",inset:0,zIndex:60,background:"#fff",display:"flex",flexDirection:"column"}}>
+      <div style={{padding:"16px 16px 12px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+        <button className="tap" onClick={onClose} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
+        <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>Share a stage</div>
+      </div>
+      <div style={{padding:"12px 16px 4px"}}><div style={{display:"flex",alignItems:"center",gap:10,background:C.surface,borderRadius:12,padding:"11px 14px"}}><Icon.Search size={18} color={C.mutedL}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search your stages" style={{flex:1,minWidth:0,border:"none",background:"none",outline:"none",fontSize:16,color:C.text,fontFamily:"inherit"}}/></div></div>
+      <div style={{flex:1,overflowY:"auto"}}>
+        {!ids&&<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>}
+        {ids&&list.length===0&&<div style={{padding:"40px 24px",textAlign:"center",color:C.muted,fontSize:13,lineHeight:1.4}}>{q.trim()?"No stages found":"Ride or make a public stage and it will show up here."}</div>}
+        {list.map(s=>(
+          <button key={s.id} className="tap" onClick={()=>onPick(s)} style={{width:"100%",background:"none",border:"none",borderBottom:`1px solid ${C.border}`,padding:"13px 16px",display:"flex",alignItems:"center",gap:12,textAlign:"left"}}>
+            <DifficultyDiamond color={dcol(s)} size={16}/>
+            <div style={{flex:1,minWidth:0}}><div style={{fontSize:15,fontWeight:600,color:C.text}}>{s.name}</div><div style={{fontSize:12,color:C.muted,marginTop:1}}>{formatDist(stageLengthM(s))}</div></div>
+            <Icon.Lightning size={18} color={C.mutedL}/>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function chatDayLabel(iso){
   const d=new Date(iso),n=new Date(),y=new Date();
   y.setDate(n.getDate()-1);
@@ -3241,7 +3328,10 @@ function chatDayLabel(iso){
   return `${CAL_DAYS[d.getDay()]} ${d.getDate()} ${CAL_MONTHS[d.getMonth()].slice(0,3)}`;
 }
 function chatSub(n){return n>0?`${n} new message${n===1?"":"s"}`:"Say something";}
-function TeamChatScreen({group,user,onBack}){
+function TeamChatScreen({group,user,stages,onBack,onViewStage}){
+  const [plusOpen,setPlusOpen]=useState(false);
+  const [sharing,setSharing]=useState(false);
+  const [planning,setPlanning]=useState(false);
   const [msgs,setMsgs]=useState(null);
   const [err,setErr]=useState(null);
   const [text,setText]=useState("");
@@ -3291,6 +3381,24 @@ function TeamChatScreen({group,user,onBack}){
     setOpenId(null);
     supabase.rpc("team_chat_report",{p_message_id:m.id,p_reason:null}).then(({error})=>{alert(error?error.message:"Reported. Thanks.");});
   };
+  const sendKind=args=>{
+    stick.current=true;
+    supabase.rpc("team_chat_send",{p_group_id:group.id,...args}).then(({error})=>{
+      if(error){alert(error.message);return;}
+      fetchMsgs(false);
+    });
+  };
+  const shareStage=s=>{setSharing(false);sendKind({p_stage_id:String(s.id)});};
+  const postedRide=id=>{setPlanning(false);if(id)sendKind({p_ride_id:id});};
+  const rsvp=m=>{
+    const r=m.ride;if(!r)return;
+    const was=r.mine,next=was==="going"?null:"going",delta=next==="going"?1:-1;
+    const bump=(mine,d)=>setMsgs(l=>(l||[]).map(x=>x.id===m.id&&x.ride?{...x,ride:{...x.ride,mine,going:Math.max(0,Number(x.ride.going||0)+d)}}:x));
+    bump(next,delta);
+    supabase.rpc("team_ride_rsvp",{p_ride_id:r.id,p_status:next}).then(({error})=>{
+      if(error){alert(error.message);bump(was,-delta);}
+    });
+  };
   const list=msgs||[];
   const rows=[];
   let lastDay="";
@@ -3303,7 +3411,7 @@ function TeamChatScreen({group,user,onBack}){
     const first=!near(prev,m),last=!near(m,next);
     const open=openId===m.id;
     const canDelete=mine||group.created_by===user.id;
-    const bubble=(
+    const bubble=m.kind==="stage"?<ChatStageCard m={m} stages={stages} onToggle={()=>setOpenId(open?null:m.id)} onView={()=>onViewStage&&onViewStage(m.stage&&m.stage.id)}/>:m.kind==="ride"?<ChatRideCard m={m} onToggle={()=>setOpenId(open?null:m.id)} onRsvp={()=>rsvp(m)}/>:(
       <div onClick={()=>setOpenId(open?null:m.id)} style={{display:"inline-block",textAlign:"left",background:mine?C.blue:C.surface,color:mine?"#fff":C.text,borderRadius:mine?"16px 16px 4px 16px":"16px 16px 16px 4px",padding:"9px 13px",fontSize:14,lineHeight:1.35,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{m.body}</div>
     );
     const actions=open&&(
@@ -3347,14 +3455,123 @@ function TeamChatScreen({group,user,onBack}){
           </div>
         ):rows}
       </div>
-      <div style={{borderTop:`1px solid ${C.border}`,padding:"10px 12px calc(env(safe-area-inset-bottom, 0px) + 12px)",display:"flex",alignItems:"center",gap:10,background:"#fff",flexShrink:0}}>
+      {planning&&<PlanRideSheet group={group} stages={stages||[]} onClose={()=>setPlanning(false)} onPosted={postedRide}/>}
+      {sharing&&<ChatStagePicker user={user} stages={stages||[]} onClose={()=>setSharing(false)} onPick={shareStage}/>}
+      <div style={{position:"relative",borderTop:`1px solid ${C.border}`,padding:"10px 12px calc(env(safe-area-inset-bottom, 0px) + 12px)",display:"flex",alignItems:"center",gap:10,background:"#fff",flexShrink:0}}>
+        {plusOpen&&(
+          <>
+            <div onClick={()=>setPlusOpen(false)} style={{position:"fixed",inset:0,background:"rgba(26,26,26,0.25)",zIndex:20,animation:"fadeIn .15s"}}/>
+            <div style={{position:"absolute",left:12,right:12,bottom:"calc(100% + 8px)",zIndex:21,background:"#fff",borderRadius:16,boxShadow:"0 8px 30px rgba(0,0,0,0.18)",overflow:"hidden"}}>
+              {[{k:"stage",t:"Share a stage",s:"Pick one you have ridden or made",go:()=>{setPlusOpen(false);setSharing(true);}},{k:"ride",t:"Plan a ride",s:"Date, time and meeting place",go:()=>{setPlusOpen(false);setPlanning(true);}}].map((r,i)=>(
+                <button key={r.k} className="tap" onClick={r.go} style={{width:"100%",background:"none",border:"none",...(i?{borderTop:`1px solid ${C.border}`}:{}),padding:"13px 14px",display:"flex",alignItems:"center",gap:12,textAlign:"left",fontFamily:"inherit"}}>
+                  <div style={{width:36,height:36,borderRadius:10,background:"#EFF4FF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    {r.k==="stage"?<Icon.Lightning size={19} color={C.blue}/>:<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>}
+                  </div>
+                  <div><div style={{fontSize:14,fontWeight:700,color:C.text}}>{r.t}</div><div style={{fontSize:12,color:C.muted,marginTop:1}}>{r.s}</div></div>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+        <button className="tap" onMouseDown={e=>e.preventDefault()} onClick={()=>setPlusOpen(o=>!o)} style={{width:38,height:38,borderRadius:"50%",background:plusOpen?C.text:C.surface,border:"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.Plus size={19} color={plusOpen?"#fff":C.text}/></button>
         <input value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();send();}}} onBlur={()=>window.scrollTo(0,0)} maxLength={1000} enterKeyHint="send" placeholder="Message team" style={{flex:1,minWidth:0,background:C.surface,border:"none",borderRadius:20,padding:"10px 14px",fontSize:16,color:C.text,outline:"none",fontFamily:"inherit"}}/>
         <button onMouseDown={e=>e.preventDefault()} onClick={send} style={{width:38,height:38,borderRadius:"50%",background:C.blue,border:"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,opacity:text.trim()&&!sending?1:0.45}}><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
       </div>
     </div>
   );
 }
-function TeamHomeScreen({group,user,onBack,onOpenMap,onOpenCal,onOpenTroph,onOpenChat}){
+// ── Team invite links: rivl.uk/?join=CODE ──
+const INVITE_KEY="gate_invite";
+function inviteRead(){
+  try{
+    const u=new URL(window.location.href);
+    const p=u.searchParams.get("join");
+    if(p){
+      u.searchParams.delete("join");
+      window.history.replaceState(null,"",u.pathname+u.search+u.hash);
+      if(/^[A-Za-z0-9]{6}$/.test(p))localStorage.setItem(INVITE_KEY,JSON.stringify({c:p.toUpperCase(),t:Date.now()}));
+    }
+    const v=JSON.parse(localStorage.getItem(INVITE_KEY)||"null");
+    if(v&&v.c&&Date.now()-v.t<7*86400000)return v.c;
+    localStorage.removeItem(INVITE_KEY);
+  }catch(e){}
+  return null;
+}
+function inviteClear(){try{localStorage.removeItem(INVITE_KEY);}catch(e){}}
+function InviteToast({msg,onDone}){
+  useEffect(()=>{const t=setTimeout(onDone,3200);return()=>clearTimeout(t);},[msg]);
+  return(
+    <div style={{position:"fixed",left:16,right:16,top:"calc(env(safe-area-inset-top, 0px) + 70px)",zIndex:400,background:C.text,color:"#fff",borderRadius:14,padding:"13px 14px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 8px 28px rgba(0,0,0,0.25)",animation:"gateToast .35s cubic-bezier(.32,.72,0,1)"}}>
+      <style>{"@keyframes gateToast{from{transform:translateY(-120%);opacity:0}to{transform:translateY(0);opacity:1}}"}</style>
+      <div style={{width:22,height:22,borderRadius:"50%",background:C.green,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.Check size={13} color="#fff"/></div>
+      <div style={{fontSize:14,fontWeight:600}}>{msg}</div>
+    </div>
+  );
+}
+function TeamInviteSheet({code,onClose,onOpenTeam}){
+  const [st,setSt]=useState("loading");
+  const [info,setInfo]=useState(null);
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState("");
+  const load=()=>{
+    setSt("loading");
+    supabase.rpc("team_invite_preview",{p_code:code}).then(({data,error})=>{
+      if(error){setSt("err");return;}
+      if(!data){setSt("bad");return;}
+      if(data.joined&&data.group){onOpenTeam(data.group,`You're already in ${data.name}`);return;}
+      setInfo(data);setSt("ready");
+    });
+  };
+  useEffect(()=>{load();},[code]);
+  const join=()=>{
+    if(busy)return;
+    setBusy(true);setMsg("");
+    supabase.rpc("join_group_by_code",{p_code:code}).then(({error})=>{
+      if(error){setBusy(false);setMsg(error.message);return;}
+      supabase.rpc("team_invite_preview",{p_code:code}).then(({data})=>{
+        setBusy(false);
+        if(data&&data.group)onOpenTeam(data.group,`You joined ${data.name}`);
+        else onClose();
+      });
+    });
+  };
+  if(st==="loading")return null;
+  const n=info?info.member_count:0;
+  return(
+    <>
+      <div onClick={onClose} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.3)",zIndex:300,animation:"fadeIn .2s"}}/>
+      <div className="slide-up" style={{position:"absolute",left:0,right:0,bottom:0,zIndex:301,background:"#fff",borderRadius:"16px 16px 0 0",padding:"0 20px max(34px, env(safe-area-inset-bottom, 0px))",boxShadow:"0 -8px 30px rgba(0,0,0,0.12)"}}>
+        <div style={{display:"flex",justifyContent:"center",padding:"10px 0 14px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div>
+        {st==="ready"?(
+          <>
+            <div style={{display:"inline-block",background:"#EFF4FF",color:C.blue,fontSize:11,fontWeight:800,letterSpacing:0.6,padding:"5px 10px",borderRadius:999}}>TEAM INVITE</div>
+            <div style={{fontSize:26,fontWeight:800,color:C.text,marginTop:12,letterSpacing:-0.3}}>Join {info.name}?</div>
+            <div style={{display:"flex",alignItems:"center",gap:12,margin:"16px 0 8px"}}>
+              <div style={{display:"flex"}}>{(info.members||[]).slice(0,4).map((m,i)=><div key={i} style={{marginLeft:i?-10:0,border:"2px solid #fff",borderRadius:"50%",display:"flex"}}><Avatar size={44} url={m.avatar_url}/></div>)}</div>
+              <div style={{flex:1,fontSize:14,color:C.muted,lineHeight:1.35}}>{n} rider{n===1?"":"s"} so far. Your stage runs count towards the team's monthly total.</div>
+            </div>
+            <div style={{margin:"14px 0 18px",borderTop:`1px solid ${C.border}`}}/>
+            <button className="tap" onClick={join} style={{width:"100%",background:C.blue,border:"none",borderRadius:14,padding:16,color:"#fff",fontSize:15,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",minHeight:52,fontFamily:"inherit"}}>
+              {busy?<span style={{width:18,height:18,border:"2.5px solid rgba(255,255,255,0.4)",borderTopColor:"#fff",borderRadius:"50%",display:"inline-block",animation:"gateSpin .7s linear infinite"}}/>:"Join team"}
+            </button>
+            {msg&&<div style={{fontSize:12,color:C.red,textAlign:"center",marginTop:10}}>{msg}</div>}
+            <button className="tap" onClick={onClose} style={{width:"100%",background:"none",border:"none",padding:"14px 0 0",color:C.muted,fontSize:14,fontWeight:600,fontFamily:"inherit"}}>Not now</button>
+          </>
+        ):(
+          <>
+            <div style={{width:48,height:48,borderRadius:14,background:C.surface,display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 007.07 0l3-3a5 5 0 00-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 00-7.07 0l-3 3a5 5 0 007.07 7.07l1.5-1.5"/></svg></div>
+            <div style={{fontSize:24,fontWeight:800,color:C.text,marginTop:14,letterSpacing:-0.3}}>{st==="bad"?"This invite isn't valid":"Couldn't open this invite"}</div>
+            <div style={{fontSize:14,color:C.muted,marginTop:6,lineHeight:1.4}}>{st==="bad"?"The link may be wrong, or the team no longer exists. Ask for a fresh link, or type the 6-letter code under Teams.":"Check your connection and try again."}</div>
+            <button className="tap" onClick={st==="bad"?onClose:load} style={{width:"100%",background:C.blue,border:"none",borderRadius:14,padding:16,color:"#fff",fontSize:15,fontWeight:700,marginTop:22,fontFamily:"inherit"}}>{st==="bad"?"Got it":"Try again"}</button>
+            {st==="err"&&<button className="tap" onClick={onClose} style={{width:"100%",background:"none",border:"none",padding:"14px 0 0",color:C.muted,fontSize:14,fontWeight:600,fontFamily:"inherit"}}>Not now</button>}
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
+function TeamHomeScreen({group,user,onBack,onOpenMap,onOpenCal,onOpenTroph,onOpenChat,toast,onToastDone}){
   const [d,setD]=useState(null);
   const [err,setErr]=useState(false);
   useEffect(()=>{
@@ -3365,9 +3582,9 @@ function TeamHomeScreen({group,user,onBack,onOpenMap,onOpenCal,onOpenTroph,onOpe
   },[group.id]);
   const ord=n=>{const s=["th","st","nd","rd"],v=n%100;return n+(s[(v-20)%10]||s[v]||s[0]);};
   const shareTeam=()=>{
-    const shareText=`Join my team "${group.name}" on Rivl. Code: ${group.code}`;
+    const shareText=`Join ${group.name} on Rivl. Ride stages, plan rides and take on other teams. ${window.location.origin}/?join=${group.code}`;
     if(navigator.share){navigator.share({title:group.name,text:shareText}).catch(()=>{});}
-    else if(navigator.clipboard){navigator.clipboard.writeText(group.code).then(()=>alert("Code copied to clipboard"));}
+    else if(navigator.clipboard){navigator.clipboard.writeText(shareText).then(()=>alert("Invite link copied"));}
   };
   const copyCode=()=>{if(navigator.clipboard)navigator.clipboard.writeText(group.code).then(()=>alert("Code copied"));};
   const members=d?d.members:[];
@@ -3391,6 +3608,7 @@ function TeamHomeScreen({group,user,onBack,onOpenMap,onOpenCal,onOpenTroph,onOpe
         <button className="tap" onClick={shareTeam} style={{background:"none",border:"none",padding:6}}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></button>
       </div>
       <div style={{flex:1,overflowY:"auto",padding:"16px 16px 28px"}}>
+        {toast&&<InviteToast msg={toast} onDone={onToastDone}/>}
         {err?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Could not load the team. {String(err)}</div>
         :!d?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>
         :(<>
@@ -3412,6 +3630,19 @@ function TeamHomeScreen({group,user,onBack,onOpenMap,onOpenCal,onOpenTroph,onOpe
               <div style={{fontSize:12,color:C.muted,marginTop:10}}>A team needs 3 riders to enter the monthly contest</div>
             ):null}
           </div>
+          {d.riders<3&&(
+            <div style={{border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:12}}>
+              <div style={{display:"flex",alignItems:"center"}}>
+                {members.slice(0,3).map((m,i)=><div key={m.user_id} style={{marginLeft:i?-8:0,border:"2px solid #fff",borderRadius:"50%",display:"flex"}}><Avatar size={34} url={m.avatar_url}/></div>)}
+                <div style={{width:34,height:34,borderRadius:"50%",border:`1.5px dashed ${C.mutedL}`,marginLeft:members.length?-8:0,display:"flex",alignItems:"center",justifyContent:"center",background:"#fff"}}><Icon.Plus size={16} color={C.mutedL}/></div>
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:14,fontWeight:700,color:C.text}}>Invite {3-d.riders} more rider{3-d.riders===1?"":"s"}</div>
+                <div style={{fontSize:12,color:C.muted,marginTop:1}}>{d.riders} of 3 riders needed</div>
+              </div>
+              <button className="tap" onClick={shareTeam} style={{background:C.blue,border:"none",borderRadius:999,padding:"8px 16px",color:"#fff",fontSize:13,fontWeight:700,fontFamily:"inherit"}}>Invite</button>
+            </div>
+          )}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:22}}>
             {tiles.map(t=>(
               <button key={t.key} className="tap" onClick={t.onPress} style={{position:"relative",background:"#fff",border:`1px solid ${C.border}`,borderRadius:14,padding:14,textAlign:"left",display:"flex",flexDirection:"column",gap:10}}>
@@ -3507,7 +3738,7 @@ function GroupDetailScreen({group,user,onBack,onOpenMap}){
   },[members,times,groupStageIds]);
 
   const shareGroup=()=>{
-    const shareText=`Join my GATE group "${group.name}" — code: ${group.code}`;
+    const shareText=`Join my Rivl team "${group.name}" — code: ${group.code}`;
     if(navigator.share){navigator.share({title:group.name,text:shareText}).catch(()=>{});}
     else if(navigator.clipboard){navigator.clipboard.writeText(group.code).then(()=>alert('Code copied to clipboard'));}
   };
@@ -3738,8 +3969,8 @@ function H2hDetail({c,user,meAvatar,onBack,onReload,onActivity}){
     setShared(true);onActivity&&onActivity();
   };
   const shareText=()=>{
-    const t=`GATE head to head: me ${scoreText} ${name}`;
-    if(navigator.share){navigator.share({title:"GATE head to head",text:t}).catch(()=>{});}
+    const t=`Rivl head to head: me ${scoreText} ${name}`;
+    if(navigator.share){navigator.share({title:"Rivl head to head",text:t}).catch(()=>{});}
     else if(navigator.clipboard){navigator.clipboard.writeText(t).then(()=>alert("Copied"));}
   };
   const leadPill=sum.both>0?<H2hPill d={sum.gap}/>:null;
@@ -4648,10 +4879,10 @@ function HowItWorksScreen({onClose}){
     <div style={{position:"fixed",inset:0,zIndex:9999,background:"#fff",display:"flex",flexDirection:"column",overflowY:"auto"}}>
       <div style={{padding:"calc(env(safe-area-inset-top, 0px) + 40px) 20px 0",display:"flex",alignItems:"center",gap:7}}>
         <svg width="18" height="18" viewBox="0 0 24 24"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10" fill={C.blue}/></svg>
-        <span style={{fontSize:17,fontWeight:800,letterSpacing:1.5,color:C.text}}>GATE</span>
+        <span style={{fontSize:17,fontWeight:800,letterSpacing:1.5,color:C.text}}>Rivl</span>
       </div>
       <div style={{padding:"22px 20px 0"}}>
-        <div style={{fontSize:26,fontWeight:800,color:C.text}}>How GATE works</div>
+        <div style={{fontSize:26,fontWeight:800,color:C.text}}>How Rivl works</div>
         <div style={{fontSize:14,color:C.muted,marginTop:6}}>Make a stage, then race it.</div>
       </div>
       <div style={{padding:"22px 20px 0",display:"flex",flexDirection:"column",gap:12}}>
@@ -6830,7 +7061,7 @@ function LobbySheet({onClose}){
     </div>
   );
 }
-function AuthScreen({onAuth}){
+function AuthScreen({onAuth,invited}){
   const [mode,setMode]=useState("login");
   const [email,setEmail]=useState("");
   const [password,setPassword]=useState("");
@@ -6856,10 +7087,16 @@ function AuthScreen({onAuth}){
     <div style={{position:"fixed",inset:0,background:"#fff",zIndex:200,display:"flex",flexDirection:"column"}}>
       <div style={{padding:"72px 24px 28px",textAlign:"center"}}>
         <svg width="30" height="30" viewBox="0 0 24 24" style={{margin:"0 auto 14px"}}><polygon points="13,2 3,14 12,14 11,22 21,10 12,10" fill={C.blue}/></svg>
-        <div style={{fontSize:30,fontWeight:800,color:C.text,letterSpacing:-1,marginBottom:4}}>GATE</div>
+        <div style={{fontSize:30,fontWeight:800,color:C.text,letterSpacing:-1,marginBottom:4}}>Rivl</div>
         <div style={{fontSize:13,color:C.muted}}>Enduro timing for every trail</div>
       </div>
       <div style={{flex:1,padding:"8px 24px 24px",overflowY:"auto"}}>
+        {invited&&(
+          <div style={{background:"#EFF4FF",borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:10,marginBottom:18}}>
+            <div style={{width:32,height:32,borderRadius:9,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.Users size={18} color={C.blue}/></div>
+            <div style={{fontSize:13,color:C.text,lineHeight:1.35,fontWeight:600}}>You've been invited to join a team. {mode==="login"?"Log in":"Sign up"} and you'll be asked to join.</div>
+          </div>
+        )}
         <div style={{display:"flex",background:C.surface,borderRadius:10,padding:3,marginBottom:22}}>
           {["login","signup"].map(m=><button key={m} onClick={()=>setMode(m)} style={{flex:1,padding:"9px",borderRadius:8,background:mode===m?"#fff":"none",border:"none",color:mode===m?C.text:C.muted,fontSize:14,fontWeight:mode===m?600:400,boxShadow:mode===m?"0 1px 4px rgba(0,0,0,0.08)":"none"}}>{m==="login"?"Log In":"Sign Up"}</button>)}
         </div>
@@ -7130,7 +7367,7 @@ async function drawRecapImage(recap,name){
   let y=P;
   // header: bolt + GATE, date
   ctx.save();ctx.translate(P,y);ctx.scale(2.4,2.4);ctx.beginPath();[[13,2],[3,14],[12,14],[11,22],[21,10],[12,10]].forEach(([a,b],i)=>i?ctx.lineTo(a,b):ctx.moveTo(a,b));ctx.closePath();ctx.fillStyle=C.blue;ctx.fill();ctx.restore();
-  ctx.textBaseline='alphabetic';ctx.fillStyle=C.text;ctx.font=`800 46px ${F}`;if('letterSpacing' in ctx)ctx.letterSpacing='4px';ctx.fillText('GATE',P+72,y+46);if('letterSpacing' in ctx)ctx.letterSpacing='0px';
+  ctx.textBaseline='alphabetic';ctx.fillStyle=C.text;ctx.font=`800 46px ${F}`;if('letterSpacing' in ctx)ctx.letterSpacing='4px';ctx.fillText('Rivl',P+72,y+46);if('letterSpacing' in ctx)ctx.letterSpacing='0px';
   ctx.textAlign='right';ctx.fillStyle=C.muted;ctx.font=`600 32px ${F}`;ctx.fillText(recap.days?weekRange(recap.from,recap.date):new Date(recap.date).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}),W-P,y+44);ctx.textAlign='left';
   y+=70+40;
   ctx.fillStyle=C.text;ctx.font=`800 68px ${F}`;ctx.fillText(recap.days?`${name}'s week`:`${name}'s ride`,P,y+54);y+=80+30;
@@ -7184,7 +7421,7 @@ async function shareRecapImage(recap,name){
   if(!blob)return;
   const file=new File([blob],recap.days?'gate-week.png':'gate-ride.png',{type:'image/png'});
   if(navigator.canShare&&navigator.canShare({files:[file]})){
-    try{await navigator.share({files:[file],title:'My GATE ride'});return;}catch(e){if(e&&e.name==='AbortError')return;}
+    try{await navigator.share({files:[file],title:'My Rivl ride'});return;}catch(e){if(e&&e.name==='AbortError')return;}
   }
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=recap.days?'gate-week.png':'gate-ride.png';a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),4000);
@@ -7217,7 +7454,7 @@ function DayRecapPreviewSheet({recap,name,posting,onPost,onDismiss}){
   return(
     <div style={{padding:"0 16px 22px"}}>
       <div style={{fontSize:17,fontWeight:700,color:C.text,marginBottom:4,padding:"0 4px"}}>{recap.days?"Share this week's ride?":"Share today's ride?"}</div>
-      <div style={{fontSize:13,color:C.muted,marginBottom:12,padding:"0 4px"}}>Other riders on GATE will see this in their feed.</div>
+      <div style={{fontSize:13,color:C.muted,marginBottom:12,padding:"0 4px"}}>Other riders on Rivl will see this in their feed.</div>
       <div style={{marginBottom:14}}><DayRecapCard recap={recap}/></div>
       <div style={{display:"flex",gap:10}}>
         <button className="tap" onClick={onDismiss} style={{flex:"0 0 auto",whiteSpace:"nowrap",background:"#fff",border:`1px solid ${C.border}`,borderRadius:12,padding:"13px 16px",color:C.muted,fontSize:14,fontWeight:600}}>Not now</button>
@@ -7225,6 +7462,104 @@ function DayRecapPreviewSheet({recap,name,posting,onPost,onDismiss}){
         <button className="tap" disabled={posting} onClick={onPost} style={{flex:2,whiteSpace:"nowrap",background:C.blue,border:"none",borderRadius:12,padding:"13px 8px",color:"#fff",fontSize:14,fontWeight:700,opacity:posting?0.7:1}}>{posting?"Posting…":"Post to Feed"}</button>
       </div>
     </div>
+  );
+}
+
+// ── App updates: "New update ready" banner + What's new sheet ──
+// For each big update: change WHATS_NEW (id + text) AND public/version.json (same id).
+const WHATS_NEW={
+  id:"teams-1",
+  title:"Teams are here",
+  sub:"Ride together, plan sessions and take on other teams.",
+  items:[
+    {k:"chat",t:"Team chat",s:"Message your team and share stages"},
+    {k:"cal",t:"Calendar",s:"Plan rides and see who is in"},
+    {k:"crown",t:"Monthly league",s:"Most stage runs wins. Medals every month"},
+    {k:"map",t:"Team map",s:"Everywhere your team has ridden"}
+  ]
+};
+function WnIcon({k}){
+  const p={width:22,height:22,viewBox:"0 0 24 24",fill:"none",stroke:C.blue,strokeWidth:1.8,strokeLinecap:"round",strokeLinejoin:"round"};
+  if(k==="crown")return <TrophyCrown size={22} color={C.blue}/>;
+  if(k==="map")return <Icon.Map size={22} color={C.blue}/>;
+  if(k==="cal")return <svg {...p}><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>;
+  return <svg {...p}><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>;
+}
+function useAppUpdates(user){
+  const [pending,setPending]=useState(null);
+  const [busy,setBusy]=useState(false);
+  const [showNew,setShowNew]=useState(false);
+  const uid=user?user.id:null;
+  const uidRef=useRef(null);
+  uidRef.current=uid;
+  useEffect(()=>{
+    window.__gateMajorCheck=async()=>{
+      try{
+        const res=await fetch("/version.json?_c="+Date.now(),{cache:"no-store"});
+        if(!res.ok)return;
+        const v=await res.json();
+        const newer=!!(v&&v.major&&v.major!==WHATS_NEW.id);
+        window.__gateMajorPending=newer&&!!uidRef.current;
+        setPending(newer?{note:String(v.note||"")}:null);
+      }catch(e){}
+    };
+    return()=>{window.__gateMajorCheck=null;window.__gateMajorPending=false;};
+  },[]);
+  useEffect(()=>{if(!pending||!uid)window.__gateMajorPending=false;else window.__gateMajorPending=true;},[pending,uid]);
+  useEffect(()=>{
+    if(!uid)return;
+    let seen=null;
+    try{seen=localStorage.getItem("gate_seen_major");}catch(e){return;}
+    if(seen===WHATS_NEW.id)return;
+    const mark=()=>{try{localStorage.setItem("gate_seen_major",WHATS_NEW.id);}catch(e){}};
+    if(!seen&&user.created_at&&Date.now()-new Date(user.created_at).getTime()<86400000){mark();return;}
+    const t=setTimeout(()=>{mark();setShowNew(true);},700);
+    return()=>clearTimeout(t);
+  },[uid]);
+  const doUpdate=()=>{
+    if(busy||navigator.onLine===false)return;
+    setBusy(true);
+    setTimeout(()=>{
+      try{sessionStorage.setItem("gate_upd",String(Date.now()));}catch(e){}
+      const u=new URL(window.location.href);u.searchParams.set("_v",Date.now());window.location.replace(u.toString());
+    },500);
+  };
+  return(
+    <>
+      <style>{"@keyframes gateDrop{from{transform:translateY(-120%);opacity:0}to{transform:translateY(0);opacity:1}}@keyframes gateSpin{to{transform:rotate(360deg)}}"}</style>
+      {pending&&uid&&(
+        <div style={{position:"absolute",left:12,right:12,top:"calc(env(safe-area-inset-top, 0px) + 6px)",zIndex:250,background:C.text,borderRadius:16,padding:"12px 12px 12px 14px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 8px 28px rgba(0,0,0,0.25)",animation:"gateDrop .35s cubic-bezier(.32,.72,0,1)"}}>
+          <div style={{width:36,height:36,borderRadius:10,background:"rgba(255,255,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.Lightning size={19} color="#fff"/></div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>New update ready</div>
+            {pending.note&&<div style={{fontSize:12,color:"rgba(255,255,255,0.65)",marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{pending.note}</div>}
+          </div>
+          <button className="tap" onClick={doUpdate} style={{background:C.blue,border:"none",borderRadius:999,padding:"8px 16px",color:"#fff",fontSize:13,fontWeight:700,minWidth:78,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontFamily:"inherit"}}>
+            {busy?<span style={{width:14,height:14,border:"2px solid rgba(255,255,255,0.4)",borderTopColor:"#fff",borderRadius:"50%",display:"inline-block",animation:"gateSpin .7s linear infinite"}}/>:"Update"}
+          </button>
+        </div>
+      )}
+      {showNew&&(
+        <>
+          <div onClick={()=>setShowNew(false)} style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.3)",zIndex:300,animation:"fadeIn .2s"}}/>
+          <div className="slide-up" style={{position:"absolute",left:0,right:0,bottom:0,zIndex:301,background:"#fff",borderRadius:"16px 16px 0 0",padding:"0 20px max(34px, env(safe-area-inset-bottom, 0px))",boxShadow:"0 -8px 30px rgba(0,0,0,0.12)"}}>
+            <div style={{display:"flex",justifyContent:"center",padding:"10px 0 14px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div>
+            <div style={{display:"inline-block",background:"#EFF4FF",color:C.blue,fontSize:11,fontWeight:800,letterSpacing:0.6,padding:"5px 10px",borderRadius:999}}>WHAT'S NEW</div>
+            <div style={{fontSize:26,fontWeight:800,color:C.text,marginTop:12,letterSpacing:-0.3}}>{WHATS_NEW.title}</div>
+            <div style={{fontSize:14,color:C.muted,marginTop:5,lineHeight:1.4}}>{WHATS_NEW.sub}</div>
+            <div style={{margin:"14px 0 18px",borderTop:`1px solid ${C.border}`,paddingTop:6}}>
+              {WHATS_NEW.items.map(it=>(
+                <div key={it.k} style={{display:"flex",alignItems:"center",gap:14,padding:"11px 0"}}>
+                  <div style={{width:42,height:42,borderRadius:12,background:"#EFF4FF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><WnIcon k={it.k}/></div>
+                  <div><div style={{fontSize:15,fontWeight:700,color:C.text}}>{it.t}</div><div style={{fontSize:13,color:C.muted,marginTop:2,lineHeight:1.3}}>{it.s}</div></div>
+                </div>
+              ))}
+            </div>
+            <button className="tap" onClick={()=>setShowNew(false)} style={{width:"100%",background:C.blue,border:"none",borderRadius:14,padding:16,color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Let's ride</button>
+          </div>
+        </>
+      )}
+    </>
   );
 }
 
@@ -7260,6 +7595,9 @@ export default function App(){
   const [settings,setSettings]=useState(DEFAULT_SETTINGS);
   const saveSettings=async(s)=>{setSettings(s);if(!user)return;await supabase.from('profiles').update({category:(s.category==="men"||s.category==="women")?s.category:null,app_settings:{units:s.units,heightUnit:s.heightUnit,gpsAccuracy:s.gpsAccuracy,notifications:s.notifications,privacy:s.privacy}}).eq('id',user.id);};
   const [user,setUser]=useState(null);
+  const updUi=useAppUpdates(user);
+  const [inviteCode,setInviteCode]=useState(inviteRead);
+  const [inviteMsg,setInviteMsg]=useState("");
     const goToStage=(stageId)=>{
   const stage=stages.find(s=>String(s.id)===String(stageId));
   if(!stage){alert("Couldn't find that stage");return;}
@@ -7341,7 +7679,8 @@ useEffect(()=>{
     try{
       const res=await fetch("/?_c="+Date.now(),{cache:"no-store"});
       const m=(await res.text()).match(/\/assets\/index-[^"'\s]+\.js/);
-      if(m&&!loaded.endsWith(m[0])&&!window.__gateBusy&&!document.querySelector(".slide-up")){
+      if(window.__gateMajorCheck)await window.__gateMajorCheck();
+      if(m&&!loaded.endsWith(m[0])&&!window.__gateBusy&&!window.__gateMajorPending&&!document.querySelector(".slide-up")){
         let last=0;try{last=Number(sessionStorage.getItem("gate_upd")||0);}catch(e){}
         if(Date.now()-last>60000){
           try{sessionStorage.setItem("gate_upd",String(Date.now()));}catch(e){}
@@ -7652,7 +7991,7 @@ const weekStats=weekStatsByType.all;
     <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",overflow:"hidden"}}>
       <style>{STYLES}</style>
       <Analytics/>
-      <AuthScreen/>
+      <AuthScreen invited={!!inviteCode}/>
     </div>
   );
 
@@ -7738,7 +8077,7 @@ if(showBikeSetup)return(
                 setShowGroups(false);
                 setTab('map');
               }}/>
-            :teamCalOpen?<TeamCalendarScreen group={activeGroup} user={user} stages={stages} onBack={()=>setTeamCalOpen(false)}/>:teamTrophOpen?<TeamTrophiesScreen group={activeGroup} user={user} onBack={()=>setTeamTrophOpen(false)}/>:teamChatOpen?<TeamChatScreen group={activeGroup} user={user} onBack={()=>setTeamChatOpen(false)}/>:<TeamHomeScreen group={activeGroup} user={user} onBack={()=>setActiveGroup(null)} onOpenMap={()=>setGroupMapOpen(true)} onOpenCal={()=>setTeamCalOpen(true)} onOpenTroph={()=>setTeamTrophOpen(true)} onOpenChat={()=>setTeamChatOpen(true)}/>)
+            :teamCalOpen?<TeamCalendarScreen group={activeGroup} user={user} stages={stages} onBack={()=>setTeamCalOpen(false)}/>:teamTrophOpen?<TeamTrophiesScreen group={activeGroup} user={user} onBack={()=>setTeamTrophOpen(false)}/>:teamChatOpen?<TeamChatScreen group={activeGroup} user={user} stages={stages} onBack={()=>setTeamChatOpen(false)} onViewStage={id=>{setShowGroups(false);goToStage(id);}}/>:<TeamHomeScreen group={activeGroup} user={user} onBack={()=>setActiveGroup(null)} onOpenMap={()=>setGroupMapOpen(true)} onOpenCal={()=>setTeamCalOpen(true)} onOpenTroph={()=>setTeamTrophOpen(true)} onOpenChat={()=>setTeamChatOpen(true)} toast={inviteMsg} onToastDone={()=>setInviteMsg("")}/>)
         :<GroupsScreen user={user} onBack={()=>setShowGroups(false)} onOpenGroup={g=>setActiveGroup(g)} h2h={{requests:h2hRequests+gInvites,active:h2hActive+gActiveCount}} onOpenH2h={()=>{setH2hFromFeed(false);setShowGroups(false);setShowH2h(true);}}/>}
     </div>
   );
@@ -7760,6 +8099,8 @@ if(showBikeSetup)return(
 
   return(
         <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",background:"#fff",overflow:"hidden",fontFamily:"'Inter',sans-serif"}}>
+      {updUi}
+      {user&&inviteCode&&<TeamInviteSheet code={inviteCode} onClose={()=>{inviteClear();setInviteCode(null);}} onOpenTeam={(g,m)=>{inviteClear();setInviteCode(null);setTeamChatOpen(false);setTeamCalOpen(false);setTeamTrophOpen(false);setGroupMapOpen(false);setActiveGroup(g);setInviteMsg(m);setShowGroups(true);}}/>}
       <style>{STYLES}</style>
       <Analytics/>
       <div style={{height:"env(safe-area-inset-top, 0px)",background:tab==="map"?"transparent":"#fff",position:"relative",zIndex:10}}/>
@@ -7790,7 +8131,7 @@ if(showBikeSetup)return(
           )}
           {pushState==='ios'&&(
             <div style={{margin:"14px 16px 0",background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:14,display:"flex",alignItems:"center",gap:12}}>
-              <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700,color:C.text}}>Get alerts on your iPhone</div><div style={{fontSize:12,color:C.muted,marginTop:2,lineHeight:1.35}}>Tap Share, then Add to Home Screen, and open GATE from the new icon.</div></div>
+              <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:700,color:C.text}}>Get alerts on your iPhone</div><div style={{fontSize:12,color:C.muted,marginTop:2,lineHeight:1.35}}>Tap Share, then Add to Home Screen, and open Rivl from the new icon.</div></div>
               <button className="tap" onClick={dismissIosHint} style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:9,padding:"8px 12px",color:C.text,fontSize:12,fontWeight:600}}>Got it</button>
             </div>
           )}
