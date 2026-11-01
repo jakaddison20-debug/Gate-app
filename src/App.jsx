@@ -934,7 +934,26 @@ function compactTrace(samples){
   return s.map(p=>[Math.round(p.t),+p.lat.toFixed(6),+p.lng.toFixed(6)]);
 }
 // points: [[t_ms,lat,lng],...] -> time and speed sampled evenly along the distance travelled
+// Cleans a saved GPS trace before any speed is worked out from it (speed numbers and charts only, never timing).
+// 1) drops fixes that would need an impossible jump (over 45 mph) from the last good one, 2) smooths the GPS wobble.
+function tidyTrace(points){
+  if(!Array.isArray(points)||points.length<5)return points;
+  const kept=[points[0]];let skipped=0;
+  for(let i=1;i<points.length;i++){
+    const last=kept[kept.length-1],p=points[i],dt=(p[0]-last[0])/1000;
+    if(dt<=0)continue;
+    if(haversine({lat:last[1],lng:last[2]},{lat:p[1],lng:p[2]})/dt>20&&skipped<2){skipped++;continue;}
+    skipped=0;kept.push(p);
+  }
+  if(kept.length<5)return points;
+  return kept.map((q,i)=>{
+    const a=Math.max(0,i-2),b=Math.min(kept.length-1,i+2);let la=0,ln=0;
+    for(let k=a;k<=b;k++){la+=kept[k][1];ln+=kept[k][2];}
+    return[q[0],la/(b-a+1),ln/(b-a+1)];
+  });
+}
 function traceProfile(points){
+  points=tidyTrace(points);
   if(!points||points.length<3)return null;
   const cum=[0];
   for(let i=1;i<points.length;i++)cum.push(cum[i-1]+haversine({lat:points[i-1][1],lng:points[i-1][2]},{lat:points[i][1],lng:points[i][2]}));
@@ -1753,6 +1772,7 @@ function avgMph(stage,ms){
 }
 // Top speed in mph from a saved GPS trace ([[t_ms,lat,lng],...]): the fastest ~150 ft (46 m) stretch. null if there is no usable trace.
 function topMphFromTrace(points){
+  points=tidyTrace(points);
   if(!Array.isArray(points)||points.length<8)return null;
   const cum=[0];
   for(let i=1;i<points.length;i++)cum.push(cum[i-1]+haversine({lat:points[i-1][1],lng:points[i-1][2]},{lat:points[i][1],lng:points[i][2]}));
@@ -1760,11 +1780,11 @@ function topMphFromTrace(points){
   let top=0,j=0;
   for(let i=0;i<points.length-1;i++){
     if(j<=i)j=i+1;
-    while(j<points.length-1&&cum[j]-cum[i]<46)j++;
+    while(j<points.length-1&&(cum[j]-cum[i]<46||points[j][0]-points[i][0]<8000))j++;
     const d=cum[j]-cum[i],dt=(points[j][0]-points[i][0])/1000;
-    if(d>=46&&dt>0){const v=d/dt*MPS_TO_MPH;if(v>top)top=v;}
+    if(d>=46&&dt>=6){const v=d/dt*MPS_TO_MPH;if(v>top)top=v;}
   }
-  return top>0&&top<80?top:null;
+  return top>0&&top<60?top:null;
 }
 
 // Speed wedge on the stage sheet
