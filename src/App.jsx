@@ -934,7 +934,26 @@ function compactTrace(samples){
   return s.map(p=>[Math.round(p.t),+p.lat.toFixed(6),+p.lng.toFixed(6)]);
 }
 // points: [[t_ms,lat,lng],...] -> time and speed sampled evenly along the distance travelled
+// Cleans a saved GPS trace before any speed is worked out from it (speed numbers and charts only, never timing).
+// 1) drops fixes that would need an impossible jump (over 45 mph) from the last good one, 2) smooths the GPS wobble.
+function tidyTrace(points){
+  if(!Array.isArray(points)||points.length<5)return points;
+  const kept=[points[0]];let skipped=0;
+  for(let i=1;i<points.length;i++){
+    const last=kept[kept.length-1],p=points[i],dt=(p[0]-last[0])/1000;
+    if(dt<=0)continue;
+    if(haversine({lat:last[1],lng:last[2]},{lat:p[1],lng:p[2]})/dt>20&&skipped<2){skipped++;continue;}
+    skipped=0;kept.push(p);
+  }
+  if(kept.length<5)return points;
+  return kept.map((q,i)=>{
+    const a=Math.max(0,i-2),b=Math.min(kept.length-1,i+2);let la=0,ln=0;
+    for(let k=a;k<=b;k++){la+=kept[k][1];ln+=kept[k][2];}
+    return[q[0],la/(b-a+1),ln/(b-a+1)];
+  });
+}
 function traceProfile(points){
+  points=tidyTrace(points);
   if(!points||points.length<3)return null;
   const cum=[0];
   for(let i=1;i<points.length;i++)cum.push(cum[i-1]+haversine({lat:points[i-1][1],lng:points[i-1][2]},{lat:points[i][1],lng:points[i][2]}));
@@ -1753,6 +1772,7 @@ function avgMph(stage,ms){
 }
 // Top speed in mph from a saved GPS trace ([[t_ms,lat,lng],...]): the fastest ~150 ft (46 m) stretch. null if there is no usable trace.
 function topMphFromTrace(points){
+  points=tidyTrace(points);
   if(!Array.isArray(points)||points.length<8)return null;
   const cum=[0];
   for(let i=1;i<points.length;i++)cum.push(cum[i-1]+haversine({lat:points[i-1][1],lng:points[i-1][2]},{lat:points[i][1],lng:points[i][2]}));
@@ -1760,11 +1780,11 @@ function topMphFromTrace(points){
   let top=0,j=0;
   for(let i=0;i<points.length-1;i++){
     if(j<=i)j=i+1;
-    while(j<points.length-1&&cum[j]-cum[i]<46)j++;
+    while(j<points.length-1&&(cum[j]-cum[i]<46||points[j][0]-points[i][0]<8000))j++;
     const d=cum[j]-cum[i],dt=(points[j][0]-points[i][0])/1000;
-    if(d>=46&&dt>0){const v=d/dt*MPS_TO_MPH;if(v>top)top=v;}
+    if(d>=46&&dt>=6){const v=d/dt*MPS_TO_MPH;if(v>top)top=v;}
   }
-  return top>0&&top<80?top:null;
+  return top>0&&top<60?top:null;
 }
 
 // Speed wedge on the stage sheet
@@ -2804,13 +2824,21 @@ function GarageScreen({user,settings,setSettings,bikes,setBikes,activeBikeId,set
   );
 }
 
+function teamRowSub(g){
+  const n=g.memberCount;
+  const base=`${n} member${n===1?"":"s"}`;
+  if(n<3)return `${base} · needs 3 riders to enter the monthly contest`;
+  if(g.runs===null||g.runs===undefined)return base;
+  if(g.runs>0&&g.rank)return `${base} · ${trophyOrd(g.rank)} this month`;
+  return `${base} · No runs yet this month`;
+}
 function GroupRow({group,onPress}){
   return(
     <button className="tap" onClick={()=>onPress(group)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"14px 16px",borderBottom:`1px solid ${C.border}`,background:"white",textAlign:"left"}}>
-      <div style={{width:40,height:40,borderRadius:10,background:`${C.blue}12`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.Users size={20} color={C.blue}/></div>
+      <div style={{width:40,height:40,borderRadius:12,background:"#EFF4FF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.Users size={22} color={C.blue}/></div>
       <div style={{flex:1,minWidth:0}}>
-        <div style={{fontSize:14,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{group.name}</div>
-        <div style={{fontSize:12,color:C.muted,marginTop:2}}>{group.memberCount} member{group.memberCount===1?"":"s"}</div>
+        <div style={{fontSize:15,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{group.name}</div>
+        <div style={{fontSize:13,color:C.muted,marginTop:2}}>{teamRowSub(group)}</div>
       </div>
       <Icon.ChevronRight size={16} color={C.mutedL}/>
     </button>
@@ -2826,10 +2854,16 @@ function GroupsScreen({user,onBack,onOpenGroup,h2h,onOpenH2h}){
   const [joinError,setJoinError]=useState("");
   const [joining,setJoining]=useState(false);
 
-  const loadGroups=()=>{
+  const loadGroupsOld=()=>{
     supabase.from('groups').select('id,name,code,created_by,group_members(count)').then(({data,error})=>{
       if(error){console.log(error);setGroups([]);return;}
-      setGroups((data||[]).map(g=>({id:g.id,name:g.name,code:g.code,created_by:g.created_by,memberCount:g.group_members?.[0]?.count||0})));
+      setGroups((data||[]).map(g=>({id:g.id,name:g.name,code:g.code,created_by:g.created_by,memberCount:g.group_members?.[0]?.count||0,runs:null,rank:null})));
+    });
+  };
+  const loadGroups=()=>{
+    supabase.rpc('my_teams').then(({data,error})=>{
+      if(error||!Array.isArray(data)){loadGroupsOld();return;}
+      setGroups(data.map(g=>({id:g.id,name:g.name,code:g.code,created_by:g.created_by,memberCount:g.member_count,runs:g.runs,rank:g.rank,teams:g.teams})));
     });
   };
   useEffect(()=>{loadGroups();},[]);
@@ -2912,7 +2946,7 @@ function GroupsScreen({user,onBack,onOpenGroup,h2h,onOpenH2h}){
               <>
                 <div style={{background:C.surface,borderRadius:12,padding:"14px",border:`1px solid ${C.border}`,marginBottom:14,textAlign:"center"}}>
                   <div style={{fontSize:15,fontWeight:700,color:C.text}}>{joinPreview.name}</div>
-                  <div style={{fontSize:12,color:C.muted,marginTop:2}}>{joinPreview.member_count} members</div>
+                  <div style={{fontSize:12,color:C.muted,marginTop:2}}>{joinPreview.member_count} member{joinPreview.member_count===1?"":"s"}</div>
                 </div>
                 <button className="tap" onClick={confirmJoin} disabled={joining} style={{width:"100%",background:C.blue,border:"none",borderRadius:12,padding:15,color:"#fff",fontSize:15,fontWeight:700}}>{joining?"Joining…":"Join Team"}</button>
               </>
@@ -8078,7 +8112,7 @@ if(showBikeSetup)return(
                 setTab('map');
               }}/>
             :teamCalOpen?<TeamCalendarScreen group={activeGroup} user={user} stages={stages} onBack={()=>setTeamCalOpen(false)}/>:teamTrophOpen?<TeamTrophiesScreen group={activeGroup} user={user} onBack={()=>setTeamTrophOpen(false)}/>:teamChatOpen?<TeamChatScreen group={activeGroup} user={user} stages={stages} onBack={()=>setTeamChatOpen(false)} onViewStage={id=>{setShowGroups(false);goToStage(id);}}/>:<TeamHomeScreen group={activeGroup} user={user} onBack={()=>setActiveGroup(null)} onOpenMap={()=>setGroupMapOpen(true)} onOpenCal={()=>setTeamCalOpen(true)} onOpenTroph={()=>setTeamTrophOpen(true)} onOpenChat={()=>setTeamChatOpen(true)} toast={inviteMsg} onToastDone={()=>setInviteMsg("")}/>)
-        :<GroupsScreen user={user} onBack={()=>setShowGroups(false)} onOpenGroup={g=>setActiveGroup(g)} h2h={{requests:h2hRequests+gInvites,active:h2hActive+gActiveCount}} onOpenH2h={()=>{setH2hFromFeed(false);setShowGroups(false);setShowH2h(true);}}/>}
+        :<GroupsScreen user={user} onBack={()=>setShowGroups(false)} onOpenGroup={g=>setActiveGroup(g)}/>}
     </div>
   );
 
