@@ -3627,7 +3627,7 @@ function TeamHomeScreen({group,user,onBack,onOpenMap,onOpenCal,onOpenTroph,onOpe
   const tiles=[
     {key:"chat",title:"Chat",sub:chatSub(d&&d.chat_unread),badge:d?d.chat_unread:0,icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>,onPress:onOpenChat},
     {key:"cal",title:"Calendar",sub:calNextLabel(d&&d.next_ride),icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>,onPress:onOpenCal},
-    {key:"map",title:"Team map",sub:"Where you've ridden",icon:<Icon.Map size={20} color={C.blue}/>,onPress:onOpenMap},
+    {key:"map",title:"Team map",sub:"Where your team has ridden",icon:<Icon.Map size={20} color={C.blue}/>,onPress:onOpenMap},
     {key:"troph",title:"Trophies",sub:trophySub(d&&d.medals),icon:<TrophyCrown size={21} color={C.blue}/>,onPress:onOpenTroph}
   ];
   const label=t=><div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>{t}</div>;
@@ -4950,7 +4950,16 @@ function GpsPill({acc}){
     </div>
   );
 }
-function GroupMapScreen({group,stages,user,onBack,onAddStages}){
+function GroupMapScreen({group,stages,user,units,onBack,onAddStages}){
+  const [tm,setTm]=useState(null);   // team_map: every stage the team has ridden, and who rode it
+  useEffect(()=>{
+    let off=false;
+    supabase.rpc('team_map',{p_group_id:group.id}).then(({data,error})=>{
+      if(off)return;
+      setTm(!error&&data&&Array.isArray(data.stages)?data:{members:[],stages:[]});
+    });
+    return()=>{off=true;};
+  },[group.id]);
   const [groupStageIds,setGroupStageIds]=useState(null);
   const isCreator=group.created_by===user.id;
   useEffect(()=>{
@@ -4958,7 +4967,12 @@ function GroupMapScreen({group,stages,user,onBack,onAddStages}){
       setGroupStageIds((data||[]).map(s=>s.stage_id));
     });
   },[group.id]);
-  const groupStages=groupStageIds?stages.filter(s=>groupStageIds.includes(s.id)):[];
+  const allIds=groupStageIds&&tm?[...new Set([...groupStageIds.map(String),...tm.stages.map(x=>String(x.stage_id))])]:null;
+  const groupStages=allIds?stages.filter(s=>allIds.includes(String(s.id))):[];
+  const riderIdsOf=s=>{const x=tm&&tm.stages.find(y=>String(y.stage_id)===String(s.id));return x?x.riders:[];};
+  const memberName=id=>{const m=tm&&tm.members.find(y=>y.user_id===id);return m&&m.name?m.name:"A rider";};
+  const totalM=groupStages.reduce((a,s)=>a+stageLengthM(s),0);
+  const totalTxt=units==="imperial"?`${(totalM/1609.34).toFixed(1)} mi`:`${(totalM/1000).toFixed(1)} km`;
   return(
     <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
       <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
@@ -4967,16 +4981,25 @@ function GroupMapScreen({group,stages,user,onBack,onAddStages}){
         {isCreator&&<button className="tap" onClick={onAddStages} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"7px 12px",color:C.blue,fontSize:13,fontWeight:600}}><Icon.Plus size={14} color={C.blue}/>Add</button>}
       </div>
       <div style={{flex:1,position:"relative"}}>
-        {groupStageIds===null?(
+        {(groupStageIds===null||tm===null)?(
           <div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>
         ):groupStages.length===0?(
           <div style={{padding:"48px 20px",textAlign:"center",color:C.muted}}>
             <Icon.Map size={32} color={C.mutedL}/>
-            <div style={{fontSize:15,fontWeight:500,marginTop:12,marginBottom:4,color:C.text}}>No stages added yet</div>
-            <div style={{fontSize:13,color:C.mutedL}}>{isCreator?"Tap Add to pick stages from the main map":"Ask the group creator to add stages"}</div>
+            <div style={{fontSize:15,fontWeight:500,marginTop:12,marginBottom:4,color:C.text}}>No stages yet</div>
+            <div style={{fontSize:13,color:C.mutedL}}>{isCreator?"Stages show up here when anyone in the team rides them, or tap Add to pick one":"Stages show up here when anyone in the team rides them"}</div>
           </div>
         ):(
-          <MapboxStyleMap center={groupStages[0].start} zoom={12} stages={groupStages} onStagePress={s=>alert(`${s.name}\n${formatDist(haversine(s.start,s.finish))}`)}/>
+          <>
+            <MapboxStyleMap center={groupStages[0].start} zoom={12} stages={groupStages} onStagePress={s=>{const names=riderIdsOf(s).map(memberName);alert(`${s.name}\n${formatDist(haversine(s.start,s.finish))}${names.length?`\nRidden by ${names.join(", ")}`:""}`);}}/>
+            <div style={{position:"absolute",left:12,right:12,bottom:24,zIndex:5,background:"#fff",borderRadius:16,padding:"14px 16px",boxShadow:"0 4px 18px rgba(0,0,0,0.16)",display:"flex",alignItems:"center",gap:14}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5}}>Everywhere the team has ridden</div>
+                <div style={{marginTop:3}}><span style={{fontSize:22,fontWeight:800,color:C.text}}>{groupStages.length}</span><span style={{fontSize:13,color:C.muted,marginLeft:6}}>{groupStages.length===1?"stage":"stages"}{totalM>0?` · ${totalTxt}`:""}</span></div>
+              </div>
+              <div style={{display:"flex"}}>{(tm?tm.members:[]).slice(0,4).map((m,i)=><div key={m.user_id} style={{marginLeft:i?-8:0,border:"2px solid #fff",borderRadius:"50%",display:"flex"}}><Avatar size={32} url={m.avatar_url}/></div>)}</div>
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -8103,7 +8126,7 @@ if(showBikeSetup)return(
       <style>{STYLES}</style>
       {activeGroup
         ?(groupMapOpen
-            ?<GroupMapScreen group={activeGroup} stages={stages} user={user} onBack={()=>setGroupMapOpen(false)} onAddStages={()=>{
+            ?<GroupMapScreen group={activeGroup} stages={stages} user={user} units={settings.units} onBack={()=>setGroupMapOpen(false)} onAddStages={()=>{
                 const g=activeGroup;
                 setPickingGroup(g);
                 supabase.from('group_stages').select('stage_id').eq('group_id',g.id).then(({data})=>{setPickingExistingIds((data||[]).map(s=>s.stage_id));});
