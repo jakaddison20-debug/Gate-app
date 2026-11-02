@@ -2354,7 +2354,7 @@ function NotificationsScreen({notifications,onBack,onMarkAll,onOpen}){
   );
 }
 
-function DifficultyChips({value,onChange,shadow=false}){
+function DifficultyChips({value,onChange,shadow=false,dots=false}){
   const keys=Object.keys(value);
   const toggle=d=>{
     if(d==='all'){onChange({});return;}
@@ -2362,12 +2362,13 @@ function DifficultyChips({value,onChange,shadow=false}){
     if(next[d])delete next[d];else next[d]=true;
     onChange(next);
   };
-  const chipStyle=(active,color)=>({display:"flex",alignItems:"center",gap:6,padding:"7px 12px",borderRadius:20,fontSize:13,whiteSpace:"nowrap",background:active?`${color}15`:C.surface,border:`1px solid ${active?color:C.border}`,color:active?color:C.text,fontWeight:active?600:400,boxShadow:shadow?"0 2px 8px rgba(0,0,0,0.12)":"none"});
+  const dotStyle=active=>({width:36,height:36,flexShrink:0,padding:0,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:active?"#fff":"transparent",border:active?`1.5px solid ${C.text}`:"1px solid #E4E4E1",boxShadow:active?"0 1px 3px rgba(0,0,0,0.1)":"none",fontSize:12,fontWeight:700,color:active?C.text:"#8A8A88"});
+  const chipStyle=(active,color)=>dots?dotStyle(active):({display:"flex",alignItems:"center",gap:6,padding:"7px 12px",borderRadius:20,fontSize:13,whiteSpace:"nowrap",background:active?`${color}15`:C.surface,border:`1px solid ${active?color:C.border}`,color:active?color:C.text,fontWeight:active?600:400,boxShadow:shadow?"0 2px 8px rgba(0,0,0,0.12)":"none"});
   return(
-    <div style={{display:"flex",gap:8,overflowX:"auto"}}>
+    <div style={{display:"flex",gap:dots?6:8,overflowX:"auto"}}>
       <button className="tap" onClick={()=>toggle('all')} style={chipStyle(keys.length===0,C.blue)}>All</button>
       {DIFFICULTIES.map(d=>(
-        <button key={d.val} className="tap" onClick={()=>toggle(d.val)} style={chipStyle(!!value[d.val],d.color)}><TallDiamond color={d.color} size={14}/>{d.label}</button>
+        <button key={d.val} className="tap" aria-label={d.label} onClick={()=>toggle(d.val)} style={chipStyle(!!value[d.val],d.color)}><TallDiamond color={d.color} size={dots?15:14}/>{dots?null:d.label}</button>
       ))}
     </div>
   );
@@ -8293,25 +8294,25 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
       {/* STAGES */}
       {tab==="stages"&&(
         <div style={{height:"calc(var(--app-h) - env(safe-area-inset-top, 0px))",overflowY:"auto",paddingBottom:100}}>
-                    <div style={{padding:"12px 16px 0",position:"sticky",top:0,background:"#fff",zIndex:5,borderBottom:`1px solid ${C.border}`,paddingBottom:12}}>
-            <div style={{display:"flex",background:C.surface,borderRadius:10,padding:3,marginBottom:12}}>
+                    <div style={{padding:"12px 16px 0",position:"sticky",top:0,background:"#fff",zIndex:5,paddingBottom:8,display:"flex",flexWrap:"wrap",alignItems:"center",columnGap:10}}>
+            <div style={{display:"flex",background:"#F0F0EE",borderRadius:12,padding:3,height:40,width:"100%",marginBottom:10}}>
               {[{val:"stages",label:"Stages"},{val:"courses",label:"Courses"}].map(t=>(
-                <button key={t.val} className="tap" onClick={()=>setCoursesFilter(t.val)} style={{flex:1,padding:"9px",borderRadius:8,background:coursesFilter===t.val?"#fff":"none",border:"none",color:coursesFilter===t.val?C.text:C.muted,fontSize:14,fontWeight:coursesFilter===t.val?600:400,boxShadow:coursesFilter===t.val?"0 1px 4px rgba(0,0,0,0.08)":"none",transition:"all 0.15s"}}>{t.label}</button>
+                <button key={t.val} className="tap" onClick={()=>setCoursesFilter(t.val)} style={{flex:1,borderRadius:9,background:coursesFilter===t.val?"#fff":"none",border:"none",color:coursesFilter===t.val?C.text:"#7A7A78",fontSize:14,fontWeight:coursesFilter===t.val?600:500,boxShadow:coursesFilter===t.val?"0 1px 3px rgba(0,0,0,0.12)":"none",transition:"all 0.15s"}}>{t.label}</button>
               ))}
             </div>
-            {coursesFilter==="stages"&&<div style={{display:"flex",gap:8,marginBottom:12}}>
+            {coursesFilter==="stages"&&<div style={{display:"flex",flex:1,minWidth:0,background:"#F0F0EE",borderRadius:11,padding:2,height:36}}>
               {[{val:"nearby",label:"Nearby",sub:"20mi",Ic:MapPinIcon},{val:"explore",label:"Explore",sub:"All",Ic:Icon.Globe}].map(p=>{
                 const on=proximityFilter===p.val;
                 return(
-                  <button key={p.val} className="tap" onClick={()=>setProximityFilter(p.val)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:on?`${C.blue}10`:C.surface,border:`1.5px solid ${on?C.blue:C.border}`,borderRadius:12,padding:"10px 8px",transition:"all 0.15s"}}>
-                    <p.Ic size={16} color={on?C.blue:C.muted}/>
-                    <span style={{fontSize:14,fontWeight:700,color:on?C.blue:C.text}}>{p.label}</span>
-                    <span style={{fontSize:12,color:C.muted}}>{p.sub}</span>
+                  <button key={p.val} className="tap" onClick={()=>setProximityFilter(p.val)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",background:on?"#fff":"none",border:"none",borderRadius:9,boxShadow:on?"0 1px 3px rgba(0,0,0,0.12)":"none",transition:"all 0.15s"}}>
+                    {null}
+                    <span style={{fontSize:14,fontWeight:on?600:500,color:on?C.text:"#7A7A78"}}>{p.label}</span>
+                    {null}
                   </button>
                 );
               })}
             </div>}
-            {coursesFilter==="stages"&&<div style={{marginBottom:10}}><DifficultyChips value={diffFilter} onChange={setDiffFilter}/></div>}
+            {coursesFilter==="stages"&&<div style={{flexShrink:0,paddingLeft:10,borderLeft:"1px solid #E4E4E1",height:36,display:"flex",alignItems:"center"}}><DifficultyChips value={diffFilter} onChange={setDiffFilter} dots/></div>}
           </div>
                 {coursesFilter==="stages"&&popularStages.length>0&&(
             <div style={{padding:"16px 0 0"}}>
