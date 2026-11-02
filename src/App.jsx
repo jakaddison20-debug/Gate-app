@@ -2405,7 +2405,7 @@ function smoothRoutePath(pts){
 }
 function PopularStageCard({stage,rank,rides,units,onPress}){
   const color=(DIFFICULTIES.find(d=>d.val===stage.difficulty)||DIFFICULTIES[0]).color;
-  const W=150,H=88;
+  const W=156,H=92;
   const[steep,setSteep]=useState(undefined);
   const[imgOk,setImgOk]=useState(true);
   useEffect(()=>{
@@ -2424,7 +2424,7 @@ function PopularStageCard({stage,rank,rides,units,onPress}){
   const gradeTxt=typeof steep==="number"?`${steep}% grade`:"";
   const st=m&&m.pts[0],en=m&&m.pts[m.pts.length-1];
   return(
-    <button className="tap" onClick={()=>onPress(stage)} style={{flex:"0 0 150px",background:"#fff",border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden",textAlign:"left",padding:0}}>
+    <button className="tap" onClick={()=>onPress(stage)} style={{flex:"0 0 156px",background:"#fff",border:"1px solid #ECECE9",borderRadius:16,overflow:"hidden",textAlign:"left",padding:0}}>
       <div style={{position:"relative",width:W,height:H,background:"radial-gradient(circle at 50% 50%,#fff 0%,#DCE3D8 100%)"}}>
         {imgUrl&&imgOk&&<img src={imgUrl} alt="" width={W} height={H} onError={()=>setImgOk(false)} style={{position:"absolute",left:0,top:0,width:W,height:H,display:"block"}}/>}
         {m&&<svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} style={{position:"absolute",left:0,top:0,display:"block"}}>
@@ -2438,10 +2438,10 @@ function PopularStageCard({stage,rank,rides,units,onPress}){
         </svg>}
         <div style={{position:"absolute",top:6,left:6,background:"#fff",borderRadius:6,padding:"2px 7px",fontSize:11,fontWeight:800,color:C.text,boxShadow:"0 1px 3px rgba(0,0,0,0.15)"}}>#{rank}</div>
       </div>
-      <div style={{padding:"9px 10px"}}>
-        <div style={{display:"flex",alignItems:"center",gap:5}}><span style={{display:"flex",flexShrink:0}}><TallDiamond color={color} size={15}/></span><span style={{fontSize:13,fontWeight:700,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{stage.name}</span></div>
-        <div style={{fontSize:11,color:C.muted,marginTop:3,minHeight:14}}>{lenTxt}{lenTxt&&gradeTxt?" · ":""}{gradeTxt}</div>
-        <div style={{fontSize:11,color:"#9A9A9A",marginTop:1}}>{rides} ride{rides===1?"":"s"}</div>
+      <div style={{padding:"10px 12px 12px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:6}}><span style={{display:"flex",flexShrink:0}}><TallDiamond color={color} size={15}/></span><span style={{fontSize:13.5,fontWeight:700,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{stage.name}</span></div>
+        <div style={{fontSize:11.5,color:C.muted,marginTop:4,minHeight:14}}>{lenTxt}{lenTxt&&gradeTxt?" · ":""}{gradeTxt}</div>
+        <div style={{fontSize:11.5,color:"#9A9A98",marginTop:1}}>{rides} ride{rides===1?"":"s"}</div>
       </div>
     </button>
   );
@@ -8315,18 +8315,18 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
             {coursesFilter==="stages"&&<div style={{flexShrink:0,paddingLeft:10,borderLeft:"1px solid #E4E4E1",height:36,display:"flex",alignItems:"center"}}><DifficultyChips value={diffFilter} onChange={setDiffFilter} dots/></div>}
           </div>
                 {coursesFilter==="stages"&&popularStages.length>0&&(
-            <div style={{padding:"16px 0 0"}}>
-              <div style={{margin:"0 16px 8px"}}><span style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase"}}>Popular near you</span><span style={{fontSize:11,color:"#9A9A9A"}}> · most rides this month</span></div>
-              <div style={{display:"flex",gap:10,overflowX:"auto",padding:"2px 16px 4px"}}>
+            <div style={{padding:"22px 0 0"}}>
+              <div style={{margin:"0 16px 10px"}}><span style={{fontSize:12,fontWeight:700,color:C.text,letterSpacing:0.2}}>Popular near you</span><span style={{fontSize:11,color:"#9A9A98"}}> · most rides this month</span></div>
+              <div style={{display:"flex",gap:12,overflowX:"auto",padding:"2px 16px 4px"}}>
                 {popularStages.map((s,i)=><PopularStageCard key={s.id} stage={s} rank={i+1} rides={stageRides[s.id]||0} units={settings.units} onPress={st=>{setSelectedStage(st);setMapCenter({lat:st.start.lat,lng:st.start.lng});setZoom(15);setTab("map");}}/>)}
               </div>
             </div>
           )}
           {coursesFilter==="stages"&&(
-            <div style={{padding:"16px 16px 6px",display:"flex",alignItems:"center"}}>
-              <span style={{flex:1,fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase"}}>All stages</span>
-              <label style={{position:"relative",marginRight:14,fontSize:13,fontWeight:600,color:C.blue}}>
-                {({all:"All",public:"Public",group:"Group",private:"Private"})[stagesFilter]} ▾
+            <div style={{padding:"24px 16px 10px",display:"flex",alignItems:"center"}}>
+              <span style={{flex:1,fontSize:12,fontWeight:700,color:C.text,letterSpacing:0.2}}>All stages</span>
+              <label style={{position:"relative",marginRight:10,fontSize:13,fontWeight:600,color:C.text,display:"flex",alignItems:"center",gap:3,height:30}}>
+                {({all:"All",public:"Public",group:"Group",private:"Private"})[stagesFilter]}<Icon.ChevronDown size={14} color={C.muted}/>
                 <select value={stagesFilter} onChange={e=>setStagesFilter(e.target.value)} style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0}}>
                   <option value="all">All</option>
                   <option value="public">Public</option>
@@ -8334,7 +8334,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
                   <option value="private">Private</option>
                 </select>
               </label>
-              <button className="tap" onClick={()=>setSortMode(m=>m==='popular'?'closest':'popular')} style={{background:"none",border:"none",padding:0,fontSize:13,fontWeight:600,color:C.blue}}>{sortMode==='popular'?'Popular':'Closest'} ▾</button>
+              <button className="tap" onClick={()=>setSortMode(m=>m==='popular'?'closest':'popular')} style={{background:"none",border:"none",padding:0,fontSize:13,fontWeight:600,color:C.text,display:"flex",alignItems:"center",gap:3,height:30}}>{sortMode==='popular'?'Popular':'Closest'}<Icon.ChevronDown size={14} color={C.muted}/></button>
             </div>
           )}
           {coursesFilter==="stages"&&(filteredStages.length===0?<div style={{textAlign:"center",padding:"48px 20px",color:C.muted}}><Icon.Lightning size={36} color={C.mutedL}/><div style={{fontSize:15,fontWeight:500,marginBottom:4,marginTop:12}}>{proximityFilter==="nearby"?"No stages nearby":"No stages"}</div>{proximityFilter==="nearby"&&<div style={{fontSize:13,color:C.mutedL,marginBottom:16}}>Try Explore to see stages further afield</div>}</div>:filteredStages.map(s=><SegmentRow key={s.id} stage={s} userId={user.id} onPress={s=>{setSelectedStage(s);setMapCenter({lat:s.start.lat,lng:s.start.lng});setZoom(15);setTab("map");}}/>))}
