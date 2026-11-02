@@ -309,7 +309,7 @@ const STYLES=`
   .fade-in{animation:fadeIn 0.2s ease;}
   .slide-up{animation:slideUp 0.3s cubic-bezier(0.32,0.72,0,1);}
   .tap{transition:opacity 0.12s;} .tap:active{opacity:0.65;}
-  button{cursor:pointer;border:none;font-family:'Inter',sans-serif;}
+  button{cursor:pointer;border:none;font-family:'Inter',sans-serif;} .segrow:last-child .segdiv{display:none;} .segrow>svg:last-child{opacity:.75;}
   input,textarea{font-family:'Inter',sans-serif;}
   input::placeholder,textarea::placeholder{color:#C4C4C4;}
   input:focus,textarea:focus{outline:none;} textarea{resize:none;}
@@ -2271,18 +2271,18 @@ function SegmentRow({stage,onPress}){
   const dcolor=(DIFFICULTIES.find(d=>d.val===stage.difficulty)||DIFFICULTIES[0]).color;
   const privIcon=stage.privacy==="public"?<Icon.Globe size={12} color={C.mutedL}/>:stage.privacy==="group"?<Icon.Users size={12} color={C.mutedL}/>:<Icon.Lock size={12} color={C.mutedL}/>;
   return(
-    <button className="tap" onClick={()=>onPress&&onPress(stage)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"12px 16px",borderBottom:`1px solid ${C.border}`,background:"white",textAlign:"left"}}>
-      <div style={{position:"relative",width:44,height:44,flexShrink:0}}>
-        <div style={{width:44,height:44,borderRadius:12,background:`${C.blue}12`,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon.Lightning size={22} color={C.blue}/></div>
+    <button className="tap segrow" onClick={()=>onPress&&onPress(stage)} style={{position:"relative",width:"100%",display:"flex",alignItems:"center",gap:14,padding:"14px 16px",background:"white",textAlign:"left"}}>
+      <div className="segdiv" style={{position:"absolute",left:76,right:16,bottom:0,height:1,background:"#EDEDEA"}}/><div style={{position:"relative",width:46,height:46,flexShrink:0}}>
+        <div style={{width:46,height:46,borderRadius:14,background:"#fff",border:"1px solid #E4E4E1",boxSizing:"border-box",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon.Lightning size={21} color={C.blue}/></div>
         <div style={{position:"absolute",right:-5,bottom:-7,display:"flex"}}><TallDiamond color={dcolor} size={20} halo/></div>
       </div>
       <div style={{flex:1,minWidth:0}}>
-        <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{fontSize:15,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{stage.name}</div>{stage.cr&&<span style={{fontSize:10,background:"#FEF3C7",color:"#92400E",borderRadius:5,padding:"2px 6px",fontWeight:800,flexShrink:0}}>CR</span>}</div>
-        <div style={{display:"flex",alignItems:"center",gap:5,marginTop:3,fontSize:12,color:C.muted}}>{privIcon}<span>{formatDist(dist)}</span></div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{fontSize:15.5,fontWeight:650,letterSpacing:-0.15,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{stage.name}</div>{stage.cr&&<span style={{fontSize:10,background:"#FEF3C7",color:"#92400E",borderRadius:5,padding:"2px 6px",fontWeight:800,flexShrink:0}}>CR</span>}</div>
+        <div style={{display:"flex",alignItems:"center",gap:5,marginTop:3,fontSize:12.5,color:"#7A7A78"}}>{privIcon}<span>{formatDist(dist)}</span></div>
       </div>
       <div style={{textAlign:"right",flexShrink:0}}>
-        {stage.time?<div style={{fontSize:17,fontWeight:800,color:C.text,fontVariantNumeric:"tabular-nums"}}>{formatTime(stage.time)}</div>:<div style={{fontSize:13,color:C.mutedL}}>—</div>}
-        <div style={{fontSize:11,color:C.muted,marginTop:1}}>best</div>
+        {stage.time?<div style={{fontSize:16,fontWeight:700,letterSpacing:-0.2,color:C.text,fontVariantNumeric:"tabular-nums"}}>{formatTime(stage.time)}</div>:<div style={{fontSize:13,color:C.mutedL}}>—</div>}
+        <div style={{fontSize:11,color:"#A0A09E",marginTop:2}}>best</div>
       </div>
       <Icon.ChevronRight size={16} color={C.mutedL}/>
     </button>
