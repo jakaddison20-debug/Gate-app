@@ -309,7 +309,7 @@ const STYLES=`
   .fade-in{animation:fadeIn 0.2s ease;}
   .slide-up{animation:slideUp 0.3s cubic-bezier(0.32,0.72,0,1);}
   .tap{transition:opacity 0.12s;} .tap:active{opacity:0.65;}
-  button{cursor:pointer;border:none;font-family:'Inter',sans-serif;}
+  button{cursor:pointer;border:none;font-family:'Inter',sans-serif;} .segrow:last-child .segdiv{display:none;} .segrow>svg:last-child{opacity:.75;}
   input,textarea{font-family:'Inter',sans-serif;}
   input::placeholder,textarea::placeholder{color:#C4C4C4;}
   input:focus,textarea:focus{outline:none;} textarea{resize:none;}
@@ -2271,18 +2271,18 @@ function SegmentRow({stage,onPress}){
   const dcolor=(DIFFICULTIES.find(d=>d.val===stage.difficulty)||DIFFICULTIES[0]).color;
   const privIcon=stage.privacy==="public"?<Icon.Globe size={12} color={C.mutedL}/>:stage.privacy==="group"?<Icon.Users size={12} color={C.mutedL}/>:<Icon.Lock size={12} color={C.mutedL}/>;
   return(
-    <button className="tap" onClick={()=>onPress&&onPress(stage)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"12px 16px",borderBottom:`1px solid ${C.border}`,background:"white",textAlign:"left"}}>
-      <div style={{position:"relative",width:44,height:44,flexShrink:0}}>
-        <div style={{width:44,height:44,borderRadius:12,background:`${C.blue}12`,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon.Lightning size={22} color={C.blue}/></div>
+    <button className="tap segrow" onClick={()=>onPress&&onPress(stage)} style={{position:"relative",width:"100%",display:"flex",alignItems:"center",gap:14,padding:"14px 16px",background:"white",textAlign:"left"}}>
+      <div className="segdiv" style={{position:"absolute",left:76,right:16,bottom:0,height:1,background:"#EDEDEA"}}/><div style={{position:"relative",width:46,height:46,flexShrink:0}}>
+        <div style={{width:46,height:46,borderRadius:14,background:"#fff",border:"1px solid #E4E4E1",boxSizing:"border-box",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon.Lightning size={21} color={C.blue}/></div>
         <div style={{position:"absolute",right:-5,bottom:-7,display:"flex"}}><TallDiamond color={dcolor} size={20} halo/></div>
       </div>
       <div style={{flex:1,minWidth:0}}>
-        <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{fontSize:15,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{stage.name}</div>{stage.cr&&<span style={{fontSize:10,background:"#FEF3C7",color:"#92400E",borderRadius:5,padding:"2px 6px",fontWeight:800,flexShrink:0}}>CR</span>}</div>
-        <div style={{display:"flex",alignItems:"center",gap:5,marginTop:3,fontSize:12,color:C.muted}}>{privIcon}<span>{formatDist(dist)}</span></div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{fontSize:15.5,fontWeight:650,letterSpacing:-0.15,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{stage.name}</div>{stage.cr&&<span style={{fontSize:10,background:"#FEF3C7",color:"#92400E",borderRadius:5,padding:"2px 6px",fontWeight:800,flexShrink:0}}>CR</span>}</div>
+        <div style={{display:"flex",alignItems:"center",gap:5,marginTop:3,fontSize:12.5,color:"#7A7A78"}}>{privIcon}<span>{formatDist(dist)}</span></div>
       </div>
       <div style={{textAlign:"right",flexShrink:0}}>
-        {stage.time?<div style={{fontSize:17,fontWeight:800,color:C.text,fontVariantNumeric:"tabular-nums"}}>{formatTime(stage.time)}</div>:<div style={{fontSize:13,color:C.mutedL}}>—</div>}
-        <div style={{fontSize:11,color:C.muted,marginTop:1}}>best</div>
+        {stage.time?<div style={{fontSize:16,fontWeight:700,letterSpacing:-0.2,color:C.text,fontVariantNumeric:"tabular-nums"}}>{formatTime(stage.time)}</div>:<div style={{fontSize:13,color:C.mutedL}}>—</div>}
+        <div style={{fontSize:11,color:"#A0A09E",marginTop:2}}>best</div>
       </div>
       <Icon.ChevronRight size={16} color={C.mutedL}/>
     </button>
@@ -2354,7 +2354,7 @@ function NotificationsScreen({notifications,onBack,onMarkAll,onOpen}){
   );
 }
 
-function DifficultyChips({value,onChange,shadow=false}){
+function DifficultyChips({value,onChange,shadow=false,dots=false}){
   const keys=Object.keys(value);
   const toggle=d=>{
     if(d==='all'){onChange({});return;}
@@ -2362,12 +2362,13 @@ function DifficultyChips({value,onChange,shadow=false}){
     if(next[d])delete next[d];else next[d]=true;
     onChange(next);
   };
-  const chipStyle=(active,color)=>({display:"flex",alignItems:"center",gap:6,padding:"7px 12px",borderRadius:20,fontSize:13,whiteSpace:"nowrap",background:active?`${color}15`:C.surface,border:`1px solid ${active?color:C.border}`,color:active?color:C.text,fontWeight:active?600:400,boxShadow:shadow?"0 2px 8px rgba(0,0,0,0.12)":"none"});
+  const dotStyle=active=>({width:36,height:36,flexShrink:0,padding:0,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:active?"#fff":"transparent",border:active?`1.5px solid ${C.text}`:"1px solid #E4E4E1",boxShadow:active?"0 1px 3px rgba(0,0,0,0.1)":"none",fontSize:12,fontWeight:700,color:active?C.text:"#8A8A88"});
+  const chipStyle=(active,color)=>dots?dotStyle(active):({display:"flex",alignItems:"center",gap:6,padding:"7px 12px",borderRadius:20,fontSize:13,whiteSpace:"nowrap",background:active?`${color}15`:C.surface,border:`1px solid ${active?color:C.border}`,color:active?color:C.text,fontWeight:active?600:400,boxShadow:shadow?"0 2px 8px rgba(0,0,0,0.12)":"none"});
   return(
-    <div style={{display:"flex",gap:8,overflowX:"auto"}}>
+    <div style={{display:"flex",gap:dots?6:8,overflowX:"auto"}}>
       <button className="tap" onClick={()=>toggle('all')} style={chipStyle(keys.length===0,C.blue)}>All</button>
       {DIFFICULTIES.map(d=>(
-        <button key={d.val} className="tap" onClick={()=>toggle(d.val)} style={chipStyle(!!value[d.val],d.color)}><TallDiamond color={d.color} size={14}/>{d.label}</button>
+        <button key={d.val} className="tap" aria-label={d.label} onClick={()=>toggle(d.val)} style={chipStyle(!!value[d.val],d.color)}><TallDiamond color={d.color} size={dots?15:14}/>{dots?null:d.label}</button>
       ))}
     </div>
   );
@@ -2404,7 +2405,7 @@ function smoothRoutePath(pts){
 }
 function PopularStageCard({stage,rank,rides,units,onPress}){
   const color=(DIFFICULTIES.find(d=>d.val===stage.difficulty)||DIFFICULTIES[0]).color;
-  const W=150,H=88;
+  const W=156,H=92;
   const[steep,setSteep]=useState(undefined);
   const[imgOk,setImgOk]=useState(true);
   useEffect(()=>{
@@ -2423,7 +2424,7 @@ function PopularStageCard({stage,rank,rides,units,onPress}){
   const gradeTxt=typeof steep==="number"?`${steep}% grade`:"";
   const st=m&&m.pts[0],en=m&&m.pts[m.pts.length-1];
   return(
-    <button className="tap" onClick={()=>onPress(stage)} style={{flex:"0 0 150px",background:"#fff",border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden",textAlign:"left",padding:0}}>
+    <button className="tap" onClick={()=>onPress(stage)} style={{flex:"0 0 156px",background:"#fff",border:"1px solid #ECECE9",borderRadius:16,overflow:"hidden",textAlign:"left",padding:0}}>
       <div style={{position:"relative",width:W,height:H,background:"radial-gradient(circle at 50% 50%,#fff 0%,#DCE3D8 100%)"}}>
         {imgUrl&&imgOk&&<img src={imgUrl} alt="" width={W} height={H} onError={()=>setImgOk(false)} style={{position:"absolute",left:0,top:0,width:W,height:H,display:"block"}}/>}
         {m&&<svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} style={{position:"absolute",left:0,top:0,display:"block"}}>
@@ -2437,10 +2438,10 @@ function PopularStageCard({stage,rank,rides,units,onPress}){
         </svg>}
         <div style={{position:"absolute",top:6,left:6,background:"#fff",borderRadius:6,padding:"2px 7px",fontSize:11,fontWeight:800,color:C.text,boxShadow:"0 1px 3px rgba(0,0,0,0.15)"}}>#{rank}</div>
       </div>
-      <div style={{padding:"9px 10px"}}>
-        <div style={{display:"flex",alignItems:"center",gap:5}}><span style={{display:"flex",flexShrink:0}}><TallDiamond color={color} size={15}/></span><span style={{fontSize:13,fontWeight:700,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{stage.name}</span></div>
-        <div style={{fontSize:11,color:C.muted,marginTop:3,minHeight:14}}>{lenTxt}{lenTxt&&gradeTxt?" · ":""}{gradeTxt}</div>
-        <div style={{fontSize:11,color:"#9A9A9A",marginTop:1}}>{rides} ride{rides===1?"":"s"}</div>
+      <div style={{padding:"10px 12px 12px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:6}}><span style={{display:"flex",flexShrink:0}}><TallDiamond color={color} size={15}/></span><span style={{fontSize:13.5,fontWeight:700,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{stage.name}</span></div>
+        <div style={{fontSize:11.5,color:C.muted,marginTop:4,minHeight:14}}>{lenTxt}{lenTxt&&gradeTxt?" · ":""}{gradeTxt}</div>
+        <div style={{fontSize:11.5,color:"#9A9A98",marginTop:1}}>{rides} ride{rides===1?"":"s"}</div>
       </div>
     </button>
   );
@@ -8293,39 +8294,39 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
       {/* STAGES */}
       {tab==="stages"&&(
         <div style={{height:"calc(var(--app-h) - env(safe-area-inset-top, 0px))",overflowY:"auto",paddingBottom:100}}>
-                    <div style={{padding:"12px 16px 0",position:"sticky",top:0,background:"#fff",zIndex:5,borderBottom:`1px solid ${C.border}`,paddingBottom:12}}>
-            <div style={{display:"flex",background:C.surface,borderRadius:10,padding:3,marginBottom:12}}>
+                    <div style={{padding:"12px 16px 0",position:"sticky",top:0,background:"#fff",zIndex:5,paddingBottom:8,display:"flex",flexWrap:"wrap",alignItems:"center",columnGap:10}}>
+            <div style={{display:"flex",background:"#F0F0EE",borderRadius:12,padding:3,height:40,width:"100%",marginBottom:10}}>
               {[{val:"stages",label:"Stages"},{val:"courses",label:"Courses"}].map(t=>(
-                <button key={t.val} className="tap" onClick={()=>setCoursesFilter(t.val)} style={{flex:1,padding:"9px",borderRadius:8,background:coursesFilter===t.val?"#fff":"none",border:"none",color:coursesFilter===t.val?C.text:C.muted,fontSize:14,fontWeight:coursesFilter===t.val?600:400,boxShadow:coursesFilter===t.val?"0 1px 4px rgba(0,0,0,0.08)":"none",transition:"all 0.15s"}}>{t.label}</button>
+                <button key={t.val} className="tap" onClick={()=>setCoursesFilter(t.val)} style={{flex:1,borderRadius:9,background:coursesFilter===t.val?"#fff":"none",border:"none",color:coursesFilter===t.val?C.text:"#7A7A78",fontSize:14,fontWeight:coursesFilter===t.val?600:500,boxShadow:coursesFilter===t.val?"0 1px 3px rgba(0,0,0,0.12)":"none",transition:"all 0.15s"}}>{t.label}</button>
               ))}
             </div>
-            {coursesFilter==="stages"&&<div style={{display:"flex",gap:8,marginBottom:12}}>
+            {coursesFilter==="stages"&&<div style={{display:"flex",flex:1,minWidth:0,background:"#F0F0EE",borderRadius:11,padding:2,height:36}}>
               {[{val:"nearby",label:"Nearby",sub:"20mi",Ic:MapPinIcon},{val:"explore",label:"Explore",sub:"All",Ic:Icon.Globe}].map(p=>{
                 const on=proximityFilter===p.val;
                 return(
-                  <button key={p.val} className="tap" onClick={()=>setProximityFilter(p.val)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:on?`${C.blue}10`:C.surface,border:`1.5px solid ${on?C.blue:C.border}`,borderRadius:12,padding:"10px 8px",transition:"all 0.15s"}}>
-                    <p.Ic size={16} color={on?C.blue:C.muted}/>
-                    <span style={{fontSize:14,fontWeight:700,color:on?C.blue:C.text}}>{p.label}</span>
-                    <span style={{fontSize:12,color:C.muted}}>{p.sub}</span>
+                  <button key={p.val} className="tap" onClick={()=>setProximityFilter(p.val)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",background:on?"#fff":"none",border:"none",borderRadius:9,boxShadow:on?"0 1px 3px rgba(0,0,0,0.12)":"none",transition:"all 0.15s"}}>
+                    {null}
+                    <span style={{fontSize:14,fontWeight:on?600:500,color:on?C.text:"#7A7A78"}}>{p.label}</span>
+                    {null}
                   </button>
                 );
               })}
             </div>}
-            {coursesFilter==="stages"&&<div style={{marginBottom:10}}><DifficultyChips value={diffFilter} onChange={setDiffFilter}/></div>}
+            {coursesFilter==="stages"&&<div style={{flexShrink:0,paddingLeft:10,borderLeft:"1px solid #E4E4E1",height:36,display:"flex",alignItems:"center"}}><DifficultyChips value={diffFilter} onChange={setDiffFilter} dots/></div>}
           </div>
                 {coursesFilter==="stages"&&popularStages.length>0&&(
-            <div style={{padding:"16px 0 0"}}>
-              <div style={{margin:"0 16px 8px"}}><span style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase"}}>Popular near you</span><span style={{fontSize:11,color:"#9A9A9A"}}> · most rides this month</span></div>
-              <div style={{display:"flex",gap:10,overflowX:"auto",padding:"2px 16px 4px"}}>
+            <div style={{padding:"22px 0 0"}}>
+              <div style={{margin:"0 16px 10px"}}><span style={{fontSize:12,fontWeight:700,color:C.text,letterSpacing:0.2}}>Popular near you</span><span style={{fontSize:11,color:"#9A9A98"}}> · most rides this month</span></div>
+              <div style={{display:"flex",gap:12,overflowX:"auto",padding:"2px 16px 4px"}}>
                 {popularStages.map((s,i)=><PopularStageCard key={s.id} stage={s} rank={i+1} rides={stageRides[s.id]||0} units={settings.units} onPress={st=>{setSelectedStage(st);setMapCenter({lat:st.start.lat,lng:st.start.lng});setZoom(15);setTab("map");}}/>)}
               </div>
             </div>
           )}
           {coursesFilter==="stages"&&(
-            <div style={{padding:"16px 16px 6px",display:"flex",alignItems:"center"}}>
-              <span style={{flex:1,fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase"}}>All stages</span>
-              <label style={{position:"relative",marginRight:14,fontSize:13,fontWeight:600,color:C.blue}}>
-                {({all:"All",public:"Public",group:"Group",private:"Private"})[stagesFilter]} ▾
+            <div style={{padding:"24px 16px 10px",display:"flex",alignItems:"center"}}>
+              <span style={{flex:1,fontSize:12,fontWeight:700,color:C.text,letterSpacing:0.2}}>All stages</span>
+              <label style={{position:"relative",marginRight:10,fontSize:13,fontWeight:600,color:C.text,display:"flex",alignItems:"center",gap:3,height:30}}>
+                {({all:"All",public:"Public",group:"Group",private:"Private"})[stagesFilter]}<Icon.ChevronDown size={14} color={C.muted}/>
                 <select value={stagesFilter} onChange={e=>setStagesFilter(e.target.value)} style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0}}>
                   <option value="all">All</option>
                   <option value="public">Public</option>
@@ -8333,7 +8334,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
                   <option value="private">Private</option>
                 </select>
               </label>
-              <button className="tap" onClick={()=>setSortMode(m=>m==='popular'?'closest':'popular')} style={{background:"none",border:"none",padding:0,fontSize:13,fontWeight:600,color:C.blue}}>{sortMode==='popular'?'Popular':'Closest'} ▾</button>
+              <button className="tap" onClick={()=>setSortMode(m=>m==='popular'?'closest':'popular')} style={{background:"none",border:"none",padding:0,fontSize:13,fontWeight:600,color:C.text,display:"flex",alignItems:"center",gap:3,height:30}}>{sortMode==='popular'?'Popular':'Closest'}<Icon.ChevronDown size={14} color={C.muted}/></button>
             </div>
           )}
           {coursesFilter==="stages"&&(filteredStages.length===0?<div style={{textAlign:"center",padding:"48px 20px",color:C.muted}}><Icon.Lightning size={36} color={C.mutedL}/><div style={{fontSize:15,fontWeight:500,marginBottom:4,marginTop:12}}>{proximityFilter==="nearby"?"No stages nearby":"No stages"}</div>{proximityFilter==="nearby"&&<div style={{fontSize:13,color:C.mutedL,marginBottom:16}}>Try Explore to see stages further afield</div>}</div>:filteredStages.map(s=><SegmentRow key={s.id} stage={s} userId={user.id} onPress={s=>{setSelectedStage(s);setMapCenter({lat:s.start.lat,lng:s.start.lng});setZoom(15);setTab("map");}}/>))}
