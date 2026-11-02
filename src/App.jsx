@@ -501,12 +501,13 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
   );
 }
 
-function MapboxStyleMap({center,zoom,flyToTrigger,width:W,height:H,stages=[],courses=[],userPos,userHeading,onStagePress,diffFilter}){
+function MapboxStyleMap({center,zoom,flyToTrigger,width:W,height:H,stages=[],courses=[],userPos,userHeading,onStagePress,diffFilter,visibleIds}){
   const mapContainer=useRef(null);
   const map=useRef(null);
   const gateMarkersRef=useRef([]);
   const markerStagesRef=useRef([]);
   const diffFilterRef=useRef(diffFilter);
+  const visibleIdsRef=useRef(visibleIds);
   const userMarkerRef=useRef(null);
   const userMarkerInnerRef=useRef(null);
   const onStagePressRef=useRef(onStagePress);
@@ -551,10 +552,10 @@ map.current.addImage('stage-pin',ctx.getImageData(0,0,24,24));
           const stageColor=diffColors[stage.difficulty]||'#2563EB';
           const startEl=document.createElement('div');startEl.innerHTML=`<div style="width:18px;height:18px;transform-origin:center;transition:transform 0.1s ease;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35));"><svg width="14" height="18" viewBox="0 0 18 24" style="display:block;margin:0 auto;overflow:visible"><path d="M9 1L17 12 9 23 1 12z" fill="${stageColor}" stroke="white" stroke-width="2.6" stroke-linejoin="round"/></svg></div>`;
           new mapboxgl.Marker({element:startEl}).setLngLat([stage.start.lng,stage.start.lat]).addTo(map.current);
-          gateMarkersRef.current.push(startEl.firstElementChild);markerStagesRef.current.push({el:startEl,difficulty:stage.difficulty||'blue'});
+          gateMarkersRef.current.push(startEl.firstElementChild);markerStagesRef.current.push({el:startEl,id:String(stage.id),difficulty:stage.difficulty||'blue'});
           const finishEl=document.createElement('div');finishEl.innerHTML='<div style="width:18px;height:18px;border-radius:50%;background:white;border:2px solid #1A1A1A;box-shadow:0 2px 6px rgba(0,0,0,0.3);overflow:hidden;transform-origin:center;transition:transform 0.1s ease;"><svg width="14" height="14" viewBox="0 0 8 8"><rect width="2" height="2" fill="#1A1A1A"/><rect x="4" width="2" height="2" fill="#1A1A1A"/><rect x="2" y="2" width="2" height="2" fill="#1A1A1A"/><rect x="6" y="2" width="2" height="2" fill="#1A1A1A"/><rect y="4" width="2" height="2" fill="#1A1A1A"/><rect x="4" y="4" width="2" height="2" fill="#1A1A1A"/><rect x="2" y="6" width="2" height="2" fill="#1A1A1A"/><rect x="6" y="6" width="2" height="2" fill="#1A1A1A"/></svg></div>';
           new mapboxgl.Marker({element:finishEl}).setLngLat([stage.finish.lng,stage.finish.lat]).addTo(map.current);
-          gateMarkersRef.current.push(finishEl.firstElementChild);markerStagesRef.current.push({el:finishEl,difficulty:stage.difficulty||'blue'});
+          gateMarkersRef.current.push(finishEl.firstElementChild);markerStagesRef.current.push({el:finishEl,id:String(stage.id),difficulty:stage.difficulty||'blue'});
 
                               let midLat,midLng;
                 if(stage.line_coords&&stage.line_coords.length>1){
@@ -634,12 +635,14 @@ map.current.addImage('stage-pin',ctx.getImageData(0,0,24,24));
     const m=map.current;
     if(!m)return;
     const keys=Object.keys(f||{});
-    const show=d=>keys.length===0||!!(f&&f[d||'blue']);
-    stages.forEach(s=>{const id='line-'+s.id;if(m.getLayer(id))m.setLayoutProperty(id,'visibility',show(s.difficulty)?'visible':'none');});
-    markerStagesRef.current.forEach(x=>{x.el.style.display=show(x.difficulty)?'':'none';});
-    if(m.getLayer('stage-midpoints-icon'))m.setFilter('stage-midpoints-icon',keys.length===0?null:['in',['get','difficulty'],['literal',keys]]);
+    const vis=visibleIdsRef.current;
+    const show=(d,sid)=>(keys.length===0||!!(f&&f[d||'blue']))&&(!vis||vis.includes(String(sid)));
+    stages.forEach(s=>{const id='line-'+s.id;if(m.getLayer(id))m.setLayoutProperty(id,'visibility',show(s.difficulty,s.id)?'visible':'none');});
+    markerStagesRef.current.forEach(x=>{x.el.style.display=show(x.difficulty,x.id)?'':'none';});
+    if(m.getLayer('stage-midpoints-icon')){const conds=[];if(keys.length)conds.push(['in',['get','difficulty'],['literal',keys]]);if(vis)conds.push(vis.length?['in',['get','stageId'],['literal',vis]]:['==',['get','stageId'],'__none__']);m.setFilter('stage-midpoints-icon',conds.length===0?null:conds.length===1?conds[0]:['all',...conds]);}
   };
-  useEffect(()=>{diffFilterRef.current=diffFilter;applyDiffFilter(diffFilter);},[diffFilter]);
+  const visKey=visibleIds?visibleIds.join('|'):null;
+  useEffect(()=>{diffFilterRef.current=diffFilter;visibleIdsRef.current=visibleIds;applyDiffFilter(diffFilter);},[diffFilter,visKey]);
   useEffect(()=>{if(map.current&&flyToTrigger)map.current.flyTo({center:[center.lng,center.lat],zoom:zoom,essential:true});},[flyToTrigger]);
 
   useEffect(()=>{
@@ -3627,7 +3630,7 @@ function TeamHomeScreen({group,user,onBack,onOpenMap,onOpenCal,onOpenTroph,onOpe
   const tiles=[
     {key:"chat",title:"Chat",sub:chatSub(d&&d.chat_unread),badge:d?d.chat_unread:0,icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>,onPress:onOpenChat},
     {key:"cal",title:"Calendar",sub:calNextLabel(d&&d.next_ride),icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>,onPress:onOpenCal},
-    {key:"map",title:"Team map",sub:"Where you've ridden",icon:<Icon.Map size={20} color={C.blue}/>,onPress:onOpenMap},
+    {key:"map",title:"Team map",sub:"Where your team has ridden",icon:<Icon.Map size={20} color={C.blue}/>,onPress:onOpenMap},
     {key:"troph",title:"Trophies",sub:trophySub(d&&d.medals),icon:<TrophyCrown size={21} color={C.blue}/>,onPress:onOpenTroph}
   ];
   const label=t=><div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>{t}</div>;
@@ -4950,15 +4953,35 @@ function GpsPill({acc}){
     </div>
   );
 }
-function GroupMapScreen({group,stages,user,onBack,onAddStages}){
+function GroupMapScreen({group,stages,user,units,onBack,onAddStages}){
+  const [tm,setTm]=useState(null);   // team_map: every stage the team has ridden, and who rode it
+  useEffect(()=>{
+    let off=false;
+    supabase.rpc('team_map',{p_group_id:group.id}).then(({data,error})=>{
+      if(off)return;
+      setTm(!error&&data&&Array.isArray(data.stages)?data:{members:[],stages:[]});
+    });
+    return()=>{off=true;};
+  },[group.id]);
   const [groupStageIds,setGroupStageIds]=useState(null);
   const isCreator=group.created_by===user.id;
+  const [riderSel,setRiderSel]=useState(null);   // null = everyone, else a member's user id
   useEffect(()=>{
     supabase.from('group_stages').select('stage_id').eq('group_id',group.id).then(({data})=>{
       setGroupStageIds((data||[]).map(s=>s.stage_id));
     });
   },[group.id]);
-  const groupStages=groupStageIds?stages.filter(s=>groupStageIds.includes(s.id)):[];
+  const allIds=groupStageIds&&tm?[...new Set([...groupStageIds.map(String),...tm.stages.map(x=>String(x.stage_id))])]:null;
+  const groupStages=allIds?stages.filter(s=>allIds.includes(String(s.id))):[];
+  const riderIdsOf=s=>{const x=tm&&tm.stages.find(y=>String(y.stage_id)===String(s.id));return x?x.riders:[];};
+  const memberName=id=>{const m=tm&&tm.members.find(y=>y.user_id===id);return m&&m.name?m.name:"A rider";};
+  const sel=riderSel&&tm&&tm.members.some(m=>m.user_id===riderSel)?riderSel:null;
+  const shownStages=sel?groupStages.filter(s=>riderIdsOf(s).includes(sel)):groupStages;
+  const chipMembers=tm?[...tm.members].sort((a,b)=>(b.user_id===user.id)-(a.user_id===user.id)):[];
+  const chipName=m=>m.user_id===user.id?"You":(m.name||"Rider");
+  const selMember=sel?tm.members.find(m=>m.user_id===sel):null;
+  const totalM=shownStages.reduce((a,s)=>a+stageLengthM(s),0);
+  const totalTxt=units==="imperial"?`${(totalM/1609.34).toFixed(1)} mi`:`${(totalM/1000).toFixed(1)} km`;
   return(
     <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
       <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
@@ -4967,16 +4990,28 @@ function GroupMapScreen({group,stages,user,onBack,onAddStages}){
         {isCreator&&<button className="tap" onClick={onAddStages} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"7px 12px",color:C.blue,fontSize:13,fontWeight:600}}><Icon.Plus size={14} color={C.blue}/>Add</button>}
       </div>
       <div style={{flex:1,position:"relative"}}>
-        {groupStageIds===null?(
+        {(groupStageIds===null||tm===null)?(
           <div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>
         ):groupStages.length===0?(
           <div style={{padding:"48px 20px",textAlign:"center",color:C.muted}}>
             <Icon.Map size={32} color={C.mutedL}/>
-            <div style={{fontSize:15,fontWeight:500,marginTop:12,marginBottom:4,color:C.text}}>No stages added yet</div>
-            <div style={{fontSize:13,color:C.mutedL}}>{isCreator?"Tap Add to pick stages from the main map":"Ask the group creator to add stages"}</div>
+            <div style={{fontSize:15,fontWeight:500,marginTop:12,marginBottom:4,color:C.text}}>No stages yet</div>
+            <div style={{fontSize:13,color:C.mutedL}}>{isCreator?"Stages show up here when anyone in the team rides them, or tap Add to pick one":"Stages show up here when anyone in the team rides them"}</div>
           </div>
         ):(
-          <MapboxStyleMap center={groupStages[0].start} zoom={12} stages={groupStages} onStagePress={s=>alert(`${s.name}\n${formatDist(haversine(s.start,s.finish))}`)}/>
+          <>
+            <MapboxStyleMap center={groupStages[0].start} zoom={12} stages={groupStages} visibleIds={sel?shownStages.map(s=>String(s.id)):null} onStagePress={s=>{const names=riderIdsOf(s).map(memberName);alert(`${s.name}\n${formatDist(haversine(s.start,s.finish))}${names.length?`\nRidden by ${names.join(", ")}`:""}`);}}/>
+            {chipMembers.length>1&&<div style={{position:"absolute",top:12,left:0,right:0,zIndex:5,padding:"0 12px",display:"flex",gap:8,overflowX:"auto",scrollbarWidth:"none",pointerEvents:"none"}}>
+              {[{user_id:null},...chipMembers].map(m=>{const on=m.user_id===sel;return <button key={m.user_id||"all"} className="tap" onClick={()=>setRiderSel(m.user_id)} style={{pointerEvents:"auto",flexShrink:0,border:on?"none":`1px solid ${C.border}`,background:on?C.blue:"#fff",color:on?"#fff":C.text,borderRadius:999,padding:"7px 14px",fontSize:13,fontWeight:700,boxShadow:"0 1px 4px rgba(0,0,0,0.12)"}}>{m.user_id?chipName(m):"All"}</button>;})}
+            </div>}
+            <div style={{position:"absolute",left:12,right:12,bottom:24,zIndex:5,background:"#fff",borderRadius:16,padding:"14px 16px",boxShadow:"0 4px 18px rgba(0,0,0,0.16)",display:"flex",alignItems:"center",gap:14}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5}}>{selMember?`Ridden by ${chipName(selMember)}`:"Everywhere the team has ridden"}</div>
+                <div style={{marginTop:3}}><span style={{fontSize:22,fontWeight:800,color:C.text}}>{shownStages.length}</span><span style={{fontSize:13,color:C.muted,marginLeft:6}}>{shownStages.length===1?"stage":"stages"}{totalM>0?` · ${totalTxt}`:""}</span></div>
+              </div>
+              <div style={{display:"flex"}}>{(selMember?[selMember]:(tm?tm.members:[]).slice(0,4)).map((m,i)=><div key={m.user_id} style={{marginLeft:i?-8:0,border:"2px solid #fff",borderRadius:"50%",display:"flex"}}><Avatar size={32} url={m.avatar_url}/></div>)}</div>
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -8103,7 +8138,7 @@ if(showBikeSetup)return(
       <style>{STYLES}</style>
       {activeGroup
         ?(groupMapOpen
-            ?<GroupMapScreen group={activeGroup} stages={stages} user={user} onBack={()=>setGroupMapOpen(false)} onAddStages={()=>{
+            ?<GroupMapScreen group={activeGroup} stages={stages} user={user} units={settings.units} onBack={()=>setGroupMapOpen(false)} onAddStages={()=>{
                 const g=activeGroup;
                 setPickingGroup(g);
                 supabase.from('group_stages').select('stage_id').eq('group_id',g.id).then(({data})=>{setPickingExistingIds((data||[]).map(s=>s.stage_id));});
