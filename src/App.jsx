@@ -2291,6 +2291,48 @@ function DifficultyPicker({value,onChange}){
     </div>
   );
 }
+let TC_ID=0;
+const TC_TIER={3:{l:"#FFF0A0",m:"#E3B93C",d:"#946806",g:"245,166,35"},2:{l:"#FAFBFC",m:"#BCC2C8",d:"#6B7279",g:"159,180,214"},1:{l:"#F6D5B0",m:"#C48E5E",d:"#7A4B26",g:"224,123,57"}};
+const TITLE_DEFS={fast:{name:"Fastest Rider",key:"crown",unit:"record"},active:{name:"Most Active",key:"flame",unit:"run"},long:{name:"Longest Stage",key:"ruler"}};
+function TitleCoin({size=64,rank=1,k="crown"}){
+  const id=useMemo(()=>"tc"+(++TC_ID),[]),sm=size<44,tier=4-Math.min(3,Math.max(1,rank)),t=TC_TIER[tier],edge="rgba(255,255,255,.45)";
+  const g=`url(#${id}ic)`,gl=`url(#${id}il)`,gd=`url(#${id}id)`;
+  const icon=k==="crown"?(()=>{const s=sm?2.5:2.3;return <g transform={`translate(${50-11.75*s} ${(sm?50:46)-11.8*s}) scale(${s})`} strokeLinejoin="round"><polygon points="3,19 1.5,9 7,13 12,4 12,19" fill={gl} stroke={edge} strokeWidth=".45"/><polygon points="12,4 17,13 22.5,9 20,19 12,19" fill={gd} stroke={edge} strokeWidth=".45"/><rect x="3" y="17" width="17" height="2.6" rx="1" fill={g} stroke={edge} strokeWidth=".4"/></g>;})()
+  :k==="flame"?<svg x={sm?27:30} y={sm?20:22} width={sm?46:40} height={sm?46:40} viewBox="0 0 24 24"><path d="M12 22.5c4.2 0 7.2-2.9 7.2-7.2 0-3.1-1.9-5.2-3.6-7.2-.4 2.1-1.5 3.1-2.8 3.5C13.5 8 12.4 4.7 9.5 1.8c.1 4.1-4.7 6.8-4.7 13.5 0 4.3 3 7.2 7.2 7.2z" fill={g} stroke={edge} strokeWidth=".5"/><path d="M12 20.5c2.6 0 4.4-1.8 4.4-4.4 0-1.8-1.1-3-2.2-4.2-.3 1.1-.9 1.7-1.7 2-.6-1.8-1.3-3.4-2.7-5 0 3.2-2.5 4.6-2.5 8.1 0 2.6 1.8 3.5 4.7 3.5z" fill="#fff" opacity=".18"/></svg>
+  :<g transform={`rotate(-35 50 ${sm?50:46})`}><rect x="26" y={sm?42:39} width="48" height={sm?17:15} rx="2.2" fill={g} stroke={edge} strokeWidth=".8"/>{[0,1,2,3,4,5].map(i=><rect key={i} x={31+i*7.6} y={sm?42:39} width="2.4" height={i%2?7:5} fill={t.d} opacity=".9"/>)}</g>;
+  return <svg width={size} height={size} viewBox="0 0 100 100" style={{overflow:"visible",flexShrink:0,filter:`drop-shadow(0 0 ${sm?2:5}px rgba(${t.g},.5)) drop-shadow(0 2px 2px rgba(0,0,0,.28))`}}>
+    <defs>
+      <linearGradient id={id+"rim"} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor={t.l}/><stop offset=".28" stopColor={t.m}/><stop offset=".5" stopColor={t.d}/><stop offset=".72" stopColor={t.m}/><stop offset="1" stopColor={t.l}/></linearGradient>
+      <linearGradient id={id+"ri"} x1="1" y1="1" x2="0" y2="0"><stop offset="0" stopColor={t.l}/><stop offset=".5" stopColor={t.d}/><stop offset="1" stopColor={t.m}/></linearGradient>
+      <radialGradient id={id+"fc"} cx=".5" cy=".3" r=".8"><stop offset="0" stopColor="#4D4742"/><stop offset=".6" stopColor="#27231F"/><stop offset="1" stopColor="#110F0C"/></radialGradient>
+      <linearGradient id={id+"ic"} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={t.l}/><stop offset=".55" stopColor={t.m}/><stop offset="1" stopColor={t.d}/></linearGradient>
+      <linearGradient id={id+"il"} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor={t.l}/><stop offset="1" stopColor={t.m}/></linearGradient>
+      <linearGradient id={id+"id"} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor={t.m}/><stop offset="1" stopColor={t.d}/></linearGradient>
+      <linearGradient id={id+"mt"} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={t.m}/><stop offset="1" stopColor={t.d}/></linearGradient>
+      <linearGradient id={id+"bv"} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#000" stopOpacity=".55"/><stop offset=".5" stopColor="#000" stopOpacity="0"/><stop offset="1" stopColor="#fff" stopOpacity=".22"/></linearGradient>
+      <clipPath id={id+"c"}><circle cx="50" cy="50" r="37.5"/></clipPath>
+      <filter id={id+"n"} x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="2" seed="4" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 .7  0 0 0 0 .66  0 0 0 0 .6  0 0 0 .55 0"/></filter>
+    </defs>
+    <circle cx="50" cy="50" r="46" fill={`url(#${id}rim)`}/><circle cx="50" cy="50" r="46" fill="none" stroke="rgba(0,0,0,.4)" strokeWidth=".9"/>
+    <circle cx="50" cy="50" r="41.2" fill={`url(#${id}ri)`}/><circle cx="50" cy="50" r="41.2" fill="none" stroke="rgba(255,255,255,.45)" strokeWidth=".7"/>
+    <circle cx="50" cy="50" r="38" fill={`url(#${id}fc)`}/>
+    {!sm&&<g clipPath={`url(#${id}c)`}><rect width="100" height="100" filter={`url(#${id}n)`} opacity=".32"/></g>}
+    {!sm&&<g clipPath={`url(#${id}c)`}><polygon points="8,92 26,68 35,75 47,57 58,72 66,65 92,92" fill={t.d} opacity=".55"/><polygon points="14,92 30,72 39,79 49,62 60,78 70,70 88,92" fill={`url(#${id}mt)`}/><polygon points="49,62 60,78 52,92 41,92 39,79" fill="#000" opacity=".28"/><polygon points="30,72 39,79 33,92 14,92" fill="#000" opacity=".22"/></g>}
+    {icon}
+    <circle cx="50" cy="50" r="37.5" fill="none" stroke={`url(#${id}bv)`} strokeWidth="2.2"/>
+  </svg>;
+}
+function useRivlTitles(user){
+  const[rows,setRows]=useState(null);
+  const load=useCallback(()=>{if(!user)return;supabase.rpc("rivl_titles").then(({data,error})=>{if(!error&&data)setRows(data);});},[user]);
+  useEffect(()=>{load();},[load]);
+  return{rows,reload:load};
+}
+function titlesOf(rows,uid){
+  if(!rows||!uid)return[];
+  return rows.filter(r=>r.user_id===uid&&(r.title==="long"?r.rank===1:r.rank<=3)).map(r=>({title:r.title,rank:r.rank,val:Number(r.val)}));
+}
+
 function GoldCrown({size=20}){
   return <svg width={size} height={size*0.85} viewBox="0 0 24 20" style={{flexShrink:0}}><path d="M3 19l-1.5-10L7 13l5-9 5 9 5.5-4L20 19H3z" fill="#C9A227" stroke="#C9A227" strokeLinejoin="round" strokeWidth="1"/><rect x="3" y="17" width="17" height="2.6" rx="1" fill="#C9A227"/></svg>;
 }
