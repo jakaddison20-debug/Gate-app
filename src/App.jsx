@@ -7353,7 +7353,7 @@ function AuthScreen({onAuth,invited}){
 
   const submit=async()=>{
     setLoading(true);setError("");
-    if(mode==="login"){
+    if(mode==="reset"){const{error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin});if(error)setError(error.message);else setError("Check your email for a reset link.");}else if(mode==="login"){
       const{error}=await supabase.auth.signInWithPassword({email,password});
       if(error)setError(error.message);
     } else {
@@ -7378,12 +7378,18 @@ function AuthScreen({onAuth,invited}){
             <div style={{fontSize:13,color:C.text,lineHeight:1.35,fontWeight:600}}>You've been invited to join a team. {mode==="login"?"Log in":"Sign up"} and you'll be asked to join.</div>
           </div>
         )}
-        <div style={{display:"flex",background:C.surface,borderRadius:10,padding:3,marginBottom:22}}>
+        {mode==="reset"&&<div style={{marginBottom:22}}>
+          <div style={{fontSize:20,fontWeight:800,color:C.text,marginBottom:6}}>Reset password</div>
+          <div style={{fontSize:13,color:C.muted,lineHeight:1.5}}>Enter your email and we'll send you a link to set a new password.</div>
+        </div>}
+        <div style={{display:mode==="reset"?"none":"flex",background:C.surface,borderRadius:10,padding:3,marginBottom:22}}>
           {["login","signup"].map(m=><button key={m} onClick={()=>setMode(m)} style={{flex:1,padding:"9px",borderRadius:8,background:mode===m?"#fff":"none",border:"none",color:mode===m?C.text:C.muted,fontSize:14,fontWeight:mode===m?600:400,boxShadow:mode===m?"0 1px 4px rgba(0,0,0,0.08)":"none"}}>{m==="login"?"Log In":"Sign Up"}</button>)}
         </div>
         {mode==="signup"&&<input value={name} onChange={e=>setName(e.target.value)} placeholder="Your name" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"13px 14px",fontSize:15,marginBottom:12,background:C.surface,boxSizing:"border-box"}}/>}
         <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email" type="email" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"13px 14px",fontSize:15,marginBottom:12,background:C.surface,boxSizing:"border-box"}}/>
-        <input value={password} onChange={e=>setPassword(e.target.value)} placeholder="Password" type="password" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"13px 14px",fontSize:15,marginBottom:20,background:C.surface,boxSizing:"border-box"}}/>
+        {mode!=="reset"&&<input value={password} onChange={e=>setPassword(e.target.value)} placeholder="Password" type="password" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"13px 14px",fontSize:15,marginBottom:mode==="login"?10:20,background:C.surface,boxSizing:"border-box"}}/>}
+        {mode==="login"&&<div style={{textAlign:"right",marginBottom:20}}><button className="tap" onClick={()=>{setMode("reset");setError("");}} style={{background:"none",border:"none",padding:0,fontSize:13,fontWeight:600,color:C.blue}}>Forgot password?</button></div>}
+        {mode==="reset"&&<div style={{height:8}}/>}
         {mode==="signup"&&(
           <label style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:20,cursor:"pointer"}}>
             <input type="checkbox" checked={agreed} onChange={e=>setAgreed(e.target.checked)} style={{marginTop:2,width:16,height:16,accentColor:C.blue,flexShrink:0}}/>
@@ -7392,8 +7398,9 @@ function AuthScreen({onAuth,invited}){
         )}
         {error&&<div style={{fontSize:13,color:error.includes("Check")?C.green:C.red,marginBottom:16,textAlign:"center"}}>{error}</div>}
         <button className="tap" onClick={submit} disabled={mode==="signup"&&!agreed} style={{width:"100%",background:loading?C.surface:(mode==="signup"&&!agreed)?C.surface:C.blue,border:"none",borderRadius:12,padding:16,color:loading||(mode==="signup"&&!agreed)?C.muted:"#fff",fontSize:15,fontWeight:700}}>
-          {loading?"...":(mode==="login"?"Log In":"Create Account")}
+          {loading?"...":(mode==="reset"?"Send reset link":mode==="login"?"Log In":"Create Account")}
         </button>
+        {mode==="reset"&&<div style={{textAlign:"center",marginTop:16}}><button className="tap" onClick={()=>{setMode("login");setError("");}} style={{background:"none",border:"none",padding:0,fontSize:14,fontWeight:600,color:C.muted}}>Back to log in</button></div>}
         <div style={{textAlign:"center",fontSize:12,color:C.muted,marginTop:20,lineHeight:1.6}}>By continuing you agree that mountain biking carries inherent risk and you're responsible for riding within your ability.</div>
       </div>
     </div>
