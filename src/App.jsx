@@ -2561,7 +2561,7 @@ function NotificationsScreen({notifications,onBack,onMarkAll,onOpen}){
   );
 }
 
-function DifficultyChips({value,onChange,shadow=false,dots=false}){
+function DifficultyChips({value,onChange,shadow=false,dots=false,frost=false}){
   const keys=Object.keys(value);
   const toggle=d=>{
     if(d==='all'){onChange({});return;}
@@ -2570,9 +2570,10 @@ function DifficultyChips({value,onChange,shadow=false,dots=false}){
     onChange(next);
   };
   const dotStyle=active=>({width:36,height:36,flexShrink:0,padding:0,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:active?"#fff":"transparent",border:active?`1.5px solid ${C.text}`:"1px solid #E4E4E1",boxShadow:active?"0 1px 3px rgba(0,0,0,0.1)":"none",fontSize:12,fontWeight:700,color:active?C.text:"#8A8A88"});
-  const chipStyle=(active,color)=>dots?dotStyle(active):({display:"flex",alignItems:"center",gap:6,padding:"7px 12px",borderRadius:20,fontSize:13,whiteSpace:"nowrap",background:active?`${color}15`:C.surface,border:`1px solid ${active?color:C.border}`,color:active?color:C.text,fontWeight:active?600:400,boxShadow:shadow?"0 2px 8px rgba(0,0,0,0.12)":"none"});
+  const frostStyle=active=>({width:38,height:38,flexShrink:0,padding:0,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:active?"#fff":"rgba(255,255,255,0.78)",backdropFilter:active?"none":"blur(18px)",WebkitBackdropFilter:active?"none":"blur(18px)",border:active?`1.5px solid ${C.text}`:"1px solid rgba(0,0,0,0.1)",boxShadow:active?"0 2px 8px rgba(0,0,0,0.16)":"0 2px 8px rgba(0,0,0,0.1)",fontSize:12,fontWeight:700,color:active?C.text:"#6B6B6B"});
+  const chipStyle=(active,color)=>frost?frostStyle(active):dots?dotStyle(active):({display:"flex",alignItems:"center",gap:6,padding:"7px 12px",borderRadius:20,fontSize:13,whiteSpace:"nowrap",background:active?`${color}15`:C.surface,border:`1px solid ${active?color:C.border}`,color:active?color:C.text,fontWeight:active?600:400,boxShadow:shadow?"0 2px 8px rgba(0,0,0,0.12)":"none"});
   return(
-    <div style={{display:"flex",gap:dots?6:8,overflowX:"auto"}}>
+    <div style={{display:"flex",gap:frost?8:dots?6:8,overflowX:"auto",padding:frost?"2px 4px 10px 2px":0}}>
       <button className="tap" onClick={()=>toggle('all')} style={chipStyle(keys.length===0,C.blue)}>All</button>
       {DIFFICULTIES.map(d=>(
         <button key={d.val} className="tap" aria-label={d.label} onClick={()=>toggle(d.val)} style={chipStyle(!!value[d.val],d.color)}><TallDiamond color={d.color} size={dots?15:14}/>{dots?null:d.label}</button>
@@ -8459,12 +8460,12 @@ if(showBikeSetup)return(
             ):(
               <>
                 <div style={{display:"flex",gap:10}}>
-                  <div style={{flex:1,background:"white",border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:8,boxShadow:"0 2px 10px rgba(0,0,0,0.1)"}}>
+                  <div style={{flex:1,minWidth:0,height:44,background:"rgba(255,255,255,0.78)",backdropFilter:"blur(18px)",WebkitBackdropFilter:"blur(18px)",border:"1px solid rgba(0,0,0,0.06)",borderRadius:14,padding:"0 16px",display:"flex",alignItems:"center",gap:9,boxShadow:"0 6px 24px rgba(0,0,0,0.12)"}}>
                     <Icon.Search/>
                     <input value={mapSearchQuery} onChange={e=>setMapSearchQuery(e.target.value)} placeholder="Search stages…" style={{border:"none",outline:"none",background:"none",fontSize:14,color:C.text,flex:1,fontFamily:"'Inter',sans-serif"}}/>
                     {mapSearchQuery&&<button onClick={()=>setMapSearchQuery("")} style={{background:"none",border:"none",padding:0,display:"flex"}}><Icon.Close size={14} color={C.muted}/></button>}
                   </div>
-                  <button className="tap" onClick={()=>setSheet("stageBuilder")} style={{background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:12,padding:"10px 16px",display:"flex",alignItems:"center",gap:6,boxShadow:"0 2px 10px rgba(0,0,0,0.08)"}}><Icon.Plus size={20} color={C.blue}/><span style={{fontSize:13,fontWeight:600,color:C.blue,whiteSpace:"nowrap"}}>Stage</span></button>
+                  <button className="tap" onClick={()=>setSheet("stageBuilder")} style={{flexShrink:0,height:44,background:"rgba(255,255,255,0.78)",backdropFilter:"blur(18px)",WebkitBackdropFilter:"blur(18px)",border:"1px solid rgba(0,0,0,0.06)",borderRadius:14,padding:"0 16px 0 12px",display:"flex",alignItems:"center",gap:5,boxShadow:"0 6px 24px rgba(0,0,0,0.12)"}}><Icon.Plus size={19} color={C.blue}/><span style={{fontSize:14,fontWeight:600,color:C.text,whiteSpace:"nowrap"}}>Stage</span></button>
                 </div>
                 {mapSearchQuery.trim()&&(mapSearchResults.length>0?(
                   <div style={{marginTop:8,background:"#fff",borderRadius:12,border:`1px solid ${C.border}`,boxShadow:"0 4px 16px rgba(0,0,0,0.12)",overflow:"hidden"}}>
@@ -8484,12 +8485,12 @@ if(showBikeSetup)return(
 
           {!pickingGroup&&(
             <div style={{position:"absolute",top:"calc(env(safe-area-inset-top, 0px) + 66px)",left:16,right:16,zIndex:9}}>
-              <DifficultyChips value={diffFilter} onChange={setDiffFilter} shadow/>
+              <DifficultyChips value={diffFilter} onChange={setDiffFilter} dots frost/>
             </div>
           )}
           <div style={{position:"absolute",right:16,bottom:"calc(env(safe-area-inset-bottom, 0px) + 84px)",display:"flex",flexDirection:"column",gap:6,zIndex:10}}>
             {[{l:"⌖",a:()=>{setMapCenter(userPos);setFlyToTrigger(Date.now());}}].map(({l,a})=>(
-              <button key={l} className="tap" onClick={a} style={{width:36,height:36,borderRadius:9,background:"white",border:`1px solid ${C.border}`,fontSize:l==="⌖"?14:18,display:"flex",alignItems:"center",justifyContent:"center",color:C.text,boxShadow:"0 2px 6px rgba(0,0,0,0.08)"}}>{l}</button>
+              <button key={l} aria-label="My location" className="tap" onClick={a} style={{width:46,height:46,borderRadius:"50%",background:"rgba(255,255,255,0.78)",backdropFilter:"blur(18px)",WebkitBackdropFilter:"blur(18px)",border:"1px solid rgba(0,0,0,0.06)",display:"flex",alignItems:"center",justifyContent:"center",color:C.text,boxShadow:"0 6px 24px rgba(0,0,0,0.12)"}}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/></svg></button>
             ))}
           </div>
                     {selectedStage&&sheet!=='sections'&&(
