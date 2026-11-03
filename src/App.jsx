@@ -8490,7 +8490,7 @@ if(showBikeSetup)return(
           )}
           <div style={{position:"absolute",right:16,bottom:"calc(env(safe-area-inset-bottom, 0px) + 84px)",display:"flex",flexDirection:"column",gap:6,zIndex:10}}>
             {[{l:"⌖",a:()=>{setMapCenter(userPos);setFlyToTrigger(Date.now());}}].map(({l,a})=>(
-              <button key={l} className="tap" onClick={a} style={{width:36,height:36,borderRadius:9,background:"white",border:`1px solid ${C.border}`,fontSize:l==="⌖"?14:18,display:"flex",alignItems:"center",justifyContent:"center",color:C.text,boxShadow:"0 2px 6px rgba(0,0,0,0.08)"}}>{l}</button>
+              <button key={l} aria-label="My location" className="tap" onClick={a} style={{width:46,height:46,borderRadius:"50%",background:"rgba(255,255,255,0.78)",backdropFilter:"blur(18px)",WebkitBackdropFilter:"blur(18px)",border:"1px solid rgba(0,0,0,0.06)",display:"flex",alignItems:"center",justifyContent:"center",color:C.text,boxShadow:"0 6px 24px rgba(0,0,0,0.12)"}}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/></svg></button>
             ))}
           </div>
                     {selectedStage&&sheet!=='sections'&&(
