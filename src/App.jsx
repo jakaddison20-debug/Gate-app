@@ -7342,6 +7342,45 @@ function LobbySheet({onClose}){
     </div>
   );
 }
+function NewPasswordScreen({onDone,onCancel,recovery}){
+  const [pw,setPw]=useState("");
+  const [pw2,setPw2]=useState("");
+  const [error,setError]=useState("");
+  const [loading,setLoading]=useState(false);
+  const [done,setDone]=useState(false);
+  const save=async()=>{
+    if(pw.length<6){setError("Use at least 6 characters.");return;}
+    if(pw!==pw2){setError("Passwords don't match.");return;}
+    setLoading(true);setError("");
+    const{error}=await supabase.auth.updateUser({password:pw});
+    setLoading(false);
+    if(error){setError(error.message);return;}
+    setDone(true);
+  };
+  const inp={width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"13px 14px",fontSize:15,marginBottom:12,background:C.surface,boxSizing:"border-box"};
+  return(
+    <div style={{position:"fixed",inset:0,background:"#fff",zIndex:9500,display:"flex",flexDirection:"column"}}>
+      <div style={{padding:"72px 24px 28px",textAlign:"center"}}>
+        <svg width="30" height="30" viewBox="0 0 24 24" style={{margin:"0 auto 14px"}}><polygon points="13,2 3,14 12,14 11,22 21,10 12,10" fill={C.blue}/></svg>
+        <div style={{fontSize:24,fontWeight:800,color:C.text,letterSpacing:-0.5,marginBottom:4}}>{done?"Password updated":(recovery?"Set a new password":"Change password")}</div>
+        <div style={{fontSize:13,color:C.muted}}>{done?"You can use it next time you log in.":"Choose something you'll remember."}</div>
+      </div>
+      <div style={{flex:1,padding:"8px 24px 24px",overflowY:"auto"}}>
+        {done?(
+          <button className="tap" onClick={onDone} style={{width:"100%",background:C.blue,border:"none",borderRadius:12,padding:16,color:"#fff",fontSize:15,fontWeight:700}}>Done</button>
+        ):(
+          <>
+            <input value={pw} onChange={e=>setPw(e.target.value)} placeholder="New password" type="password" style={inp}/>
+            <input value={pw2} onChange={e=>setPw2(e.target.value)} placeholder="Confirm new password" type="password" style={{...inp,marginBottom:20}}/>
+            {error&&<div style={{fontSize:13,color:C.red,marginBottom:16,textAlign:"center"}}>{error}</div>}
+            <button className="tap" onClick={save} style={{width:"100%",background:loading?C.surface:C.blue,border:"none",borderRadius:12,padding:16,color:loading?C.muted:"#fff",fontSize:15,fontWeight:700}}>{loading?"...":"Save password"}</button>
+            {onCancel&&<div style={{textAlign:"center",marginTop:16}}><button className="tap" onClick={onCancel} style={{background:"none",border:"none",padding:0,fontSize:14,fontWeight:600,color:C.muted}}>Cancel</button></div>}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 function AuthScreen({onAuth,invited}){
   const [mode,setMode]=useState("login");
   const [email,setEmail]=useState("");
@@ -7872,6 +7911,7 @@ export default function App(){
   const [showFollow,setShowFollow]=useState(false);
   const [showTrophies,setShowTrophies]=useState(false);
   const [followerCount,setFollowerCount]=useState(null);
+  const [recovering,setRecovering]=useState(false);
   const [followingCount,setFollowingCount]=useState(null);
   const [followTab,setFollowTab]=useState("Followers");
   const [h2hList,setH2hList]=useState([]);
@@ -8018,7 +8058,7 @@ useEffect(()=>{
   useEffect(()=>{const el=containerRef.current;if(!el)return;const ro=new ResizeObserver(e=>setMapSize({w:e[0].contentRect.width,h:e[0].contentRect.height}));ro.observe(el);setMapSize({w:el.clientWidth,h:el.clientHeight});return()=>ro.disconnect();},[]);
   useEffect(()=>{
   supabase.auth.getSession().then(({data:{session}})=>setUser(session?.user??null));
-  const {data:{subscription}}=supabase.auth.onAuthStateChange((_,session)=>setUser(session?.user??null));
+  const {data:{subscription}}=supabase.auth.onAuthStateChange((ev,session)=>{if(ev==="PASSWORD_RECOVERY")setRecovering(true);setUser(session?.user??null);});
   return()=>subscription.unsubscribe();
 },[]);
 useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.eq.public,created_by.eq.${user.id}`).then(async({data})=>{if(!data)return;const{data:times}=await supabase.from('stage_times').select('stage_id,time_ms').eq('user_id',user.id);const bests={};if(times)times.forEach(t=>{if(!bests[t.stage_id]||t.time_ms<bests[t.stage_id])bests[t.stage_id]=t.time_ms;});setStages(prev=>{const prevCrById={};prev.forEach(s=>{prevCrById[s.id]=s.cr;});return data.map(s=>({id:s.id,name:s.name,note:s.note||'',privacy:s.privacy,difficulty:s.difficulty||'blue',built_by:s.built_by||null,created_by:s.created_by,start:{lat:s.start_lat,lng:s.start_lng},finish:{lat:s.finish_lat,lng:s.finish_lng},line_coords:s.line_coords||null,time:bests[s.id]||null,cr:prevCrById[s.id]||false}));});});},[user,refreshTick]);
@@ -8281,6 +8321,7 @@ const weekStats=weekStatsByType.all;
   const mapSearchResults=mapSearchQuery.trim()?stages.filter(s=>s.name.toLowerCase().includes(mapSearchQuery.trim().toLowerCase())).slice(0,6):[];
 
     const TABS=[{id:"home",label:"Home",Ic:Icon.Home},{id:"map",label:"Map",Ic:Icon.Map},{id:"stages",label:"Stages",Ic:Icon.Lightning},{id:"profile",label:"Profile",Ic:Icon.User}];
+    if(recovering&&user)return <NewPasswordScreen recovery onDone={()=>setRecovering(false)}/>;
     if(!user)return(
     <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",overflow:"hidden"}}>
       <style>{STYLES}</style>
