@@ -4907,9 +4907,9 @@ function FollowRow({p,chip,right}){
   );
 }
 
-function FollowScreen({user,onBack,onChanged}){
+function FollowScreen({user,onBack,onChanged,startTab}){
   const [view,setView]=useState("list");
-  const [tab,setTab]=useState("Followers");
+  const [tab,setTab]=useState(startTab||"Followers");
   const [data,setData]=useState(null);
   const [q,setQ]=useState("");
   const [results,setResults]=useState(null);
@@ -5861,7 +5861,7 @@ function ProfileTrophyCard({counts,onOpen,titles}){
   );
 }
 
-function ProfileScreen({trophyCounts,streak,stages,settings,courseResults,pastWeeks,weekByType,onSettingsPress,onGoToStages,onGoToCourses,onOpenProgress,onOpenBikeSetup,followerCount,onOpenFollowers,onOpenTrophies,titles,followingCount}){
+function ProfileScreen({trophyCounts,streak,stages,settings,courseResults,pastWeeks,weekByType,onSettingsPress,onGoToStages,onGoToCourses,onOpenProgress,onOpenBikeSetup,followerCount,onOpenFollowers,onOpenTrophies,titles,followingCount,onOpenFollowing}){
   const [selectedWeek,setSelectedWeek]=useState(pastWeeks.length-1);
   const stagesRidden=stages.filter(s=>s.time).length;
   const coursesComplete=courseResults.length;
@@ -5883,7 +5883,7 @@ function ProfileScreen({trophyCounts,streak,stages,settings,courseResults,pastWe
           <button className="tap" onClick={onSettingsPress} style={{width:36,height:36,borderRadius:9,background:C.surface,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon.Settings size={18} color={C.muted}/></button>
         </div>
         <div style={{display:"flex",gap:40}}>
-          {[{label:"Followers",value:followerCount==null?"—":String(followerCount),onClick:onOpenFollowers},{label:"Following",value:followingCount==null?"—":String(followingCount),onClick:onOpenFollowers}].map(s=>(
+          {[{label:"Followers",value:followerCount==null?"—":String(followerCount),onClick:onOpenFollowers},{label:"Following",value:followingCount==null?"—":String(followingCount),onClick:onOpenFollowing}].map(s=>(
             <button key={s.label} className="tap" onClick={s.onClick||undefined} style={{background:"none",border:"none",padding:0,textAlign:"left"}}>
               <div style={{fontSize:20,fontWeight:800,color:C.text,lineHeight:1.1}}>{s.value}</div>
               <div style={{fontSize:11,color:C.muted,marginTop:2}}>{s.label}</div>
@@ -7865,6 +7865,8 @@ export default function App(){
   const [showFollow,setShowFollow]=useState(false);
   const [showTrophies,setShowTrophies]=useState(false);
   const [followerCount,setFollowerCount]=useState(null);
+  const [followingCount,setFollowingCount]=useState(null);
+  const [followTab,setFollowTab]=useState("Followers");
   const [h2hList,setH2hList]=useState([]);
   const [groupMapOpen,setGroupMapOpen]=useState(false);
   const [teamCalOpen,setTeamCalOpen]=useState(false);
@@ -7915,6 +7917,7 @@ export default function App(){
   const challengeBadge=h2hRequests+gInvites;
   const [h2hFromFeed,setH2hFromFeed]=useState(false);
   useEffect(()=>{if(!user)return;supabase.rpc('follow_counts').then(({data,error})=>{if(!error&&data)setFollowerCount(data.followers);});},[user,refreshTick,showFollow]);
+  useEffect(()=>{if(!user)return;supabase.rpc('list_connections').then(({data,error})=>{if(!error&&data)setFollowingCount((data.following||[]).length);});},[user,refreshTick,showFollow]);
     useEffect(()=>{
   const onVisible=()=>{if(document.visibilityState==="visible"){syncOfflineTimes().then(()=>setRefreshTick(t=>t+1));}};
   document.addEventListener('visibilitychange',onVisible);
@@ -8141,7 +8144,7 @@ const markAllNotificationsRead=()=>{
 const openNotification=(n)=>{
   if(!n.read_at)markNotificationRead(n.id);
   setShowNotifications(false);
-  if(n.kind==='new_follower'){setShowFollow(true);}
+  if(n.kind==='new_follower'){setFollowTab("Followers");setShowFollow(true);}
   else if(n.kind==='course_record_lost'){setCoursesFilter('courses');setTab('stages');}
   else if(n.stage_id)goToStage(n.stage_id);
 }; 
@@ -8296,7 +8299,7 @@ if(showFollow)return(
 <style>{STYLES}</style>
 <div style={{height:44,background:"#fff"}}/>
 <div style={{height:"calc(100% - 44px)"}}>
-<FollowScreen user={user} onBack={()=>setShowFollow(false)} onChanged={()=>setRefreshTick(t=>t+1)}/>
+<FollowScreen user={user} startTab={followTab} onBack={()=>setShowFollow(false)} onChanged={()=>setRefreshTick(t=>t+1)}/>
 </div>
 </div>
 );
@@ -8576,7 +8579,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
       {/* PROFILE */}
       {tab==="profile"&&(
         <div style={{height:"calc(var(--app-h) - env(safe-area-inset-top, 0px))",overflowY:"auto",paddingBottom:100}}>
-            <ProfileScreen titles={myTitles} stages={stages} settings={settings} courseResults={courseResults} weeklyActivity={weeklyActivity} pastWeeks={weekStats} weekByType={weekStatsByType} streak={streak} courseCRCount={courseCRCount} onSettingsPress={()=>setShowSettings(true)} onStatPress={key=>setSheet('stat-'+key)} onGoToStages={()=>{setCoursesFilter('stages');setTab('stages');}} onGoToCourses={()=>{setCoursesFilter('courses');setTab('stages');}}onOpenProgress={()=>setShowProgress(true)} onOpenBikeSetup={()=>setShowBikeSetup(true)} followerCount={followerCount} onOpenFollowers={()=>setShowFollow(true)} onOpenTrophies={()=>setShowTrophies(true)} trophyCounts={trophyCounts}/>
+            <ProfileScreen titles={myTitles} stages={stages} settings={settings} courseResults={courseResults} weeklyActivity={weeklyActivity} pastWeeks={weekStats} weekByType={weekStatsByType} streak={streak} courseCRCount={courseCRCount} onSettingsPress={()=>setShowSettings(true)} onStatPress={key=>setSheet('stat-'+key)} onGoToStages={()=>{setCoursesFilter('stages');setTab('stages');}} onGoToCourses={()=>{setCoursesFilter('courses');setTab('stages');}}onOpenProgress={()=>setShowProgress(true)} onOpenBikeSetup={()=>setShowBikeSetup(true)} followerCount={followerCount} followingCount={followingCount} onOpenFollowers={()=>{setFollowTab("Followers");setShowFollow(true);}} onOpenFollowing={()=>{setFollowTab("Following");setShowFollow(true);}} onOpenTrophies={()=>setShowTrophies(true)} trophyCounts={trophyCounts}/>
 
         </div>
       )}
