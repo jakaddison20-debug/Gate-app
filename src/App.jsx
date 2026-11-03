@@ -2561,7 +2561,7 @@ function NotificationsScreen({notifications,onBack,onMarkAll,onOpen}){
   );
 }
 
-function DifficultyChips({value,onChange,shadow=false,dots=false}){
+function DifficultyChips({value,onChange,shadow=false,dots=false,frost=false}){
   const keys=Object.keys(value);
   const toggle=d=>{
     if(d==='all'){onChange({});return;}
@@ -2570,9 +2570,10 @@ function DifficultyChips({value,onChange,shadow=false,dots=false}){
     onChange(next);
   };
   const dotStyle=active=>({width:36,height:36,flexShrink:0,padding:0,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:active?"#fff":"transparent",border:active?`1.5px solid ${C.text}`:"1px solid #E4E4E1",boxShadow:active?"0 1px 3px rgba(0,0,0,0.1)":"none",fontSize:12,fontWeight:700,color:active?C.text:"#8A8A88"});
-  const chipStyle=(active,color)=>dots?dotStyle(active):({display:"flex",alignItems:"center",gap:6,padding:"7px 12px",borderRadius:20,fontSize:13,whiteSpace:"nowrap",background:active?`${color}15`:C.surface,border:`1px solid ${active?color:C.border}`,color:active?color:C.text,fontWeight:active?600:400,boxShadow:shadow?"0 2px 8px rgba(0,0,0,0.12)":"none"});
+  const frostStyle=active=>({width:38,height:38,flexShrink:0,padding:0,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:active?"#fff":"rgba(255,255,255,0.78)",backdropFilter:active?"none":"blur(18px)",WebkitBackdropFilter:active?"none":"blur(18px)",border:active?`1.5px solid ${C.text}`:"1px solid rgba(0,0,0,0.1)",boxShadow:active?"0 2px 8px rgba(0,0,0,0.16)":"0 2px 8px rgba(0,0,0,0.1)",fontSize:12,fontWeight:700,color:active?C.text:"#6B6B6B"});
+  const chipStyle=(active,color)=>frost?frostStyle(active):dots?dotStyle(active):({display:"flex",alignItems:"center",gap:6,padding:"7px 12px",borderRadius:20,fontSize:13,whiteSpace:"nowrap",background:active?`${color}15`:C.surface,border:`1px solid ${active?color:C.border}`,color:active?color:C.text,fontWeight:active?600:400,boxShadow:shadow?"0 2px 8px rgba(0,0,0,0.12)":"none"});
   return(
-    <div style={{display:"flex",gap:dots?6:8,overflowX:"auto"}}>
+    <div style={{display:"flex",gap:frost?8:dots?6:8,overflowX:"auto",padding:frost?"2px 4px 10px 2px":0}}>
       <button className="tap" onClick={()=>toggle('all')} style={chipStyle(keys.length===0,C.blue)}>All</button>
       {DIFFICULTIES.map(d=>(
         <button key={d.val} className="tap" aria-label={d.label} onClick={()=>toggle(d.val)} style={chipStyle(!!value[d.val],d.color)}><TallDiamond color={d.color} size={dots?15:14}/>{dots?null:d.label}</button>
@@ -8484,7 +8485,7 @@ if(showBikeSetup)return(
 
           {!pickingGroup&&(
             <div style={{position:"absolute",top:"calc(env(safe-area-inset-top, 0px) + 66px)",left:16,right:16,zIndex:9}}>
-              <DifficultyChips value={diffFilter} onChange={setDiffFilter} shadow/>
+              <DifficultyChips value={diffFilter} onChange={setDiffFilter} dots frost/>
             </div>
           )}
           <div style={{position:"absolute",right:16,bottom:"calc(env(safe-area-inset-bottom, 0px) + 84px)",display:"flex",flexDirection:"column",gap:6,zIndex:10}}>
