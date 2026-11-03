@@ -2338,7 +2338,7 @@ const badgeOrd=n=>n+(["th","st","nd","rd"][(n%100>10&&n%100<14)?0:(n%10<4?n%10:0
 function LockedCoin({size=80,k="crown"}){
   return <svg width={size} height={size} viewBox="0 0 100 100"><circle cx="50" cy="50" r="38" fill="#fff" stroke={C.mutedL} strokeWidth="2.4" strokeDasharray="5 4"/><svg x="34" y="34" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={C.mutedL} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{k==="crown"?<path d="M2 19h20M2 19l3-10 5 5 2-8 2 8 5-5 3 10"/>:k==="flame"?<path d="M12 22c4 0 7-2.8 7-7 0-3-1.8-5-3.5-7-.4 2-1.5 3-2.7 3.4C13.4 8 12.3 4.8 9.5 2 9.6 6 5 8.6 5 15c0 4.2 3 7 7 7z" fill={C.mutedL}/>:<><rect x="2" y="8" width="20" height="8" rx="1.5"/><path d="M6 8v3M10 8v4M14 8v3M18 8v4"/></>}</svg></svg>;
 }
-function BadgesScreen({user,rows,onBack}){
+function BadgesScreen({user,rows,onBack,bare}){
   const[sel,setSel]=useState(null);
   const info=id=>{
     const all=(rows||[]).filter(r=>r.title===id);
@@ -2370,8 +2370,8 @@ function BadgesScreen({user,rows,onBack}){
       <div style={{fontSize:12,fontWeight:700,color:C.muted}}>{fmt(id,r.val)}</div>
     </div>;
     return <>
-      <div style={{position:"absolute",inset:0,background:"rgba(26,26,26,0.4)",zIndex:39}} onClick={()=>setSel(null)}/>
-      <div className="slide-up" style={{position:"absolute",bottom:0,left:0,right:0,background:"#fff",borderRadius:"20px 20px 0 0",zIndex:40,maxHeight:"88%",overflowY:"auto",padding:"10px 16px 30px"}}>
+      <div style={{position:bare?"fixed":"absolute",inset:0,background:"rgba(26,26,26,0.4)",zIndex:bare?9000:39}} onClick={()=>setSel(null)}/>
+      <div className="slide-up" style={{position:bare?"fixed":"absolute",bottom:0,left:0,right:0,background:"#fff",borderRadius:"20px 20px 0 0",zIndex:bare?9001:40,maxHeight:"88%",overflowY:"auto",padding:"10px 16px 30px"}}>
         <div style={{width:38,height:4,borderRadius:2,background:C.border,margin:"0 auto 14px"}}/>
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",marginBottom:14}}>
           <div style={{height:130,display:"flex",alignItems:"center"}}>{i.held?<TitleCoin size={130} rank={i.rank} k={d.key}/>:<LockedCoin size={130} k={d.key}/>}</div>
@@ -2388,6 +2388,13 @@ function BadgesScreen({user,rows,onBack}){
       </div>
     </>;
   };
+  if(bare)return(<>
+    <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:12}}>Badges · live</div>
+    {!rows?<div style={{padding:20,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>
+    :<><div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"16px 6px"}}>{["fast","active","long"].map(cell)}</div>
+    <div style={{fontSize:11,color:C.muted,marginTop:14,lineHeight:1.4}}>Held by the top riders on Rivl. They move when someone passes you.</div></>}
+    {sel&&sheet()}
+  </>);
   return(
     <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff",position:"relative",overflow:"hidden"}}>
       <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
@@ -4954,6 +4961,7 @@ function TrophyCabinetScreen({user,onBack}){
   const list=rows||[];
   const gold=list.filter(r=>r.result!=="lost").length;
   const silver=list.filter(r=>r.result==="lost").length;
+  const{rows:titleRows}=useRivlTitles(user);
   return(
     <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
       <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
@@ -4966,6 +4974,7 @@ function TrophyCabinetScreen({user,onBack}){
           <TrophyMedal pos={1} count={gold}/>
           <TrophyMedal pos={3} count={0}/>
         </div>
+        <div style={{marginBottom:22}}><BadgesScreen bare user={user} rows={titleRows}/></div>
         <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>Head to head</div>
         {rows===null?<div style={{padding:30,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>:list.length===0?(
           <div style={{textAlign:"center",padding:"32px 20px",color:C.muted}}>
