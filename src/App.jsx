@@ -27,13 +27,6 @@ const START_GATE_RADIUS=20; // start gate detection radius (timing no longer dep
 const GPS_MAX_ACC_M=50;    // ignore fixes the phone says are worse than 50 m (guesses from wifi/phone masts)
 const GPS_MAX_SPEED_MS=30; // ignore jumps faster than 30 m/s (67 mph)...
 const GPS_MAX_REJECTS=3;   // ...unless it keeps happening, then trust the new position
-// GPS margin for one gate, in ms: average accuracy (m) ÷ speed (m/s). null if unknown.
-const GPS_WEAK_S=1.5; // runs with a bigger margin than this show "weak signal"
-function gpsMarginMs(accs,speedMs){
-  const a=accs.filter(x=>typeof x==="number"&&x>0);
-  if(!a.length||!(speedMs>0.5))return null;
-  return a.reduce((x,y)=>x+y,0)/a.length/speedMs*1000;
-}
 function segClosest(prevPos,currPos,gate){
   if(!prevPos)return{d:haversine(currPos,gate),ts:currPos.ts};
   const t=gateCrossT(prevPos,currPos,gate);
@@ -113,19 +106,12 @@ function makeGateTracker(gate,radius,dir,fitM=GATE_FIT_M,strict=false){
   };
 }
 
-// Helper for the finish screen: combines every stage's margin into one ±, or null if any is unknown
-function gpsMarginLabel(splits){
-  const m=(splits||[]).map(s=>s.gpsMarginMs);
-  if(!m.length||m.some(x=>typeof x!=="number"))return null;
-  const sec=Math.sqrt(m.reduce((a,x)=>a+x*x,0))/1000;
-  return{text:`GPS ±${sec.toFixed(1)}s`,weak:sec>GPS_WEAK_S};
-}
 function formatTime(ms){if(!ms)return"—";const m=Math.floor(ms/60000),s=Math.floor((ms%60000)/1000),cs=Math.floor((ms%1000)/10);return`${m}:${String(s).padStart(2,"0")}.${String(cs).padStart(2,"0")}`;}
 function formatDist(m){return m>=1000?`${(m/1000).toFixed(1)}km`:`${Math.round(m)}m`;}
 function timeAgo(iso){const s=(Date.now()-new Date(iso).getTime())/1000;if(s<60)return'just now';if(s<3600)return`${Math.floor(s/60)}m ago`;if(s<86400)return`${Math.floor(s/3600)}h ago`;if(s<604800)return`${Math.floor(s/86400)}d ago`;return new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short'});}
 function playBeep(freq=880,duration=150){try{const ctx=new(window.AudioContext||window.webkitAudioContext)();const osc=ctx.createOscillator();const gain=ctx.createGain();osc.connect(gain);gain.connect(ctx.destination);osc.frequency.value=freq;osc.type='sine';gain.gain.setValueAtTime(0.3,ctx.currentTime);gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+duration/1000);osc.start();osc.stop(ctx.currentTime+duration/1000);}catch(e){console.log(e);}}
 function logEvent(userId,type,message,stageId=null,context=null){if(!userId)return Promise.resolve();return supabase.from('app_events').insert({user_id:userId,event_type:type,message,stage_id:stageId?String(stageId):null,context}).then(()=>{}).catch(err=>console.log('logEvent failed:',err?.message||err));}
-async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,bike_id,gps_margin_ms,trace}){
+async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,bike_id,trace}){
   const overallRes=await supabase.from('stage_times').select('time_ms').eq('stage_id',stage_id).order('time_ms',{ascending:true}).limit(1);
   const ownRes=await supabase.from('stage_times').select('time_ms').eq('stage_id',stage_id).eq('user_id',user_id).order('time_ms',{ascending:true}).limit(1);
   const prevBest=overallRes.data&&overallRes.data[0]?overallRes.data[0].time_ms:null;
@@ -133,7 +119,6 @@ async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,bik
   const payload={stage_id,user_id,time_ms};
   if(created_at)payload.created_at=created_at;
   if(bike_id)payload.bike_id=bike_id;
-  if(gps_margin_ms!=null)payload.gps_margin_ms=gps_margin_ms;
   const{error}=await supabase.from('stage_times').insert(payload);
   if(error)throw error;
   // Keep the GPS path of your best run on this stage (powers the speed/gap charts). Never fails the save.
