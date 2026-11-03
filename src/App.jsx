@@ -8459,12 +8459,12 @@ if(showBikeSetup)return(
             ):(
               <>
                 <div style={{display:"flex",gap:10}}>
-                  <div style={{flex:1,background:"white",border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:8,boxShadow:"0 2px 10px rgba(0,0,0,0.1)"}}>
+                  <div style={{flex:1,minWidth:0,height:44,background:"rgba(255,255,255,0.78)",backdropFilter:"blur(18px)",WebkitBackdropFilter:"blur(18px)",border:"1px solid rgba(0,0,0,0.06)",borderRadius:14,padding:"0 16px",display:"flex",alignItems:"center",gap:9,boxShadow:"0 6px 24px rgba(0,0,0,0.12)"}}>
                     <Icon.Search/>
                     <input value={mapSearchQuery} onChange={e=>setMapSearchQuery(e.target.value)} placeholder="Search stages…" style={{border:"none",outline:"none",background:"none",fontSize:14,color:C.text,flex:1,fontFamily:"'Inter',sans-serif"}}/>
                     {mapSearchQuery&&<button onClick={()=>setMapSearchQuery("")} style={{background:"none",border:"none",padding:0,display:"flex"}}><Icon.Close size={14} color={C.muted}/></button>}
                   </div>
-                  <button className="tap" onClick={()=>setSheet("stageBuilder")} style={{background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:12,padding:"10px 16px",display:"flex",alignItems:"center",gap:6,boxShadow:"0 2px 10px rgba(0,0,0,0.08)"}}><Icon.Plus size={20} color={C.blue}/><span style={{fontSize:13,fontWeight:600,color:C.blue,whiteSpace:"nowrap"}}>Stage</span></button>
+                  <button className="tap" onClick={()=>setSheet("stageBuilder")} style={{flexShrink:0,height:44,background:"rgba(255,255,255,0.78)",backdropFilter:"blur(18px)",WebkitBackdropFilter:"blur(18px)",border:"1px solid rgba(0,0,0,0.06)",borderRadius:14,padding:"0 16px 0 12px",display:"flex",alignItems:"center",gap:5,boxShadow:"0 6px 24px rgba(0,0,0,0.12)"}}><Icon.Plus size={19} color={C.blue}/><span style={{fontSize:14,fontWeight:600,color:C.text,whiteSpace:"nowrap"}}>Stage</span></button>
                 </div>
                 {mapSearchQuery.trim()&&(mapSearchResults.length>0?(
                   <div style={{marginTop:8,background:"#fff",borderRadius:12,border:`1px solid ${C.border}`,boxShadow:"0 4px 16px rgba(0,0,0,0.12)",overflow:"hidden"}}>
