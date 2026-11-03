@@ -4950,7 +4950,7 @@ function GpsPill({acc}){
     <div style={{display:"inline-flex",alignItems:"center",gap:8,background:`${lvl.c}12`,border:`1px solid ${lvl.c}55`,borderRadius:999,padding:"7px 14px",marginBottom:20}}>
       <div style={{width:8,height:8,borderRadius:"50%",background:lvl.c,boxShadow:`0 0 0 4px ${lvl.c}22`}}/>
       <div style={{fontSize:13,fontWeight:600,color:lvl.c}}>{lvl.t}</div>
-      <div style={{fontSize:13,color:C.muted}}>· ±{Math.round(acc)} m</div>
+      {null}
     </div>
   );
 }
@@ -6511,7 +6511,7 @@ function RaceComplete({base,course,splits,courseStages,totalStages,onSave,user})
         <div style={{fontSize:12,color:C.muted,fontWeight:600,letterSpacing:1,marginBottom:6}}>TOTAL TIME</div>
         <div style={{fontSize:52,fontWeight:800,color:col,fontVariantNumeric:"tabular-nums",lineHeight:1.1}}>{formatTime(total)}</div>
         <RaceDeltaPill delta={delta} vs={prevTotal===null?"First run on this course":`vs your best ${formatTime(prevTotal)}`}/>
-        <div style={{fontSize:13,color:C.muted,margin:"14px 0 20px"}}>{dist} timed{gm&&<> · <span style={gm.weak?{color:"#D97706",fontWeight:600}:undefined}>{gm.text}{gm.weak?" · weak signal":""}</span></>}</div>
+        <div style={{fontSize:13,color:C.muted,margin:"14px 0 20px"}}>{dist} timed</div>
       </div>
       <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
         <div style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:12}}>Stage Breakdown</div>
