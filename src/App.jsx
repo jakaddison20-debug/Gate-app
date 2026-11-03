@@ -2333,6 +2333,78 @@ function titlesOf(rows,uid){
   return rows.filter(r=>r.user_id===uid&&(r.title==="long"?r.rank===1:r.rank<=3)).map(r=>({title:r.title,rank:r.rank,val:Number(r.val)}));
 }
 
+const BADGE_COL={1:"#C9A227",2:"#9AA0A6",3:"#AD8158"};
+const badgeOrd=n=>n+(["th","st","nd","rd"][(n%100>10&&n%100<14)?0:(n%10<4?n%10:0)]);
+function LockedCoin({size=80,k="crown"}){
+  return <svg width={size} height={size} viewBox="0 0 100 100"><circle cx="50" cy="50" r="38" fill="#fff" stroke={C.mutedL} strokeWidth="2.4" strokeDasharray="5 4"/><svg x="34" y="34" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={C.mutedL} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{k==="crown"?<path d="M2 19h20M2 19l3-10 5 5 2-8 2 8 5-5 3 10"/>:k==="flame"?<path d="M12 22c4 0 7-2.8 7-7 0-3-1.8-5-3.5-7-.4 2-1.5 3-2.7 3.4C13.4 8 12.3 4.8 9.5 2 9.6 6 5 8.6 5 15c0 4.2 3 7 7 7z" fill={C.mutedL}/>:<><rect x="2" y="8" width="20" height="8" rx="1.5"/><path d="M6 8v3M10 8v4M14 8v3M18 8v4"/></>}</svg></svg>;
+}
+function BadgesScreen({user,rows,onBack}){
+  const[sel,setSel]=useState(null);
+  const info=id=>{
+    const all=(rows||[]).filter(r=>r.title===id);
+    const top=all.filter(r=>id==="long"?r.rank===1:r.rank<=3).sort((a,b)=>a.rank-b.rank);
+    const me=all.find(r=>r.user_id===user.id)||null;
+    const held=!!me&&top.some(r=>r.user_id===user.id);
+    return{top,me,held,rank:held?me.rank:0};
+  };
+  const fmt=(id,v)=>id==="long"?`${(Number(v)/1000).toFixed(1)} km`:`${Number(v)} ${TITLE_DEFS[id].unit}${Number(v)===1?"":"s"}`;
+  const nameOf=r=>r.user_id===user.id?"You":(r.display_name||"Rider");
+  const cell=id=>{
+    const d=TITLE_DEFS[id],i=info(id),col=BADGE_COL[i.rank];
+    const sub=id==="long"
+      ?(i.held?<><span style={{color:col,fontWeight:700}}>You hold it</span> <span style={{color:C.mutedL}}>·</span> {fmt(id,i.me.val)}</>:(i.top[0]?<span>{nameOf(i.top[0])} · {fmt(id,i.top[0].val)}</span>:"No one yet"))
+      :(i.held?<><span style={{color:col,fontWeight:700}}>{badgeOrd(i.rank)}</span> <span style={{color:C.mutedL}}>·</span> {Number(i.me.val)}</>:(i.me?`You're ${badgeOrd(i.me.rank)}`:"Not ranked"));
+    return <button key={id} className="tap" onClick={()=>setSel(id)} style={{background:"none",border:"none",padding:0,display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center"}}>
+      <div style={{height:84,display:"flex",alignItems:"center",justifyContent:"center"}}>{i.held?<TitleCoin size={80} rank={i.rank} k={d.key}/>:<LockedCoin size={80} k={d.key}/>}</div>
+      <div style={{fontSize:12,fontWeight:700,color:i.held?C.text:C.muted,marginTop:6,lineHeight:1.2}}>{d.name}</div>
+      <div style={{fontSize:11,color:C.muted,marginTop:2}}>{sub}</div>
+    </button>;
+  };
+  const sheet=()=>{
+    const id=sel,d=TITLE_DEFS[id],i=info(id),col=BADGE_COL[i.rank];
+    const desc=id==="fast"?"Hold the most stage records right now. Times on different stages can't be compared, so records are what count.":id==="active"?"Time the most runs in the last 30 days.":(i.held?"You created the longest stage on Rivl.":i.top[0]?`Create a stage longer than ${(Number(i.top[0].val)/1000).toFixed(1)} km to take the title.`:"Create the longest stage on Rivl.");
+    const head=i.held?<span style={{color:col}}>{badgeOrd(i.rank)} on Rivl</span>:<span style={{color:C.muted}}>{id==="long"?(i.top[0]?"Held by "+nameOf(i.top[0]):"Nobody yet"):(i.me?`You're ${badgeOrd(i.me.rank)}`:"Not ranked yet")}</span>;
+    const row=(r,pos)=><div key={pos+"-"+r.user_id} style={{border:r.user_id===user.id?`1.5px solid ${C.blue}`:`1px solid ${C.border}`,borderRadius:12,padding:"8px 14px",display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
+      <div style={{width:38,display:"flex",justifyContent:"center"}}>{pos<=3?<TitleCoin size={38} rank={pos} k={d.key}/>:<div style={{fontSize:13,fontWeight:800,color:C.muted}}>{badgeOrd(pos)}</div>}</div>
+      <div style={{flex:1,minWidth:0,fontSize:14,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nameOf(r)}</div>
+      <div style={{fontSize:12,fontWeight:700,color:C.muted}}>{fmt(id,r.val)}</div>
+    </div>;
+    return <>
+      <div style={{position:"absolute",inset:0,background:"rgba(26,26,26,0.4)",zIndex:39}} onClick={()=>setSel(null)}/>
+      <div className="slide-up" style={{position:"absolute",bottom:0,left:0,right:0,background:"#fff",borderRadius:"20px 20px 0 0",zIndex:40,maxHeight:"88%",overflowY:"auto",padding:"10px 16px 30px"}}>
+        <div style={{width:38,height:4,borderRadius:2,background:C.border,margin:"0 auto 14px"}}/>
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",marginBottom:14}}>
+          <div style={{height:130,display:"flex",alignItems:"center"}}>{i.held?<TitleCoin size={130} rank={i.rank} k={d.key}/>:<LockedCoin size={130} k={d.key}/>}</div>
+          <div style={{fontSize:21,fontWeight:800,color:C.text,marginTop:6}}>{d.name}</div>
+          <div style={{fontSize:12,fontWeight:700,marginTop:3,textTransform:"uppercase",letterSpacing:0.8}}>{head}</div>
+          <div style={{fontSize:13,color:C.muted,marginTop:8,maxWidth:300,lineHeight:1.4}}>{desc}</div>
+        </div>
+        {i.top.map((r,n)=>row(r,r.rank))}
+        {!i.held&&i.me&&(id==="long"
+          ?<div style={{border:`1.5px solid ${C.blue}`,borderRadius:12,padding:"10px 14px",display:"flex",justifyContent:"space-between",fontSize:14,fontWeight:700,color:C.text,marginBottom:8}}><span>You</span><span style={{color:C.muted,fontSize:12}}>{fmt(id,i.me.val)}{i.top[0]?` · ${((Number(i.top[0].val)-Number(i.me.val))/1000).toFixed(1)} km to go`:""}</span></div>
+          :row(i.me,i.me.rank))}
+        <div style={{fontSize:11,color:C.muted,textAlign:"center",margin:"4px 0 12px"}}>Titles move when someone passes you.</div>
+        <button className="tap" onClick={()=>setSel(null)} style={{width:"100%",background:C.surface,border:"none",borderRadius:12,padding:13,fontSize:14,fontWeight:700,color:C.text}}>Done</button>
+      </div>
+    </>;
+  };
+  return(
+    <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff",position:"relative",overflow:"hidden"}}>
+      <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+        <button className="tap" onClick={onBack} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
+        <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>Badges</div>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"18px 16px 28px"}}>
+        <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.8,marginBottom:12}}>Top riders · live</div>
+        {!rows?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>
+        :<><div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"16px 6px"}}>{["fast","active","long"].map(cell)}</div>
+        <div style={{fontSize:11,color:C.muted,marginTop:14,lineHeight:1.4}}>Held by the top riders on Rivl. They move when someone passes you.</div></>}
+      </div>
+      {sel&&sheet()}
+    </div>
+  );
+}
+
 function GoldCrown({size=20}){
   return <svg width={size} height={size*0.85} viewBox="0 0 24 20" style={{flexShrink:0}}><path d="M3 19l-1.5-10L7 13l5-9 5 9 5.5-4L20 19H3z" fill="#C9A227" stroke="#C9A227" strokeLinejoin="round" strokeWidth="1"/><rect x="3" y="17" width="17" height="2.6" rx="1" fill="#C9A227"/></svg>;
 }
