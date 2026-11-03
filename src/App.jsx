@@ -1637,7 +1637,7 @@ function ImprovementScreen({rows}){
       <div style={{padding:"24px 16px 20px",textAlign:"center",borderBottom:`1px solid ${C.border}`}}>
         <div style={{margin:"0 auto",width:132}}>
           <InsightRing size={132} r={56} stroke={10} pct={Math.min(1,Math.abs(overall)/3)} color={oColor}>
-            <div><div style={{fontSize:28,fontWeight:800,lineHeight:1,color:C.text}}>{fmtPct(overall)}</div><div style={{fontSize:10,fontWeight:600,color:C.muted,marginTop:6,letterSpacing:0.6}}>{ex.curShort.toUpperCase()} VS {ex.prevShort.toUpperCase()}</div></div>
+            <div><div style={{fontSize:28,fontWeight:800,lineHeight:1,color:C.text}}>{fmtPct(overall)}</div><div style={{fontSize:10,fontWeight:600,color:C.muted,marginTop:6,letterSpacing:0.6}}>{ex.curShort.toUpperCase()}<br/>VS {ex.prevShort.toUpperCase()}</div></div>
           </InsightRing>
         </div>
         <div style={{fontSize:20,fontWeight:800,color:oColor,marginTop:14}}>{up?'Getting faster':'Slowing down'}</div>
