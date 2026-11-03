@@ -93,7 +93,8 @@ function makeGateTracker(gate,radius,dir,fitM=GATE_FIT_M,strict=false){
     if(post.length<GATE_AFTER_FIXES&&sinceDet<10&&!leaving)return null;
     const pts=pre.concat(post);
     const reset=()=>{detected=false;closest=null;sinceDet=0;while(buf.length>12)buf.shift();return null;};
-    if(pts.length>=3&&post.length){
+    const approachOk=()=>{if(pts.length>=3)return true;const rc=buf.filter(p=>p.ts>=loc.ts-6000).map(p=>({t:p.ts,s:along(p)}));if(rc.length<4)return false;const mt=rc.reduce((a,p)=>a+p.t,0)/rc.length,ms=rc.reduce((a,p)=>a+p.s,0)/rc.length;let sxy=0,sxx=0;rc.forEach(p=>{sxy+=(p.t-mt)*(p.s-ms);sxx+=(p.t-mt)**2;});return sxx>0&&sxy/sxx>=0.0025;};
+    if(pts.length>=(strict?2:3)&&post.length&&approachOk()){
       const n=pts.length,mt=pts.reduce((a,p)=>a+p.t,0)/n,ms=pts.reduce((a,p)=>a+p.s,0)/n;
       let sxy=0,sxx=0;pts.forEach(p=>{sxy+=(p.t-mt)*(p.s-ms);sxx+=(p.t-mt)**2;});
       const v=sxx?sxy/sxx:0; // metres per ms
@@ -1691,6 +1692,7 @@ function LbSeg({options,value,onChange,full}){
 }
 function StageLeaderboardCard({lb,rank,user,stage,period="all",onPeriod,cat="all",onCat}){
   const [open,setOpen]=useState(false);
+  const{rows:tRows}=useRivlTitles(user);
   const r=22,circ=2*Math.PI*r;
   const filtered=period!=="all"||cat!=="all";
   const frac=rank.myPos&&rank.total?Math.max(0,Math.min(1,(rank.total-rank.myPos+1)/rank.total)):0;
@@ -1729,7 +1731,7 @@ function StageLeaderboardCard({lb,rank,user,stage,period="all",onPeriod,cat="all
               <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"11px 12px",background:isMe?C.orangeL:"white",borderRadius:10,marginBottom:6,border:`1px solid ${isMe?C.orange:C.border}`}}>
                 <div style={{width:34}}><PositionBadge pos={entry.pos} size={30}/></div>
                 <Avatar size={32} url={entry.avatarUrl}/>
-                <div style={{flex:1}}><div style={{fontSize:13,fontWeight:isMe?700:500,color:C.text}}>{isMe?"You":entry.name}</div><div style={{fontSize:11,color:C.muted}}>{entry.date}{mph!==null?` · ${mph.toFixed(1)} mph`:""}</div></div>
+                <div style={{flex:1}}><div style={{fontSize:13,fontWeight:isMe?700:500,color:C.text,display:"flex",alignItems:"center"}}>{isMe?"You":entry.name}{titlesOf(tRows,entry.user_id).map(t=><span key={t.title} style={{display:"inline-flex",marginLeft:6}}><TitleCoin size={24} rank={t.rank} k={TITLE_DEFS[t.title].key}/></span>)}</div><div style={{fontSize:11,color:C.muted}}>{entry.date}{mph!==null?` · ${mph.toFixed(1)} mph`:""}</div></div>
                 <div style={{textAlign:"right"}}>
                   <div style={{fontSize:15,fontWeight:700,color:isMe?C.orange:C.text}}>{formatTime(entry.time)}</div>
                   {gap>0&&<div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:3,marginTop:2}}><svg width="7" height="7" viewBox="0 0 10 10"><path d="M1 1 L9 1 L5 9 Z" fill={C.muted}/></svg><span style={{fontSize:10,fontWeight:700,color:C.muted}}>{formatTime(gap)}</span></div>}
@@ -2290,6 +2292,128 @@ function DifficultyPicker({value,onChange}){
     </div>
   );
 }
+let TC_ID=0;
+let TITLE_CACHE={rows:null,ts:0};
+const TC_TIER={3:{l:"#FFF0A0",m:"#E3B93C",d:"#946806",g:"245,166,35"},2:{l:"#FAFBFC",m:"#BCC2C8",d:"#6B7279",g:"159,180,214"},1:{l:"#F6D5B0",m:"#C48E5E",d:"#7A4B26",g:"224,123,57"}};
+const TITLE_DEFS={fast:{name:"Fastest Rider",key:"crown",unit:"record"},active:{name:"Most Active",key:"flame",unit:"run"},long:{name:"Longest Stage",key:"ruler"}};
+function TitleCoin({size=64,rank=1,k="crown"}){
+  const id=useMemo(()=>"tc"+(++TC_ID),[]),sm=size<44,tier=4-Math.min(3,Math.max(1,rank)),t=TC_TIER[tier],edge="rgba(255,255,255,.45)";
+  const g=`url(#${id}ic)`,gl=`url(#${id}il)`,gd=`url(#${id}id)`;
+  const icon=k==="crown"?(()=>{const s=sm?2.5:2.3;return <g transform={`translate(${50-11.75*s} ${(sm?50:46)-11.8*s}) scale(${s})`} strokeLinejoin="round"><polygon points="3,19 1.5,9 7,13 12,4 12,19" fill={gl} stroke={edge} strokeWidth=".45"/><polygon points="12,4 17,13 22.5,9 20,19 12,19" fill={gd} stroke={edge} strokeWidth=".45"/><rect x="3" y="17" width="17" height="2.6" rx="1" fill={g} stroke={edge} strokeWidth=".4"/></g>;})()
+  :k==="flame"?<svg x={sm?27:30} y={sm?20:22} width={sm?46:40} height={sm?46:40} viewBox="0 0 24 24"><path d="M12 22.5c4.2 0 7.2-2.9 7.2-7.2 0-3.1-1.9-5.2-3.6-7.2-.4 2.1-1.5 3.1-2.8 3.5C13.5 8 12.4 4.7 9.5 1.8c.1 4.1-4.7 6.8-4.7 13.5 0 4.3 3 7.2 7.2 7.2z" fill={g} stroke={edge} strokeWidth=".5"/><path d="M12 20.5c2.6 0 4.4-1.8 4.4-4.4 0-1.8-1.1-3-2.2-4.2-.3 1.1-.9 1.7-1.7 2-.6-1.8-1.3-3.4-2.7-5 0 3.2-2.5 4.6-2.5 8.1 0 2.6 1.8 3.5 4.7 3.5z" fill="#fff" opacity=".18"/></svg>
+  :<g transform={`rotate(-35 50 ${sm?50:46})`}><rect x="26" y={sm?42:39} width="48" height={sm?17:15} rx="2.2" fill={g} stroke={edge} strokeWidth=".8"/>{[0,1,2,3,4,5].map(i=><rect key={i} x={31+i*7.6} y={sm?42:39} width="2.4" height={i%2?7:5} fill={t.d} opacity=".9"/>)}</g>;
+  return <svg width={size} height={size} viewBox="0 0 100 100" style={{overflow:"visible",flexShrink:0,filter:`drop-shadow(0 0 ${sm?2:5}px rgba(${t.g},.5)) drop-shadow(0 2px 2px rgba(0,0,0,.28))`}}>
+    <defs>
+      <linearGradient id={id+"rim"} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor={t.l}/><stop offset=".28" stopColor={t.m}/><stop offset=".5" stopColor={t.d}/><stop offset=".72" stopColor={t.m}/><stop offset="1" stopColor={t.l}/></linearGradient>
+      <linearGradient id={id+"ri"} x1="1" y1="1" x2="0" y2="0"><stop offset="0" stopColor={t.l}/><stop offset=".5" stopColor={t.d}/><stop offset="1" stopColor={t.m}/></linearGradient>
+      <radialGradient id={id+"fc"} cx=".5" cy=".3" r=".8"><stop offset="0" stopColor="#4D4742"/><stop offset=".6" stopColor="#27231F"/><stop offset="1" stopColor="#110F0C"/></radialGradient>
+      <linearGradient id={id+"ic"} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={t.l}/><stop offset=".55" stopColor={t.m}/><stop offset="1" stopColor={t.d}/></linearGradient>
+      <linearGradient id={id+"il"} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor={t.l}/><stop offset="1" stopColor={t.m}/></linearGradient>
+      <linearGradient id={id+"id"} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor={t.m}/><stop offset="1" stopColor={t.d}/></linearGradient>
+      <linearGradient id={id+"mt"} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={t.m}/><stop offset="1" stopColor={t.d}/></linearGradient>
+      <linearGradient id={id+"bv"} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#000" stopOpacity=".55"/><stop offset=".5" stopColor="#000" stopOpacity="0"/><stop offset="1" stopColor="#fff" stopOpacity=".22"/></linearGradient>
+      <clipPath id={id+"c"}><circle cx="50" cy="50" r="37.5"/></clipPath>
+      <filter id={id+"n"} x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="2" seed="4" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 .7  0 0 0 0 .66  0 0 0 0 .6  0 0 0 .55 0"/></filter>
+    </defs>
+    <circle cx="50" cy="50" r="46" fill={`url(#${id}rim)`}/><circle cx="50" cy="50" r="46" fill="none" stroke="rgba(0,0,0,.4)" strokeWidth=".9"/>
+    <circle cx="50" cy="50" r="41.2" fill={`url(#${id}ri)`}/><circle cx="50" cy="50" r="41.2" fill="none" stroke="rgba(255,255,255,.45)" strokeWidth=".7"/>
+    <circle cx="50" cy="50" r="38" fill={`url(#${id}fc)`}/>
+    {!sm&&<g clipPath={`url(#${id}c)`}><rect width="100" height="100" filter={`url(#${id}n)`} opacity=".32"/></g>}
+    {!sm&&<g clipPath={`url(#${id}c)`}><polygon points="8,92 26,68 35,75 47,57 58,72 66,65 92,92" fill={t.d} opacity=".55"/><polygon points="14,92 30,72 39,79 49,62 60,78 70,70 88,92" fill={`url(#${id}mt)`}/><polygon points="49,62 60,78 52,92 41,92 39,79" fill="#000" opacity=".28"/><polygon points="30,72 39,79 33,92 14,92" fill="#000" opacity=".22"/></g>}
+    {icon}
+    <circle cx="50" cy="50" r="37.5" fill="none" stroke={`url(#${id}bv)`} strokeWidth="2.2"/>
+  </svg>;
+}
+function useRivlTitles(user){
+  const[rows,setRows]=useState(TITLE_CACHE.rows);
+  const load=useCallback((force)=>{if(!user)return;if(force!==true&&TITLE_CACHE.rows&&Date.now()-TITLE_CACHE.ts<60000){setRows(TITLE_CACHE.rows);return;}supabase.rpc("rivl_titles").then(({data,error})=>{if(!error&&data){TITLE_CACHE={rows:data,ts:Date.now()};setRows(data);}});},[user]);
+  useEffect(()=>{load();},[load]);
+  return{rows,reload:()=>load(true)};
+}
+function titlesOf(rows,uid){
+  if(!rows||!uid)return[];
+  return rows.filter(r=>r.user_id===uid&&(r.title==="long"?r.rank===1:r.rank<=3)).map(r=>({title:r.title,rank:r.rank,val:Number(r.val)})).sort((a,b)=>["fast","active","long"].indexOf(a.title)-["fast","active","long"].indexOf(b.title));
+}
+
+const BADGE_COL={1:"#C9A227",2:"#9AA0A6",3:"#AD8158"};
+const badgeOrd=n=>n+(["th","st","nd","rd"][(n%100>10&&n%100<14)?0:(n%10<4?n%10:0)]);
+function LockedCoin({size=80,k="crown"}){
+  return <svg width={size} height={size} viewBox="0 0 100 100"><circle cx="50" cy="50" r="38" fill="#fff" stroke={C.mutedL} strokeWidth="2.4" strokeDasharray="5 4"/><svg x="34" y="34" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={C.mutedL} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{k==="crown"?<path d="M2 19h20M2 19l3-10 5 5 2-8 2 8 5-5 3 10"/>:k==="flame"?<path d="M12 22c4 0 7-2.8 7-7 0-3-1.8-5-3.5-7-.4 2-1.5 3-2.7 3.4C13.4 8 12.3 4.8 9.5 2 9.6 6 5 8.6 5 15c0 4.2 3 7 7 7z" fill={C.mutedL}/>:<><rect x="2" y="8" width="20" height="8" rx="1.5"/><path d="M6 8v3M10 8v4M14 8v3M18 8v4"/></>}</svg></svg>;
+}
+function BadgesScreen({user,rows,onBack,bare}){
+  const[sel,setSel]=useState(null);
+  const info=id=>{
+    const all=(rows||[]).filter(r=>r.title===id);
+    const top=all.filter(r=>id==="long"?r.rank===1:r.rank<=3).sort((a,b)=>a.rank-b.rank);
+    const me=all.find(r=>r.user_id===user.id)||null;
+    const held=!!me&&top.some(r=>r.user_id===user.id);
+    return{top,me,held,rank:held?me.rank:0};
+  };
+  const fmt=(id,v)=>id==="long"?`${(Number(v)/1000).toFixed(1)} km`:`${Number(v)} ${TITLE_DEFS[id].unit}${Number(v)===1?"":"s"}`;
+  const nameOf=r=>r.user_id===user.id?"You":(r.display_name||"Rider");
+  const cell=id=>{
+    const d=TITLE_DEFS[id],i=info(id),col=BADGE_COL[i.rank];
+    const sub=id==="long"
+      ?(i.held?<><span style={{color:col,fontWeight:700}}>You hold it</span> <span style={{color:C.mutedL}}>·</span> {fmt(id,i.me.val)}</>:(i.top[0]?<span>{nameOf(i.top[0])} · {fmt(id,i.top[0].val)}</span>:"No one yet"))
+      :(i.held?<><span style={{color:col,fontWeight:700}}>{badgeOrd(i.rank)}</span> <span style={{color:C.mutedL}}>·</span> {Number(i.me.val)}</>:(i.me?`You're ${badgeOrd(i.me.rank)}`:"Not ranked"));
+    return <button key={id} className="tap" onClick={()=>setSel(id)} style={{background:"none",border:"none",padding:0,display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center"}}>
+      <div style={{height:84,display:"flex",alignItems:"center",justifyContent:"center"}}>{i.held?<TitleCoin size={80} rank={i.rank} k={d.key}/>:<LockedCoin size={80} k={d.key}/>}</div>
+      <div style={{fontSize:12,fontWeight:700,color:i.held?C.text:C.muted,marginTop:6,lineHeight:1.2}}>{d.name}</div>
+      <div style={{fontSize:11,color:C.muted,marginTop:2}}>{sub}</div>
+    </button>;
+  };
+  const sheet=()=>{
+    const id=sel,d=TITLE_DEFS[id],i=info(id),col=BADGE_COL[i.rank];
+    const desc=id==="fast"?"Hold the most stage records right now. Times on different stages can't be compared, so records are what count.":id==="active"?"Time the most runs in the last 30 days.":(i.held?"You created the longest stage on Rivl.":i.top[0]?`Create a stage longer than ${(Number(i.top[0].val)/1000).toFixed(1)} km to take the title.`:"Create the longest stage on Rivl.");
+    const head=i.held?<span style={{color:col}}>{badgeOrd(i.rank)} on Rivl</span>:<span style={{color:C.muted}}>{id==="long"?(i.top[0]?"Held by "+nameOf(i.top[0]):"Nobody yet"):(i.me?`You're ${badgeOrd(i.me.rank)}`:"Not ranked yet")}</span>;
+    const row=(r,pos)=><div key={pos+"-"+r.user_id} style={{border:r.user_id===user.id?`1.5px solid ${C.blue}`:`1px solid ${C.border}`,borderRadius:12,padding:"8px 14px",display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
+      <div style={{width:38,display:"flex",justifyContent:"center"}}>{pos<=3?<TitleCoin size={38} rank={pos} k={d.key}/>:<div style={{fontSize:13,fontWeight:800,color:C.muted}}>{badgeOrd(pos)}</div>}</div>
+      <div style={{flex:1,minWidth:0,fontSize:14,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nameOf(r)}</div>
+      <div style={{fontSize:12,fontWeight:700,color:C.muted}}>{fmt(id,r.val)}</div>
+    </div>;
+    return <>
+      <div style={{position:bare?"fixed":"absolute",inset:0,background:"rgba(26,26,26,0.4)",zIndex:bare?9000:39}} onClick={()=>setSel(null)}/>
+      <div className="slide-up" style={{position:bare?"fixed":"absolute",bottom:0,left:0,right:0,background:"#fff",borderRadius:"20px 20px 0 0",zIndex:bare?9001:40,maxHeight:"88%",overflowY:"auto",padding:"10px 16px 30px"}}>
+        <div style={{width:38,height:4,borderRadius:2,background:C.border,margin:"0 auto 14px"}}/>
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",marginBottom:14}}>
+          <div style={{height:130,display:"flex",alignItems:"center"}}>{i.held?<TitleCoin size={130} rank={i.rank} k={d.key}/>:<LockedCoin size={130} k={d.key}/>}</div>
+          <div style={{fontSize:21,fontWeight:800,color:C.text,marginTop:6}}>{d.name}</div>
+          <div style={{fontSize:12,fontWeight:700,marginTop:3,textTransform:"uppercase",letterSpacing:0.8}}>{head}</div>
+          <div style={{fontSize:13,color:C.muted,marginTop:8,maxWidth:300,lineHeight:1.4}}>{desc}</div>
+        </div>
+        {i.top.map((r,n)=>row(r,r.rank))}
+        {!i.held&&i.me&&(id==="long"
+          ?<div style={{border:`1.5px solid ${C.blue}`,borderRadius:12,padding:"10px 14px",display:"flex",justifyContent:"space-between",fontSize:14,fontWeight:700,color:C.text,marginBottom:8}}><span>You</span><span style={{color:C.muted,fontSize:12}}>{fmt(id,i.me.val)}{i.top[0]?` · ${((Number(i.top[0].val)-Number(i.me.val))/1000).toFixed(1)} km to go`:""}</span></div>
+          :row(i.me,i.me.rank))}
+        <div style={{fontSize:11,color:C.muted,textAlign:"center",margin:"4px 0 12px"}}>Titles move when someone passes you.</div>
+        <button className="tap" onClick={()=>setSel(null)} style={{width:"100%",background:C.surface,border:"none",borderRadius:12,padding:13,fontSize:14,fontWeight:700,color:C.text}}>Done</button>
+      </div>
+    </>;
+  };
+  if(bare)return(<>
+    <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:12}}>Badges · live</div>
+    {!rows?<div style={{padding:20,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>
+    :<><div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"16px 6px"}}>{["fast","active","long"].map(cell)}</div>
+    <div style={{fontSize:11,color:C.muted,marginTop:14,lineHeight:1.4}}>Held by the top riders on Rivl. They move when someone passes you.</div></>}
+    {sel&&sheet()}
+  </>);
+  return(
+    <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff",position:"relative",overflow:"hidden"}}>
+      <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+        <button className="tap" onClick={onBack} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
+        <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>Badges</div>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"18px 16px 28px"}}>
+        <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.8,marginBottom:12}}>Top riders · live</div>
+        {!rows?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>
+        :<><div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"16px 6px"}}>{["fast","active","long"].map(cell)}</div>
+        <div style={{fontSize:11,color:C.muted,marginTop:14,lineHeight:1.4}}>Held by the top riders on Rivl. They move when someone passes you.</div></>}
+      </div>
+      {sel&&sheet()}
+    </div>
+  );
+}
+
 function GoldCrown({size=20}){
   return <svg width={size} height={size*0.85} viewBox="0 0 24 20" style={{flexShrink:0}}><path d="M3 19l-1.5-10L7 13l5-9 5 9 5.5-4L20 19H3z" fill="#C9A227" stroke="#C9A227" strokeLinejoin="round" strokeWidth="1"/><rect x="3" y="17" width="17" height="2.6" rx="1" fill="#C9A227"/></svg>;
 }
@@ -4839,6 +4963,7 @@ function TrophyCabinetScreen({user,onBack}){
   const list=rows||[];
   const gold=list.filter(r=>r.result!=="lost").length;
   const silver=list.filter(r=>r.result==="lost").length;
+  const{rows:titleRows}=useRivlTitles(user);
   return(
     <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
       <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
@@ -4851,6 +4976,7 @@ function TrophyCabinetScreen({user,onBack}){
           <TrophyMedal pos={1} count={gold}/>
           <TrophyMedal pos={3} count={0}/>
         </div>
+        <div style={{marginBottom:22}}><BadgesScreen bare user={user} rows={titleRows}/></div>
         <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>Head to head</div>
         {rows===null?<div style={{padding:30,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>:list.length===0?(
           <div style={{textAlign:"center",padding:"32px 20px",color:C.muted}}>
@@ -5608,7 +5734,7 @@ function StreakCard({streak}){
     </div>
   );
 }
-function ProfileTrophyCard({counts,onOpen}){
+function ProfileTrophyCard({counts,onOpen,titles}){
   const c=counts||{gold:0,silver:0,bronze:0};
   const medal=(pos,n,big)=>{
     const m=TROPHY_MEDAL[pos],has=n>0,sz=big?52:44;
@@ -5628,14 +5754,14 @@ function ProfileTrophyCard({counts,onOpen}){
         <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase"}}>Trophy cabinet</div>
         <button className="tap" onClick={onOpen} style={{background:"none",border:"none",padding:0,fontSize:12,color:C.muted}}>View all ›</button>
       </div>
-      <button className="tap" onClick={onOpen} style={{width:"100%",background:"none",border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 10px",display:"flex",alignItems:"flex-end"}}>
-        {medal(2,c.silver)}{medal(1,c.gold,true)}{medal(3,c.bronze)}
+      <button className="tap" onClick={onOpen} style={{width:"100%",background:"none",border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 10px",display:"block",textAlign:"left"}}><div style={{display:"flex",alignItems:"flex-end"}}>
+        {medal(2,c.silver)}{medal(1,c.gold,true)}{medal(3,c.bronze)}</div>{titles&&titles.length>0&&<div style={{borderTop:`1px solid ${C.border}`,margin:"12px 4px 0",paddingTop:12,display:"flex"}}>{["fast","active","long"].map(id=>titles.find(t=>t.title===id)).filter(Boolean).map(t=><div key={t.title} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center"}}><TitleCoin size={46} rank={t.rank} k={TITLE_DEFS[t.title].key}/><div style={{fontSize:10,fontWeight:600,color:C.muted,marginTop:5}}>{TITLE_DEFS[t.title].name}</div></div>)}</div>}
       </button>
     </div>
   );
 }
 
-function ProfileScreen({trophyCounts,streak,stages,settings,courseResults,pastWeeks,weekByType,onSettingsPress,onGoToStages,onGoToCourses,onOpenProgress,onOpenBikeSetup,followerCount,onOpenFollowers,onOpenTrophies}){
+function ProfileScreen({trophyCounts,streak,stages,settings,courseResults,pastWeeks,weekByType,onSettingsPress,onGoToStages,onGoToCourses,onOpenProgress,onOpenBikeSetup,followerCount,onOpenFollowers,onOpenTrophies,titles}){
   const [selectedWeek,setSelectedWeek]=useState(pastWeeks.length-1);
   const stagesRidden=stages.filter(s=>s.time).length;
   const coursesComplete=courseResults.length;
@@ -5666,7 +5792,7 @@ function ProfileScreen({trophyCounts,streak,stages,settings,courseResults,pastWe
         </div>
       </div>
 
-      <ProfileTrophyCard counts={trophyCounts} onOpen={onOpenTrophies}/>
+      <ProfileTrophyCard counts={trophyCounts} onOpen={onOpenTrophies} titles={titles}/>
       {streak&&<StreakCard streak={streak}/>}
       <div style={{padding:"26px 16px 0"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
@@ -7676,6 +7802,9 @@ export default function App(){
   const [recapBusy,setRecapBusy]=useState(false);
   const [recapPosting,setRecapPosting]=useState(false);
   const [refreshTick,setRefreshTick]=useState(0);
+  const{rows:titleRows,reload:reloadTitles}=useRivlTitles(user);
+  useEffect(()=>{if(refreshTick)reloadTitles();},[refreshTick]);
+  const myTitles=titlesOf(titleRows,user&&user.id);
   useEffect(()=>{if(!user)return;supabase.rpc('list_challenges').then(({data,error})=>{if(!error&&Array.isArray(data))setH2hList(data);});},[user,refreshTick,showH2h]);
   const h2hRequests=h2hList.filter(c=>c.status==='pending'&&c.opponent_id===user?.id).length;
   const h2hActive=h2hList.filter(c=>c.status==='active').length;
@@ -8347,7 +8476,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
       {/* PROFILE */}
       {tab==="profile"&&(
         <div style={{height:"calc(var(--app-h) - env(safe-area-inset-top, 0px))",overflowY:"auto",paddingBottom:100}}>
-            <ProfileScreen stages={stages} settings={settings} courseResults={courseResults} weeklyActivity={weeklyActivity} pastWeeks={weekStats} weekByType={weekStatsByType} streak={streak} courseCRCount={courseCRCount} onSettingsPress={()=>setShowSettings(true)} onStatPress={key=>setSheet('stat-'+key)} onGoToStages={()=>{setCoursesFilter('stages');setTab('stages');}} onGoToCourses={()=>{setCoursesFilter('courses');setTab('stages');}}onOpenProgress={()=>setShowProgress(true)} onOpenBikeSetup={()=>setShowBikeSetup(true)} followerCount={followerCount} onOpenFollowers={()=>setShowFollow(true)} onOpenTrophies={()=>setShowTrophies(true)} trophyCounts={trophyCounts}/>
+            <ProfileScreen titles={myTitles} stages={stages} settings={settings} courseResults={courseResults} weeklyActivity={weeklyActivity} pastWeeks={weekStats} weekByType={weekStatsByType} streak={streak} courseCRCount={courseCRCount} onSettingsPress={()=>setShowSettings(true)} onStatPress={key=>setSheet('stat-'+key)} onGoToStages={()=>{setCoursesFilter('stages');setTab('stages');}} onGoToCourses={()=>{setCoursesFilter('courses');setTab('stages');}}onOpenProgress={()=>setShowProgress(true)} onOpenBikeSetup={()=>setShowBikeSetup(true)} followerCount={followerCount} onOpenFollowers={()=>setShowFollow(true)} onOpenTrophies={()=>setShowTrophies(true)} trophyCounts={trophyCounts}/>
 
         </div>
       )}
