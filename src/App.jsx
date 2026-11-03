@@ -5732,7 +5732,7 @@ function StreakCard({streak}){
     </div>
   );
 }
-function ProfileTrophyCard({counts,onOpen}){
+function ProfileTrophyCard({counts,onOpen,titles}){
   const c=counts||{gold:0,silver:0,bronze:0};
   const medal=(pos,n,big)=>{
     const m=TROPHY_MEDAL[pos],has=n>0,sz=big?52:44;
@@ -5752,14 +5752,14 @@ function ProfileTrophyCard({counts,onOpen}){
         <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase"}}>Trophy cabinet</div>
         <button className="tap" onClick={onOpen} style={{background:"none",border:"none",padding:0,fontSize:12,color:C.muted}}>View all ›</button>
       </div>
-      <button className="tap" onClick={onOpen} style={{width:"100%",background:"none",border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 10px",display:"flex",alignItems:"flex-end"}}>
-        {medal(2,c.silver)}{medal(1,c.gold,true)}{medal(3,c.bronze)}
+      <button className="tap" onClick={onOpen} style={{width:"100%",background:"none",border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 10px",display:"block",textAlign:"left"}}><div style={{display:"flex",alignItems:"flex-end"}}>
+        {medal(2,c.silver)}{medal(1,c.gold,true)}{medal(3,c.bronze)}</div>{titles&&titles.length>0&&<div style={{borderTop:`1px solid ${C.border}`,margin:"12px 4px 0",paddingTop:12,display:"flex"}}>{["fast","active","long"].map(id=>titles.find(t=>t.title===id)).filter(Boolean).map(t=><div key={t.title} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center"}}><TitleCoin size={46} rank={t.rank} k={TITLE_DEFS[t.title].key}/><div style={{fontSize:10,fontWeight:600,color:C.muted,marginTop:5}}>{TITLE_DEFS[t.title].name}</div></div>)}</div>}
       </button>
     </div>
   );
 }
 
-function ProfileScreen({trophyCounts,streak,stages,settings,courseResults,pastWeeks,weekByType,onSettingsPress,onGoToStages,onGoToCourses,onOpenProgress,onOpenBikeSetup,followerCount,onOpenFollowers,onOpenTrophies}){
+function ProfileScreen({trophyCounts,streak,stages,settings,courseResults,pastWeeks,weekByType,onSettingsPress,onGoToStages,onGoToCourses,onOpenProgress,onOpenBikeSetup,followerCount,onOpenFollowers,onOpenTrophies,titles}){
   const [selectedWeek,setSelectedWeek]=useState(pastWeeks.length-1);
   const stagesRidden=stages.filter(s=>s.time).length;
   const coursesComplete=courseResults.length;
@@ -5790,7 +5790,7 @@ function ProfileScreen({trophyCounts,streak,stages,settings,courseResults,pastWe
         </div>
       </div>
 
-      <ProfileTrophyCard counts={trophyCounts} onOpen={onOpenTrophies}/>
+      <ProfileTrophyCard counts={trophyCounts} onOpen={onOpenTrophies} titles={titles}/>
       {streak&&<StreakCard streak={streak}/>}
       <div style={{padding:"26px 16px 0"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
@@ -7800,6 +7800,9 @@ export default function App(){
   const [recapBusy,setRecapBusy]=useState(false);
   const [recapPosting,setRecapPosting]=useState(false);
   const [refreshTick,setRefreshTick]=useState(0);
+  const{rows:titleRows,reload:reloadTitles}=useRivlTitles(user);
+  useEffect(()=>{if(refreshTick)reloadTitles();},[refreshTick]);
+  const myTitles=titlesOf(titleRows,user&&user.id);
   useEffect(()=>{if(!user)return;supabase.rpc('list_challenges').then(({data,error})=>{if(!error&&Array.isArray(data))setH2hList(data);});},[user,refreshTick,showH2h]);
   const h2hRequests=h2hList.filter(c=>c.status==='pending'&&c.opponent_id===user?.id).length;
   const h2hActive=h2hList.filter(c=>c.status==='active').length;
@@ -8471,7 +8474,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
       {/* PROFILE */}
       {tab==="profile"&&(
         <div style={{height:"calc(var(--app-h) - env(safe-area-inset-top, 0px))",overflowY:"auto",paddingBottom:100}}>
-            <ProfileScreen stages={stages} settings={settings} courseResults={courseResults} weeklyActivity={weeklyActivity} pastWeeks={weekStats} weekByType={weekStatsByType} streak={streak} courseCRCount={courseCRCount} onSettingsPress={()=>setShowSettings(true)} onStatPress={key=>setSheet('stat-'+key)} onGoToStages={()=>{setCoursesFilter('stages');setTab('stages');}} onGoToCourses={()=>{setCoursesFilter('courses');setTab('stages');}}onOpenProgress={()=>setShowProgress(true)} onOpenBikeSetup={()=>setShowBikeSetup(true)} followerCount={followerCount} onOpenFollowers={()=>setShowFollow(true)} onOpenTrophies={()=>setShowTrophies(true)} trophyCounts={trophyCounts}/>
+            <ProfileScreen titles={myTitles} stages={stages} settings={settings} courseResults={courseResults} weeklyActivity={weeklyActivity} pastWeeks={weekStats} weekByType={weekStatsByType} streak={streak} courseCRCount={courseCRCount} onSettingsPress={()=>setShowSettings(true)} onStatPress={key=>setSheet('stat-'+key)} onGoToStages={()=>{setCoursesFilter('stages');setTab('stages');}} onGoToCourses={()=>{setCoursesFilter('courses');setTab('stages');}}onOpenProgress={()=>setShowProgress(true)} onOpenBikeSetup={()=>setShowBikeSetup(true)} followerCount={followerCount} onOpenFollowers={()=>setShowFollow(true)} onOpenTrophies={()=>setShowTrophies(true)} trophyCounts={trophyCounts}/>
 
         </div>
       )}
