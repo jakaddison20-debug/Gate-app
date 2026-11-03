@@ -2301,7 +2301,15 @@ function TitleCoin({size=64,rank=1,k="crown"}){
   const g=`url(#${id}ic)`,gl=`url(#${id}il)`,gd=`url(#${id}id)`;
   const icon=k==="crown"?(()=>{const s=sm?2.5:2.3;return <g transform={`translate(${50-11.75*s} ${(sm?50:46)-11.8*s}) scale(${s})`} strokeLinejoin="round"><polygon points="3,19 1.5,9 7,13 12,4 12,19" fill={gl} stroke={edge} strokeWidth=".45"/><polygon points="12,4 17,13 22.5,9 20,19 12,19" fill={gd} stroke={edge} strokeWidth=".45"/><rect x="3" y="17" width="17" height="2.6" rx="1" fill={g} stroke={edge} strokeWidth=".4"/></g>;})()
   :k==="flame"?<svg x={sm?27:30} y={sm?20:22} width={sm?46:40} height={sm?46:40} viewBox="0 0 24 24"><path d="M12 22.5c4.2 0 7.2-2.9 7.2-7.2 0-3.1-1.9-5.2-3.6-7.2-.4 2.1-1.5 3.1-2.8 3.5C13.5 8 12.4 4.7 9.5 1.8c.1 4.1-4.7 6.8-4.7 13.5 0 4.3 3 7.2 7.2 7.2z" fill={g} stroke={edge} strokeWidth=".5"/><path d="M12 20.5c2.6 0 4.4-1.8 4.4-4.4 0-1.8-1.1-3-2.2-4.2-.3 1.1-.9 1.7-1.7 2-.6-1.8-1.3-3.4-2.7-5 0 3.2-2.5 4.6-2.5 8.1 0 2.6 1.8 3.5 4.7 3.5z" fill="#fff" opacity=".18"/></svg>
-  :<g transform={`rotate(-35 50 ${sm?50:46})`}><rect x="26" y={sm?42:39} width="48" height={sm?17:15} rx="2.2" fill={g} stroke={edge} strokeWidth=".8"/>{[0,1,2,3,4,5].map(i=><rect key={i} x={31+i*7.6} y={sm?42:39} width="2.4" height={i%2?7:5} fill={t.d} opacity=".9"/>)}</g>;
+  :k==="tally"?<g>{[31,42,53,64].map(x=><rect key={x} x={x} y="28" width="6" height="40" rx="3" fill={g} stroke={edge} strokeWidth=".6"/>)}<rect x="24" y="46" width="52" height="6" rx="3" fill={gl} stroke={edge} strokeWidth=".6" transform="rotate(-26 50 49)"/></g>
+  :k==="arrow"?<g><rect x="45" y="44" width="10" height="30" rx="3" fill={gd} stroke={edge} strokeWidth=".6"/><polygon points="50,23 73,48 27,48" fill={gl} stroke={edge} strokeWidth=".7" strokeLinejoin="round"/><polygon points="50,23 73,48 50,48" fill="#000" opacity=".14"/></g>
+  :k==="star"?<g><polygon points="50.0,26.0 55.9,40.9 71.9,41.9 59.5,52.1 63.5,67.6 50.0,59.0 36.5,67.6 40.5,52.1 28.1,41.9 44.1,40.9" fill={g} stroke={edge} strokeWidth=".8" strokeLinejoin="round"/></g>
+  :k==="pin"?<g><path d="M50 74C41 62 31 54 31 43a19 19 0 0 1 38 0c0 11-10 19-19 31z" fill={g} stroke={edge} strokeWidth=".8" strokeLinejoin="round"/><path d="M50 24a19 19 0 0 1 19 19c0 11-10 19-19 31z" fill="#000" opacity=".16"/><circle cx="50" cy="43" r="7" fill="#27231F"/></g>
+  :k==="cal"?<g><rect x="29" y="31" width="42" height="38" rx="6" fill={g} stroke={edge} strokeWidth=".8"/><rect x="29" y="31" width="42" height="11" rx="5" fill={gd}/><rect x="38" y="25" width="5" height="11" rx="2.2" fill={gl} stroke={edge} strokeWidth=".5"/><rect x="57" y="25" width="5" height="11" rx="2.2" fill={gl} stroke={edge} strokeWidth=".5"/><path d="M39 56l7 7 15-15" fill="none" stroke="#27231F" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"/></g>
+  :k==="flag"?<g><rect x="33" y="25" width="6" height="50" rx="2.4" fill={gd} stroke={edge} strokeWidth=".6"/><polygon points="39,27 71,38 39,51" fill={g} stroke={edge} strokeWidth=".7" strokeLinejoin="round"/><polygon points="39,39 71,38 39,51" fill="#000" opacity=".16"/></g>
+  :k==="bolt"?<svg x={sm?24:27} y={sm?19:20} width={sm?52:46} height={sm?52:46} viewBox="0 0 24 24"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10" fill={g} stroke={edge} strokeWidth=".5" strokeLinejoin="round"/><polygon points="13,2 12,10 21,10" fill="#fff" opacity=".2"/></svg>
+  :k==="stopwatch"?<g><rect x="45" y={sm?27:25} width="10" height="5" rx="1.5" fill={g} stroke={edge} strokeWidth=".6"/><circle cx="50" cy={sm?52:50} r={sm?19:17} fill="none" stroke={g} strokeWidth="5.5"/><circle cx="50" cy={sm?52:50} r={sm?19:17} fill="none" stroke={edge} strokeWidth=".6"/><rect x="48" y={sm?41:40} width="4" height={sm?13:12} rx="2" fill={gl}/><rect x="59" y={sm?31:29} width="6" height="4" rx="1.4" fill={gd} transform={`rotate(40 62 ${sm?33:31})`}/></g>
+  :k==="compass"?<g><circle cx="50" cy={sm?50:48} r={sm?20:18} fill="none" stroke={g} strokeWidth="5"/><circle cx="50" cy={sm?50:48} r={sm?20:18} fill="none" stroke={edge} strokeWidth=".6"/><g transform={`rotate(40 50 ${sm?50:48})`}><polygon points={`50,${sm?33:32} 56.5,${sm?50:48} 43.5,${sm?50:48}`} fill={gl} stroke={edge} strokeWidth=".5"/><polygon points={`50,${sm?67:64} 56.5,${sm?50:48} 43.5,${sm?50:48}`} fill={gd} stroke={edge} strokeWidth=".5"/></g><circle cx="50" cy={sm?50:48} r="2.4" fill="#27231F"/></g>:<g transform={`rotate(-35 50 ${sm?50:46})`}><rect x="26" y={sm?42:39} width="48" height={sm?17:15} rx="2.2" fill={g} stroke={edge} strokeWidth=".8"/>{[0,1,2,3,4,5].map(i=><rect key={i} x={31+i*7.6} y={sm?42:39} width="2.4" height={i%2?7:5} fill={t.d} opacity=".9"/>)}</g>;
   return <svg width={size} height={size} viewBox="0 0 100 100" style={{overflow:"visible",flexShrink:0,filter:`drop-shadow(0 0 ${sm?2:5}px rgba(${t.g},.5)) drop-shadow(0 2px 2px rgba(0,0,0,.28))`}}>
     <defs>
       <linearGradient id={id+"rim"} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor={t.l}/><stop offset=".28" stopColor={t.m}/><stop offset=".5" stopColor={t.d}/><stop offset=".72" stopColor={t.m}/><stop offset="1" stopColor={t.l}/></linearGradient>
@@ -2338,7 +2346,7 @@ function titlesOf(rows,uid){
 const BADGE_COL={1:"#C9A227",2:"#9AA0A6",3:"#AD8158"};
 const badgeOrd=n=>n+(["th","st","nd","rd"][(n%100>10&&n%100<14)?0:(n%10<4?n%10:0)]);
 function LockedCoin({size=80,k="crown"}){
-  return <svg width={size} height={size} viewBox="0 0 100 100"><circle cx="50" cy="50" r="38" fill="#fff" stroke={C.mutedL} strokeWidth="2.4" strokeDasharray="5 4"/><svg x="34" y="34" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={C.mutedL} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{k==="crown"?<path d="M2 19h20M2 19l3-10 5 5 2-8 2 8 5-5 3 10"/>:k==="flame"?<path d="M12 22c4 0 7-2.8 7-7 0-3-1.8-5-3.5-7-.4 2-1.5 3-2.7 3.4C13.4 8 12.3 4.8 9.5 2 9.6 6 5 8.6 5 15c0 4.2 3 7 7 7z" fill={C.mutedL}/>:<><rect x="2" y="8" width="20" height="8" rx="1.5"/><path d="M6 8v3M10 8v4M14 8v3M18 8v4"/></>}</svg></svg>;
+  return <svg width={size} height={size} viewBox="0 0 100 100"><circle cx="50" cy="50" r="38" fill="#fff" stroke={C.mutedL} strokeWidth="2.4" strokeDasharray="5 4"/><svg x="34" y="34" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={C.mutedL} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{k==="crown"?<path d="M2 19h20M2 19l3-10 5 5 2-8 2 8 5-5 3 10"/>:k==="flame"?<path d="M12 22c4 0 7-2.8 7-7 0-3-1.8-5-3.5-7-.4 2-1.5 3-2.7 3.4C13.4 8 12.3 4.8 9.5 2 9.6 6 5 8.6 5 15c0 4.2 3 7 7 7z" fill={C.mutedL}/>:k==="tally"?<path d="M6 5v14M10 5v14M14 5v14M18 5v14M3 17L21 7"/>:k==="arrow"?<path d="M12 20V6M6 12l6-6 6 6"/>:k==="star"?<polygon points="12,3 14.7,9 21,9.5 16.2,13.7 17.7,20 12,16.7 6.3,20 7.8,13.7 3,9.5 9.3,9"/>:k==="pin"?<><path d="M12 22c-4-5-7-8-7-12a7 7 0 0 1 14 0c0 4-3 7-7 12z"/><circle cx="12" cy="10" r="2.4"/></>:k==="cal"?<><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4M9 15l2 2 4-4"/></>:k==="flag"?<path d="M5 21V4M5 4h13l-3 4 3 4H5"/>:k==="bolt"?<polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/>:k==="stopwatch"?<><circle cx="12" cy="14" r="7"/><path d="M12 14v-4M9.5 3h5"/></>:k==="compass"?<><circle cx="12" cy="12" r="9"/><polygon points="16,8 14,14 8,16 10,10"/></>:<><rect x="2" y="8" width="20" height="8" rx="1.5"/><path d="M6 8v3M10 8v4M14 8v3M18 8v4"/></>}</svg></svg>;
 }
 function BadgesScreen({user,rows,onBack,bare}){
   const[sel,setSel]=useState(null);
@@ -2412,6 +2420,96 @@ function BadgesScreen({user,rows,onBack,bare}){
       {sel&&sheet()}
     </div>
   );
+}
+
+const EARNED_DEFS=[
+  {id:"first",name:"First Run",key:"stopwatch",one:true,desc:"Time your first stage."},
+  {id:"hunter",name:"Stage Hunter",key:"bolt",steps:[10,50,100],unit:"stage",desc:"Ride new stages. A stage counts the first time you time it."},
+  {id:"explorer",name:"Explorer",key:"compass",steps:[3,6,12],unit:"area",desc:"Ride stages in different places. An area is about 10 km across."},
+  {id:"creator",name:"Creator",key:"pin",steps:[1,5,15],unit:"stage",desc:"Create public stages for other riders to race."},
+  {id:"streak",name:"Week Streak",key:"cal",steps:[13,26,52],unit:"week",desc:"Ride every week without missing one. A quarter of a year is Bronze, half a year Silver, a full year Gold. Your best run counts."},
+  {id:"conq",name:"Course Conqueror",key:"flag",steps:[1,5,20],unit:"course",desc:"Finish a course by riding every stage of it in one go. Each different course counts once."},
+  {id:"tally",name:"Run Tally",key:"tally",steps:[25,100,250],unit:"run",desc:"Time runs. Every saved run counts."},
+  {id:"pbs",name:"Personal Best",key:"arrow",steps:[1,10,50],unit:"personal best",desc:"Beat your own best time on a stage. Your first run on a stage doesn't count."},
+  {id:"rec",name:"Record Breaker",key:"star",steps:[1,5,15],unit:"record",desc:"Take stage records from other riders on public stages. Each time you take one counts, even if someone takes it back."}
+];
+const TIER_NAMES=["","Bronze","Silver","Gold"];
+const EARNED_FIELD={hunter:"stages",explorer:"areas",creator:"created",streak:"streak",conq:"courses",tally:"runs",pbs:"pbs",rec:"records"};
+function useRivlEarned(user){
+  const[d,setD]=useState(null);
+  useEffect(()=>{if(!user)return;let off=false;Promise.all([supabase.rpc("rivl_earned"),supabase.from("stages").select("id",{count:"exact",head:true}).eq("created_by",user.id).eq("privacy","public"),supabase.rpc("my_weekly_streak",{p_tz:Intl.DateTimeFormat().resolvedOptions().timeZone||"UTC"}),supabase.from("course_results").select("course_id").eq("user_id",user.id)]).then(([a,c,w,k])=>{if(off||a.error)return;const r=(a.data&&(Array.isArray(a.data)?a.data[0]:a.data))||{first_run:null,stages:0,areas:0};const sr=w.data&&(Array.isArray(w.data)?w.data[0]:w.data);setD({...r,created:c.count||0,streak:sr?Number(sr.best_streak||0):0,courses:new Set((k.data||[]).map(x=>x.course_id)).size});});return()=>{off=true;};},[user]);
+  return d;
+}
+function earnedState(e,d){
+  const cur=e.one?(d.first_run?1:0):Number(d[EARNED_FIELD[e.id]]||0);
+  const lvl=e.one?(cur>0?1:0):e.steps.filter(x=>cur>=x).length;
+  const nextIdx=e.one||lvl>=e.steps.length?-1:lvl;
+  const prev=nextIdx>=0&&lvl?e.steps[lvl-1]:0,nxt=nextIdx>=0?e.steps[nextIdx]:0;
+  return{cur,lvl,nextIdx,nxt,frac:nextIdx>=0?Math.max(0,Math.min(1,(cur-prev)/(nxt-prev))):null};
+}
+function EarnedCoin({size,e,st}){
+  const ring=st.frac!==null,inner=ring?Math.round(size*0.8):size,rank=e.one?3:4-st.lvl;
+  const coin=st.lvl?<TitleCoin size={inner} rank={rank} k={e.key}/>:<LockedCoin size={inner} k={e.key}/>;
+  if(!ring)return coin;
+  const R=47,CC=2*Math.PI*R,col=BADGE_COL[4-(st.lvl+1)];
+  return <div style={{position:"relative",width:size,height:size,display:"flex",alignItems:"center",justifyContent:"center"}}>
+    <svg width={size} height={size} viewBox="0 0 100 100" style={{position:"absolute",inset:0,transform:"rotate(-90deg)"}}>
+      <circle cx="50" cy="50" r={R} fill="none" stroke={C.border} strokeWidth="4.5"/>
+      {st.frac>0&&<circle cx="50" cy="50" r={R} fill="none" stroke={col} strokeWidth="4.5" strokeLinecap="round" strokeDasharray={`${(st.frac*CC).toFixed(1)} ${CC.toFixed(1)}`}/>}
+    </svg>{coin}
+  </div>;
+}
+function EarnedBadges({user}){
+  const d=useRivlEarned(user);
+  const[sel,setSel]=useState(null);
+  const plural=(n,u)=>`${n} ${u}${n===1?"":"s"}`;
+  const firstDate=d&&d.first_run?new Date(d.first_run).toLocaleDateString("en-GB",{day:"numeric",month:"short"}):"";
+  const cell=e=>{
+    const st=earnedState(e,d),col=BADGE_COL[4-st.lvl];
+    const sub=e.one?(st.lvl?<><span style={{color:BADGE_COL[3],fontWeight:700}}>Earned</span> <span style={{color:C.mutedL}}>·</span> {firstDate}</>:"Time a stage")
+      :st.lvl?<><span style={{color:col,fontWeight:700}}>{TIER_NAMES[st.lvl]}</span> <span style={{color:C.mutedL}}>·</span> {st.cur}</>
+      :`${st.cur} / ${plural(e.steps[0],e.unit)}`;
+    return <button key={e.id} className="tap" onClick={()=>setSel(e.id)} style={{background:"none",border:"none",padding:0,display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center"}}>
+      <div style={{height:88,display:"flex",alignItems:"center",justifyContent:"center"}}><EarnedCoin size={88} e={e} st={st}/></div>
+      <div style={{fontSize:12,fontWeight:700,color:st.lvl?C.text:C.muted,marginTop:6,lineHeight:1.2}}>{e.name}</div>
+      <div style={{fontSize:11,color:C.muted,marginTop:2}}>{sub}</div>
+    </button>;
+  };
+  const sheet=()=>{
+    const e=EARNED_DEFS.find(x=>x.id===sel),st=earnedState(e,d),col=BADGE_COL[4-st.lvl];
+    const head=e.one?(st.lvl?<span style={{color:BADGE_COL[3]}}>Earned {firstDate}</span>:<span style={{color:C.muted}}>Not yet earned</span>)
+      :st.lvl?<span style={{color:col}}>{TIER_NAMES[st.lvl]} · {plural(st.cur,e.unit)}</span>
+      :<span style={{color:C.muted}}>Locked · {st.cur} / {plural(e.steps[0],e.unit)}</span>;
+    const bar=st.frac!==null&&!e.one?<div style={{margin:"2px 0 14px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:12,fontWeight:600,color:C.muted,marginBottom:6}}><span>{plural(st.cur,e.unit)}</span><span>{st.nxt-st.cur} more for {TIER_NAMES[st.nextIdx+1]}</span></div>
+      <div style={{height:8,borderRadius:4,background:C.surface,overflow:"hidden"}}><div style={{width:Math.round(st.frac*100)+"%",height:"100%",borderRadius:4,background:BADGE_COL[4-(st.lvl+1)]}}/></div>
+    </div>:null;
+    const ladder=e.one?null:e.steps.map((n,i)=>{const done=st.cur>=n;return <div key={n} style={{border:`1px solid ${C.border}`,borderRadius:12,padding:"8px 14px",display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
+      <div style={{width:38,display:"flex",justifyContent:"center"}}>{done?<TitleCoin size={38} rank={3-i} k={e.key}/>:<LockedCoin size={38} k={e.key}/>}</div>
+      <div style={{flex:1,fontSize:14,fontWeight:700,color:done?C.text:C.muted}}>{TIER_NAMES[i+1]}</div>
+      <div style={{fontSize:12,fontWeight:700,color:done?C.green:C.muted}}>{done?"✓ ":""}{plural(n,e.unit)}</div>
+    </div>;});
+    return <>
+      <div style={{position:"fixed",inset:0,background:"rgba(26,26,26,0.4)",zIndex:9000}} onClick={()=>setSel(null)}/>
+      <div className="slide-up" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderRadius:"20px 20px 0 0",zIndex:9001,maxHeight:"88%",overflowY:"auto",padding:"10px 16px 30px"}}>
+        <div style={{width:38,height:4,borderRadius:2,background:C.border,margin:"0 auto 14px"}}/>
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",marginBottom:14}}>
+          <div style={{height:156,display:"flex",alignItems:"center"}}><EarnedCoin size={156} e={e} st={st}/></div>
+          <div style={{fontSize:21,fontWeight:800,color:C.text,marginTop:6}}>{e.name}</div>
+          <div style={{fontSize:12,fontWeight:700,marginTop:3,textTransform:"uppercase",letterSpacing:0.8}}>{head}</div>
+          <div style={{fontSize:13,color:C.muted,marginTop:8,maxWidth:300,lineHeight:1.4}}>{e.desc}</div>
+        </div>
+        {bar}{ladder}
+        <button className="tap" onClick={()=>setSel(null)} style={{width:"100%",background:C.surface,border:"none",borderRadius:12,padding:13,fontSize:14,fontWeight:700,color:C.text,marginTop:6}}>Done</button>
+      </div>
+    </>;
+  };
+  return <div style={{marginBottom:22}}>
+    <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:12}}>Badges · earned</div>
+    {!d?<div style={{padding:20,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>
+    :<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"16px 6px"}}>{EARNED_DEFS.map(cell)}</div>}
+    {sel&&d&&sheet()}
+  </div>;
 }
 
 function GoldCrown({size=20}){
@@ -4977,6 +5075,7 @@ function TrophyCabinetScreen({user,onBack}){
           <TrophyMedal pos={3} count={0}/>
         </div>
         <div style={{marginBottom:22}}><BadgesScreen bare user={user} rows={titleRows}/></div>
+        <EarnedBadges user={user}/>
         <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>Head to head</div>
         {rows===null?<div style={{padding:30,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>:list.length===0?(
           <div style={{textAlign:"center",padding:"32px 20px",color:C.muted}}>
