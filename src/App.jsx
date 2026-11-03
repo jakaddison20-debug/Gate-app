@@ -93,7 +93,8 @@ function makeGateTracker(gate,radius,dir,fitM=GATE_FIT_M,strict=false){
     if(post.length<GATE_AFTER_FIXES&&sinceDet<10&&!leaving)return null;
     const pts=pre.concat(post);
     const reset=()=>{detected=false;closest=null;sinceDet=0;while(buf.length>12)buf.shift();return null;};
-    if(pts.length>=3&&post.length){
+    const approachOk=()=>{if(pts.length>=3)return true;const rc=buf.filter(p=>p.ts>=loc.ts-6000).map(p=>({t:p.ts,s:along(p)}));if(rc.length<4)return false;const mt=rc.reduce((a,p)=>a+p.t,0)/rc.length,ms=rc.reduce((a,p)=>a+p.s,0)/rc.length;let sxy=0,sxx=0;rc.forEach(p=>{sxy+=(p.t-mt)*(p.s-ms);sxx+=(p.t-mt)**2;});return sxx>0&&sxy/sxx>=0.0025;};
+    if(pts.length>=(strict?2:3)&&post.length&&approachOk()){
       const n=pts.length,mt=pts.reduce((a,p)=>a+p.t,0)/n,ms=pts.reduce((a,p)=>a+p.s,0)/n;
       let sxy=0,sxx=0;pts.forEach(p=>{sxy+=(p.t-mt)*(p.s-ms);sxx+=(p.t-mt)**2;});
       const v=sxx?sxy/sxx:0; // metres per ms
