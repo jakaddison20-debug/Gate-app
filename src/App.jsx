@@ -363,6 +363,7 @@ const SegControl=({options,value,onChange})=>(
 );
 
 function SettingsScreen({settings,onSave,onBack,onHowTo}){
+const [showPw,setShowPw]=useState(false);
 const [s,setS]=useState(settings);
 const [uploading,setUploading]=useState(false);
 useEffect(()=>{setS(settings);},[settings]);
@@ -472,6 +473,10 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
 
         {/* Danger zone */}
         <Section title="Account">
+          <button className="tap" onClick={()=>setShowPw(true)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"14px 16px",background:"none",border:"none",borderBottom:`1px solid ${C.border}`,textAlign:"left"}}>
+            <div style={{flex:1}}><div style={{fontSize:14,fontWeight:500,color:C.text}}>Change password</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>Set a new password for your account</div></div>
+            <Icon.ChevronRight/>
+          </button>
           <Row label="Export my data" sub="Download all your times and stages" right={<Icon.ChevronRight/>}/>
           <Row label="Clear all times" sub="Remove all your stage times" right={<Icon.ChevronRight/>}/>
           <Row label="Delete account" sub="Permanently delete everything" noBorder right={
@@ -481,6 +486,7 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
 
         <div style={{textAlign:"center",padding:"8px 0 32px"}}>
           <div style={{fontSize:12,color:C.muted}}>Rivl v1.0.0 · Made for mountain bikers</div>
+        {showPw&&<NewPasswordScreen onDone={()=>setShowPw(false)} onCancel={()=>setShowPw(false)}/>}
         </div>
       </div>
     </div>
@@ -7342,6 +7348,45 @@ function LobbySheet({onClose}){
     </div>
   );
 }
+function NewPasswordScreen({onDone,onCancel,recovery}){
+  const [pw,setPw]=useState("");
+  const [pw2,setPw2]=useState("");
+  const [error,setError]=useState("");
+  const [loading,setLoading]=useState(false);
+  const [done,setDone]=useState(false);
+  const save=async()=>{
+    if(pw.length<6){setError("Use at least 6 characters.");return;}
+    if(pw!==pw2){setError("Passwords don't match.");return;}
+    setLoading(true);setError("");
+    const{error}=await supabase.auth.updateUser({password:pw});
+    setLoading(false);
+    if(error){setError(error.message);return;}
+    setDone(true);
+  };
+  const inp={width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"13px 14px",fontSize:15,marginBottom:12,background:C.surface,boxSizing:"border-box"};
+  return(
+    <div style={{position:"fixed",inset:0,background:"#fff",zIndex:9500,display:"flex",flexDirection:"column"}}>
+      <div style={{padding:"72px 24px 28px",textAlign:"center"}}>
+        <svg width="30" height="30" viewBox="0 0 24 24" style={{margin:"0 auto 14px"}}><polygon points="13,2 3,14 12,14 11,22 21,10 12,10" fill={C.blue}/></svg>
+        <div style={{fontSize:24,fontWeight:800,color:C.text,letterSpacing:-0.5,marginBottom:4}}>{done?"Password updated":(recovery?"Set a new password":"Change password")}</div>
+        <div style={{fontSize:13,color:C.muted}}>{done?"You can use it next time you log in.":"Choose something you'll remember."}</div>
+      </div>
+      <div style={{flex:1,padding:"8px 24px 24px",overflowY:"auto"}}>
+        {done?(
+          <button className="tap" onClick={onDone} style={{width:"100%",background:C.blue,border:"none",borderRadius:12,padding:16,color:"#fff",fontSize:15,fontWeight:700}}>Done</button>
+        ):(
+          <>
+            <input value={pw} onChange={e=>setPw(e.target.value)} placeholder="New password" type="password" style={inp}/>
+            <input value={pw2} onChange={e=>setPw2(e.target.value)} placeholder="Confirm new password" type="password" style={{...inp,marginBottom:20}}/>
+            {error&&<div style={{fontSize:13,color:C.red,marginBottom:16,textAlign:"center"}}>{error}</div>}
+            <button className="tap" onClick={save} style={{width:"100%",background:loading?C.surface:C.blue,border:"none",borderRadius:12,padding:16,color:loading?C.muted:"#fff",fontSize:15,fontWeight:700}}>{loading?"...":"Save password"}</button>
+            {onCancel&&<div style={{textAlign:"center",marginTop:16}}><button className="tap" onClick={onCancel} style={{background:"none",border:"none",padding:0,fontSize:14,fontWeight:600,color:C.muted}}>Cancel</button></div>}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 function AuthScreen({onAuth,invited}){
   const [mode,setMode]=useState("login");
   const [email,setEmail]=useState("");
@@ -7353,7 +7398,7 @@ function AuthScreen({onAuth,invited}){
 
   const submit=async()=>{
     setLoading(true);setError("");
-    if(mode==="login"){
+    if(mode==="reset"){const{error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin});if(error)setError(error.message);else setError("Check your email for a reset link.");}else if(mode==="login"){
       const{error}=await supabase.auth.signInWithPassword({email,password});
       if(error)setError(error.message);
     } else {
@@ -7378,12 +7423,18 @@ function AuthScreen({onAuth,invited}){
             <div style={{fontSize:13,color:C.text,lineHeight:1.35,fontWeight:600}}>You've been invited to join a team. {mode==="login"?"Log in":"Sign up"} and you'll be asked to join.</div>
           </div>
         )}
-        <div style={{display:"flex",background:C.surface,borderRadius:10,padding:3,marginBottom:22}}>
+        {mode==="reset"&&<div style={{marginBottom:22}}>
+          <div style={{fontSize:20,fontWeight:800,color:C.text,marginBottom:6}}>Reset password</div>
+          <div style={{fontSize:13,color:C.muted,lineHeight:1.5}}>Enter your email and we'll send you a link to set a new password.</div>
+        </div>}
+        <div style={{display:mode==="reset"?"none":"flex",background:C.surface,borderRadius:10,padding:3,marginBottom:22}}>
           {["login","signup"].map(m=><button key={m} onClick={()=>setMode(m)} style={{flex:1,padding:"9px",borderRadius:8,background:mode===m?"#fff":"none",border:"none",color:mode===m?C.text:C.muted,fontSize:14,fontWeight:mode===m?600:400,boxShadow:mode===m?"0 1px 4px rgba(0,0,0,0.08)":"none"}}>{m==="login"?"Log In":"Sign Up"}</button>)}
         </div>
         {mode==="signup"&&<input value={name} onChange={e=>setName(e.target.value)} placeholder="Your name" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"13px 14px",fontSize:15,marginBottom:12,background:C.surface,boxSizing:"border-box"}}/>}
         <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email" type="email" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"13px 14px",fontSize:15,marginBottom:12,background:C.surface,boxSizing:"border-box"}}/>
-        <input value={password} onChange={e=>setPassword(e.target.value)} placeholder="Password" type="password" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"13px 14px",fontSize:15,marginBottom:20,background:C.surface,boxSizing:"border-box"}}/>
+        {mode!=="reset"&&<input value={password} onChange={e=>setPassword(e.target.value)} placeholder="Password" type="password" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"13px 14px",fontSize:15,marginBottom:mode==="login"?10:20,background:C.surface,boxSizing:"border-box"}}/>}
+        {mode==="login"&&<div style={{textAlign:"right",marginBottom:20}}><button className="tap" onClick={()=>{setMode("reset");setError("");}} style={{background:"none",border:"none",padding:0,fontSize:13,fontWeight:600,color:C.blue}}>Forgot password?</button></div>}
+        {mode==="reset"&&<div style={{height:8}}/>}
         {mode==="signup"&&(
           <label style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:20,cursor:"pointer"}}>
             <input type="checkbox" checked={agreed} onChange={e=>setAgreed(e.target.checked)} style={{marginTop:2,width:16,height:16,accentColor:C.blue,flexShrink:0}}/>
@@ -7392,8 +7443,9 @@ function AuthScreen({onAuth,invited}){
         )}
         {error&&<div style={{fontSize:13,color:error.includes("Check")?C.green:C.red,marginBottom:16,textAlign:"center"}}>{error}</div>}
         <button className="tap" onClick={submit} disabled={mode==="signup"&&!agreed} style={{width:"100%",background:loading?C.surface:(mode==="signup"&&!agreed)?C.surface:C.blue,border:"none",borderRadius:12,padding:16,color:loading||(mode==="signup"&&!agreed)?C.muted:"#fff",fontSize:15,fontWeight:700}}>
-          {loading?"...":(mode==="login"?"Log In":"Create Account")}
+          {loading?"...":(mode==="reset"?"Send reset link":mode==="login"?"Log In":"Create Account")}
         </button>
+        {mode==="reset"&&<div style={{textAlign:"center",marginTop:16}}><button className="tap" onClick={()=>{setMode("login");setError("");}} style={{background:"none",border:"none",padding:0,fontSize:14,fontWeight:600,color:C.muted}}>Back to log in</button></div>}
         <div style={{textAlign:"center",fontSize:12,color:C.muted,marginTop:20,lineHeight:1.6}}>By continuing you agree that mountain biking carries inherent risk and you're responsible for riding within your ability.</div>
       </div>
     </div>
@@ -7865,6 +7917,7 @@ export default function App(){
   const [showFollow,setShowFollow]=useState(false);
   const [showTrophies,setShowTrophies]=useState(false);
   const [followerCount,setFollowerCount]=useState(null);
+  const [recovering,setRecovering]=useState(false);
   const [followingCount,setFollowingCount]=useState(null);
   const [followTab,setFollowTab]=useState("Followers");
   const [h2hList,setH2hList]=useState([]);
@@ -8011,7 +8064,7 @@ useEffect(()=>{
   useEffect(()=>{const el=containerRef.current;if(!el)return;const ro=new ResizeObserver(e=>setMapSize({w:e[0].contentRect.width,h:e[0].contentRect.height}));ro.observe(el);setMapSize({w:el.clientWidth,h:el.clientHeight});return()=>ro.disconnect();},[]);
   useEffect(()=>{
   supabase.auth.getSession().then(({data:{session}})=>setUser(session?.user??null));
-  const {data:{subscription}}=supabase.auth.onAuthStateChange((_,session)=>setUser(session?.user??null));
+  const {data:{subscription}}=supabase.auth.onAuthStateChange((ev,session)=>{if(ev==="PASSWORD_RECOVERY")setRecovering(true);setUser(session?.user??null);});
   return()=>subscription.unsubscribe();
 },[]);
 useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.eq.public,created_by.eq.${user.id}`).then(async({data})=>{if(!data)return;const{data:times}=await supabase.from('stage_times').select('stage_id,time_ms').eq('user_id',user.id);const bests={};if(times)times.forEach(t=>{if(!bests[t.stage_id]||t.time_ms<bests[t.stage_id])bests[t.stage_id]=t.time_ms;});setStages(prev=>{const prevCrById={};prev.forEach(s=>{prevCrById[s.id]=s.cr;});return data.map(s=>({id:s.id,name:s.name,note:s.note||'',privacy:s.privacy,difficulty:s.difficulty||'blue',built_by:s.built_by||null,created_by:s.created_by,start:{lat:s.start_lat,lng:s.start_lng},finish:{lat:s.finish_lat,lng:s.finish_lng},line_coords:s.line_coords||null,time:bests[s.id]||null,cr:prevCrById[s.id]||false}));});});},[user,refreshTick]);
@@ -8274,6 +8327,7 @@ const weekStats=weekStatsByType.all;
   const mapSearchResults=mapSearchQuery.trim()?stages.filter(s=>s.name.toLowerCase().includes(mapSearchQuery.trim().toLowerCase())).slice(0,6):[];
 
     const TABS=[{id:"home",label:"Home",Ic:Icon.Home},{id:"map",label:"Map",Ic:Icon.Map},{id:"stages",label:"Stages",Ic:Icon.Lightning},{id:"profile",label:"Profile",Ic:Icon.User}];
+    if(recovering&&user)return <NewPasswordScreen recovery onDone={()=>setRecovering(false)}/>;
     if(!user)return(
     <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",overflow:"hidden"}}>
       <style>{STYLES}</style>
