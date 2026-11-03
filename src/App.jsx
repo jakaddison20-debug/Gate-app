@@ -363,6 +363,7 @@ const SegControl=({options,value,onChange})=>(
 );
 
 function SettingsScreen({settings,onSave,onBack,onHowTo}){
+const [showPw,setShowPw]=useState(false);
 const [s,setS]=useState(settings);
 const [uploading,setUploading]=useState(false);
 useEffect(()=>{setS(settings);},[settings]);
@@ -472,6 +473,10 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
 
         {/* Danger zone */}
         <Section title="Account">
+          <button className="tap" onClick={()=>setShowPw(true)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"14px 16px",background:"none",border:"none",borderBottom:`1px solid ${C.border}`,textAlign:"left"}}>
+            <div style={{flex:1}}><div style={{fontSize:14,fontWeight:500,color:C.text}}>Change password</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>Set a new password for your account</div></div>
+            <Icon.ChevronRight/>
+          </button>
           <Row label="Export my data" sub="Download all your times and stages" right={<Icon.ChevronRight/>}/>
           <Row label="Clear all times" sub="Remove all your stage times" right={<Icon.ChevronRight/>}/>
           <Row label="Delete account" sub="Permanently delete everything" noBorder right={
@@ -481,6 +486,7 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
 
         <div style={{textAlign:"center",padding:"8px 0 32px"}}>
           <div style={{fontSize:12,color:C.muted}}>Rivl v1.0.0 · Made for mountain bikers</div>
+        {showPw&&<NewPasswordScreen onDone={()=>setShowPw(false)} onCancel={()=>setShowPw(false)}/>}
         </div>
       </div>
     </div>
