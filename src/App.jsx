@@ -1692,6 +1692,7 @@ function LbSeg({options,value,onChange,full}){
 }
 function StageLeaderboardCard({lb,rank,user,stage,period="all",onPeriod,cat="all",onCat}){
   const [open,setOpen]=useState(false);
+  const{rows:tRows}=useRivlTitles(user);
   const r=22,circ=2*Math.PI*r;
   const filtered=period!=="all"||cat!=="all";
   const frac=rank.myPos&&rank.total?Math.max(0,Math.min(1,(rank.total-rank.myPos+1)/rank.total)):0;
@@ -1730,7 +1731,7 @@ function StageLeaderboardCard({lb,rank,user,stage,period="all",onPeriod,cat="all
               <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"11px 12px",background:isMe?C.orangeL:"white",borderRadius:10,marginBottom:6,border:`1px solid ${isMe?C.orange:C.border}`}}>
                 <div style={{width:34}}><PositionBadge pos={entry.pos} size={30}/></div>
                 <Avatar size={32} url={entry.avatarUrl}/>
-                <div style={{flex:1}}><div style={{fontSize:13,fontWeight:isMe?700:500,color:C.text}}>{isMe?"You":entry.name}</div><div style={{fontSize:11,color:C.muted}}>{entry.date}{mph!==null?` · ${mph.toFixed(1)} mph`:""}</div></div>
+                <div style={{flex:1}}><div style={{fontSize:13,fontWeight:isMe?700:500,color:C.text,display:"flex",alignItems:"center"}}>{isMe?"You":entry.name}{titlesOf(tRows,entry.user_id).map(t=><span key={t.title} style={{display:"inline-flex",marginLeft:6}}><TitleCoin size={24} rank={t.rank} k={TITLE_DEFS[t.title].key}/></span>)}</div><div style={{fontSize:11,color:C.muted}}>{entry.date}{mph!==null?` · ${mph.toFixed(1)} mph`:""}</div></div>
                 <div style={{textAlign:"right"}}>
                   <div style={{fontSize:15,fontWeight:700,color:isMe?C.orange:C.text}}>{formatTime(entry.time)}</div>
                   {gap>0&&<div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:3,marginTop:2}}><svg width="7" height="7" viewBox="0 0 10 10"><path d="M1 1 L9 1 L5 9 Z" fill={C.muted}/></svg><span style={{fontSize:10,fontWeight:700,color:C.muted}}>{formatTime(gap)}</span></div>}
@@ -2292,6 +2293,7 @@ function DifficultyPicker({value,onChange}){
   );
 }
 let TC_ID=0;
+let TITLE_CACHE={rows:null,ts:0};
 const TC_TIER={3:{l:"#FFF0A0",m:"#E3B93C",d:"#946806",g:"245,166,35"},2:{l:"#FAFBFC",m:"#BCC2C8",d:"#6B7279",g:"159,180,214"},1:{l:"#F6D5B0",m:"#C48E5E",d:"#7A4B26",g:"224,123,57"}};
 const TITLE_DEFS={fast:{name:"Fastest Rider",key:"crown",unit:"record"},active:{name:"Most Active",key:"flame",unit:"run"},long:{name:"Longest Stage",key:"ruler"}};
 function TitleCoin({size=64,rank=1,k="crown"}){
@@ -2323,14 +2325,14 @@ function TitleCoin({size=64,rank=1,k="crown"}){
   </svg>;
 }
 function useRivlTitles(user){
-  const[rows,setRows]=useState(null);
-  const load=useCallback(()=>{if(!user)return;supabase.rpc("rivl_titles").then(({data,error})=>{if(!error&&data)setRows(data);});},[user]);
+  const[rows,setRows]=useState(TITLE_CACHE.rows);
+  const load=useCallback((force)=>{if(!user)return;if(force!==true&&TITLE_CACHE.rows&&Date.now()-TITLE_CACHE.ts<60000){setRows(TITLE_CACHE.rows);return;}supabase.rpc("rivl_titles").then(({data,error})=>{if(!error&&data){TITLE_CACHE={rows:data,ts:Date.now()};setRows(data);}});},[user]);
   useEffect(()=>{load();},[load]);
-  return{rows,reload:load};
+  return{rows,reload:()=>load(true)};
 }
 function titlesOf(rows,uid){
   if(!rows||!uid)return[];
-  return rows.filter(r=>r.user_id===uid&&(r.title==="long"?r.rank===1:r.rank<=3)).map(r=>({title:r.title,rank:r.rank,val:Number(r.val)}));
+  return rows.filter(r=>r.user_id===uid&&(r.title==="long"?r.rank===1:r.rank<=3)).map(r=>({title:r.title,rank:r.rank,val:Number(r.val)})).sort((a,b)=>["fast","active","long"].indexOf(a.title)-["fast","active","long"].indexOf(b.title));
 }
 
 const BADGE_COL={1:"#C9A227",2:"#9AA0A6",3:"#AD8158"};
