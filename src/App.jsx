@@ -5861,7 +5861,7 @@ function ProfileTrophyCard({counts,onOpen,titles}){
   );
 }
 
-function ProfileScreen({trophyCounts,streak,stages,settings,courseResults,pastWeeks,weekByType,onSettingsPress,onGoToStages,onGoToCourses,onOpenProgress,onOpenBikeSetup,followerCount,onOpenFollowers,onOpenTrophies,titles}){
+function ProfileScreen({trophyCounts,streak,stages,settings,courseResults,pastWeeks,weekByType,onSettingsPress,onGoToStages,onGoToCourses,onOpenProgress,onOpenBikeSetup,followerCount,onOpenFollowers,onOpenTrophies,titles,followingCount}){
   const [selectedWeek,setSelectedWeek]=useState(pastWeeks.length-1);
   const stagesRidden=stages.filter(s=>s.time).length;
   const coursesComplete=courseResults.length;
@@ -5876,17 +5876,17 @@ function ProfileScreen({trophyCounts,streak,stages,settings,courseResults,pastWe
   const stats=[{label:"Stages",value:String(w.stages)},{label:"Runs",value:String(w.runs)},{label:"Time",value:fmtMins(w.mins)},{label:"New PBs",value:String(w.pbs),green:w.pbs>0}];
   return(
     <div>
-      <div style={{background:"#fff",padding:"16px 20px 18px",borderBottom:`1px solid ${C.border}`}}>
-        <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:20}}>
-          <div style={{width:60,height:60,borderRadius:"50%",background:C.surface,border:`2px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>{settings.avatarUrl?<img src={settings.avatarUrl} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<Icon.User size={28} color={C.muted}/>}</div>
-          <div style={{flex:1}}><div style={{fontSize:20,fontWeight:800,color:C.text}}>{settings.displayName}</div></div>
+      <div style={{background:"#fff",padding:"30px 16px 26px",borderBottom:`1px solid ${C.border}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:18,marginBottom:26}}>
+          <div style={{width:76,height:76,borderRadius:"50%",background:C.surface,border:`2px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0}}>{settings.avatarUrl?<img src={settings.avatarUrl} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<Icon.User size={32} color={C.muted}/>}</div>
+          <div style={{flex:1}}><div style={{fontSize:24,fontWeight:800,color:C.text}}>{settings.displayName}</div></div>
           <button className="tap" onClick={onSettingsPress} style={{width:36,height:36,borderRadius:9,background:C.surface,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center"}}><Icon.Settings size={18} color={C.muted}/></button>
         </div>
-        <div style={{display:"flex",gap:8}}>
-          {[{label:"Followers",value:followerCount==null?"—":String(followerCount),onClick:onOpenFollowers},{label:"Stages Ridden",value:String(stagesRidden)},{label:"Courses Complete",value:String(coursesComplete)}].map(s=>(
-            <button key={s.label} className="tap" onClick={s.onClick||undefined} style={{flex:1,minWidth:0,background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"5px 4px",textAlign:"center",lineHeight:1.15}}>
-              <div style={{fontSize:14,color:C.text,fontWeight:700}}>{s.value}</div>
-              <div style={{fontSize:10,color:C.muted,fontWeight:500,whiteSpace:"nowrap"}}>{s.label}</div>
+        <div style={{display:"flex",gap:40}}>
+          {[{label:"Followers",value:followerCount==null?"—":String(followerCount),onClick:onOpenFollowers},{label:"Following",value:followingCount==null?"—":String(followingCount),onClick:onOpenFollowers}].map(s=>(
+            <button key={s.label} className="tap" onClick={s.onClick||undefined} style={{background:"none",border:"none",padding:0,textAlign:"left"}}>
+              <div style={{fontSize:20,fontWeight:800,color:C.text,lineHeight:1.1}}>{s.value}</div>
+              <div style={{fontSize:11,color:C.muted,marginTop:2}}>{s.label}</div>
             </button>
           ))}
         </div>
