@@ -1637,7 +1637,7 @@ function ImprovementScreen({rows}){
       <div style={{padding:"24px 16px 20px",textAlign:"center",borderBottom:`1px solid ${C.border}`}}>
         <div style={{margin:"0 auto",width:132}}>
           <InsightRing size={132} r={56} stroke={10} pct={Math.min(1,Math.abs(overall)/3)} color={oColor}>
-            <div><div style={{fontSize:28,fontWeight:800,lineHeight:1,color:C.text}}>{fmtPct(overall)}</div><div style={{fontSize:10,fontWeight:600,color:C.muted,marginTop:6,letterSpacing:0.6}}>{ex.curShort.toUpperCase()} VS {ex.prevShort.toUpperCase()}</div></div>
+            <div><div style={{fontSize:28,fontWeight:800,lineHeight:1,color:C.text}}>{fmtPct(overall)}</div><div style={{fontSize:10,fontWeight:600,color:C.muted,marginTop:6,letterSpacing:0.6}}>{ex.curShort.toUpperCase()}<br/>VS {ex.prevShort.toUpperCase()}</div></div>
           </InsightRing>
         </div>
         <div style={{fontSize:20,fontWeight:800,color:oColor,marginTop:14}}>{up?'Getting faster':'Slowing down'}</div>
@@ -1701,7 +1701,7 @@ function StageLeaderboardCard({lb,rank,user,stage,period="all",onPeriod,cat="all
   const{rows:tRows}=useRivlTitles(user);
   const r=22,circ=2*Math.PI*r;
   const filtered=period!=="all"||cat!=="all";
-  const frac=rank.myPos&&rank.total?Math.max(0,Math.min(1,(rank.total-rank.myPos+1)/rank.total)):0;
+  const frac=rank.myPos&&rank.myPos<=3?1:rank.myPos&&rank.total?Math.max(0,Math.min(1,(rank.total-rank.myPos+1)/rank.total)):0;
   const lead=lb[0];
   const leadMe=!!(lead&&user&&lead.user_id===user.id);
   const sub=lead?`${leadMe?"You lead":lead.name+" leads"} · ${formatTime(lead.time)}`:(filtered?"No times for this filter":"No times yet");
@@ -1712,7 +1712,7 @@ function StageLeaderboardCard({lb,rank,user,stage,period="all",onPeriod,cat="all
         <div style={{position:"relative",width:56,height:56,flexShrink:0}}>
           <svg width="56" height="56" viewBox="0 0 56 56" style={{transform:"rotate(-90deg)"}}>
             <circle cx="28" cy="28" r={r} fill="none" stroke={C.border} strokeWidth="6"/>
-            <circle cx="28" cy="28" r={r} fill="none" stroke={frac>0?C.orange:"transparent"} strokeWidth="6" strokeLinecap="round" strokeDasharray={`${(frac*circ).toFixed(1)} ${circ.toFixed(1)}`}/>
+            <circle cx="28" cy="28" r={r} fill="none" stroke={frac>0?(rank.myPos===1?"#C9A227":rank.myPos===2?"#9AA0A6":rank.myPos===3?"#AD8158":C.text):"transparent"} strokeWidth="6" strokeLinecap="round" strokeDasharray={`${(frac*circ).toFixed(1)} ${circ.toFixed(1)}`}/>
           </svg>
           <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:rank.myPos>=100?12:17,fontWeight:800,letterSpacing:-0.5,color:C.text}}>{centre}</div>
         </div>
@@ -1737,7 +1737,7 @@ function StageLeaderboardCard({lb,rank,user,stage,period="all",onPeriod,cat="all
               <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"11px 12px",background:isMe?C.orangeL:"white",borderRadius:10,marginBottom:6,border:`1px solid ${isMe?C.orange:C.border}`}}>
                 <div style={{width:34}}><PositionBadge pos={entry.pos} size={30}/></div>
                 <Avatar size={32} url={entry.avatarUrl}/>
-                <div style={{flex:1}}><div style={{fontSize:13,fontWeight:isMe?700:500,color:C.text,display:"flex",alignItems:"center"}}>{isMe?"You":entry.name}{titlesOf(tRows,entry.user_id).map(t=><span key={t.title} style={{display:"inline-flex",marginLeft:6}}><TitleCoin size={24} rank={t.rank} k={TITLE_DEFS[t.title].key}/></span>)}</div><div style={{fontSize:11,color:C.muted}}>{entry.date}{mph!==null?` · ${mph.toFixed(1)} mph`:""}</div></div>
+                <div style={{flex:1}}><div style={{fontSize:13,fontWeight:isMe?700:500,color:C.text,display:"flex",alignItems:"center"}}>{isMe?"You":entry.name}{titlesOf(tRows,entry.user_id).filter(t=>t.title==="active").map(t=><span key={t.title} style={{display:"inline-flex",marginLeft:6}}><TitleCoin size={24} rank={t.rank} k={TITLE_DEFS[t.title].key}/></span>)}</div><div style={{fontSize:11,color:C.muted}}>{entry.date}{mph!==null?` · ${mph.toFixed(1)} mph`:""}</div></div>
                 <div style={{textAlign:"right"}}>
                   <div style={{fontSize:15,fontWeight:700,color:isMe?C.orange:C.text}}>{formatTime(entry.time)}</div>
                   {gap>0&&<div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:3,marginTop:2}}><svg width="7" height="7" viewBox="0 0 10 10"><path d="M1 1 L9 1 L5 9 Z" fill={C.muted}/></svg><span style={{fontSize:10,fontWeight:700,color:C.muted}}>{formatTime(gap)}</span></div>}
