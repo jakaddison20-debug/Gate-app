@@ -1701,7 +1701,7 @@ function StageLeaderboardCard({lb,rank,user,stage,period="all",onPeriod,cat="all
   const{rows:tRows}=useRivlTitles(user);
   const r=22,circ=2*Math.PI*r;
   const filtered=period!=="all"||cat!=="all";
-  const frac=rank.myPos&&rank.total?Math.max(0,Math.min(1,(rank.total-rank.myPos+1)/rank.total)):0;
+  const frac=rank.myPos&&rank.myPos<=3?1:rank.myPos&&rank.total?Math.max(0,Math.min(1,(rank.total-rank.myPos+1)/rank.total)):0;
   const lead=lb[0];
   const leadMe=!!(lead&&user&&lead.user_id===user.id);
   const sub=lead?`${leadMe?"You lead":lead.name+" leads"} · ${formatTime(lead.time)}`:(filtered?"No times for this filter":"No times yet");
@@ -1712,7 +1712,7 @@ function StageLeaderboardCard({lb,rank,user,stage,period="all",onPeriod,cat="all
         <div style={{position:"relative",width:56,height:56,flexShrink:0}}>
           <svg width="56" height="56" viewBox="0 0 56 56" style={{transform:"rotate(-90deg)"}}>
             <circle cx="28" cy="28" r={r} fill="none" stroke={C.border} strokeWidth="6"/>
-            <circle cx="28" cy="28" r={r} fill="none" stroke={frac>0?C.orange:"transparent"} strokeWidth="6" strokeLinecap="round" strokeDasharray={`${(frac*circ).toFixed(1)} ${circ.toFixed(1)}`}/>
+            <circle cx="28" cy="28" r={r} fill="none" stroke={frac>0?(rank.myPos===1?"#C9A227":rank.myPos===2?"#9AA0A6":rank.myPos===3?"#AD8158":C.text):"transparent"} strokeWidth="6" strokeLinecap="round" strokeDasharray={`${(frac*circ).toFixed(1)} ${circ.toFixed(1)}`}/>
           </svg>
           <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:rank.myPos>=100?12:17,fontWeight:800,letterSpacing:-0.5,color:C.text}}>{centre}</div>
         </div>
