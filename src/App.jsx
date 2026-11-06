@@ -4797,9 +4797,9 @@ function ChallengeIcon({type,count,bg,size=44}){
   );
 }
 
-function H2hScreen({user,onBack,onActivity,units,heightUnit}){
+function H2hScreen({user,onBack,onActivity,units,heightUnit,startId}){
   const [list,setList]=useState(null);
-  const [view,setView]=useState({name:"home"});
+  const [view,setView]=useState(startId?{name:"detail",id:startId}:{name:"home"});
   const [meAvatar,setMeAvatar]=useState(null);
   const [sums,setSums]=useState({});
   const [mates,setMates]=useState(null);
@@ -5107,7 +5107,64 @@ function H2hScreen({user,onBack,onActivity,units,heightUnit}){
 }
 
 // Strip for the Race complete screen
-function H2hSaveStrip({user}){
+// Feed strip: your live head to heads, who is leading, tap to open
+function H2hLiveStrip({user,list,onOpen}){
+  const act=(list||[]).filter(c=>c.status==="active"&&new Date(c.ends_at)>new Date());
+  const key=act.map(c=>c.id).join(",");
+  const [sums,setSums]=useState({});
+  useEffect(()=>{
+    if(!key)return;
+    let off=false;
+    const go=()=>act.forEach(c=>supabase.rpc("get_challenge_runs",{p_id:c.id}).then(({data,error})=>{if(!off&&!error&&Array.isArray(data))setSums(s=>({...s,[c.id]:h2hSummarise(data,user.id)}));}));
+    go();
+    const t=setInterval(go,30000);
+    return()=>{off=true;clearInterval(t);};
+  },[key,user.id]);
+  if(!act.length)return null;
+  return(
+    <div style={{padding:"0 16px"}}>
+      <style>{"@keyframes h2hpulse{0%{box-shadow:0 0 0 0 rgba(21,128,61,.5)}70%{box-shadow:0 0 0 6px rgba(21,128,61,0)}100%{box-shadow:0 0 0 0 rgba(21,128,61,0)}}"}</style>
+      {act.map(c=>{
+        const s=sums[c.id];
+        let txt="",col=C.muted;
+        if(s){
+          if(s.both>0){if(s.winner==="me"){txt="Leading";col=C.green;}else if(s.winner==="them"){txt="Behind";col=C.red;}else txt="Level";}
+          else txt=s.stages.length?"In progress":"No runs yet";
+        }
+        return(
+          <button key={c.id} className="tap" onClick={()=>onOpen(c.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"10px 12px",marginBottom:12,background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,textAlign:"left"}}>
+            <div style={{width:36,height:36,borderRadius:10,background:"#FFFBEB",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#92400E" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="16" r="3"/><path d="M10.5 10.5l3 3"/></svg>
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,fontSize:14,fontWeight:700,color:C.text}}><span style={{width:7,height:7,borderRadius:"50%",background:C.green,animation:"h2hpulse 1.8s infinite",flexShrink:0}}/>You vs {c.other_name||"Rider"}</div>
+              <div style={{fontSize:12,color:C.muted,marginTop:2}}>{h2hLeft(c.ends_at).replace("Ends in ","")} left</div>
+            </div>
+            {txt&&<span style={{fontSize:13,fontWeight:700,color:col}}>{txt}</span>}
+            <Icon.ChevronRight size={16} color={C.mutedL}/>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// Shown on the course results screen: says whether the runs counted in your head to head
+function H2hSaveStrip({live,count}){
+  if(!live||live.length===0)return null;
+  const name=live.length===1?(live[0].other_name||"your mate"):`${live.length} mates`;
+  const on=count>0;
+  return(
+    <div style={{padding:"0 20px 4px"}}>
+      <div style={{background:on?"#EFF6FF":C.surface,border:`1px solid ${on?"#BFD3F8":C.border}`,borderRadius:12,padding:"12px 14px"}}>
+        <div style={{fontSize:10,fontWeight:800,color:on?C.blue:C.muted,letterSpacing:0.8}}>HEAD TO HEAD</div>
+        <div style={{fontSize:14,fontWeight:600,color:C.text,marginTop:2}}>{on?`${count} run${count===1?"":"s"} added to your head to head with ${name}`:`No runs added to your head to head with ${name}`}</div>
+      </div>
+    </div>
+  );
+}
+
+function H2hSaveStripOld({user}){
   const [name,setName]=useState(null);
   useEffect(()=>{
     if(!user)return;
@@ -6942,7 +6999,7 @@ function RaceStageComplete({base,splits,courseStages,stageIndex,totalStages,isLa
 }
 
 // Race complete (Race mode)
-function RaceComplete({base,course,splits,courseStages,totalStages,onSave,user}){
+function RaceComplete({base,course,splits,courseStages,totalStages,onSave,user,liveChallenges,addedRuns}){
   const total=splits.reduce((a,s)=>a+s.time,0);
   const prevTotal=totalStages>1?(base.courseBest===undefined?null:base.courseBest):(base.stageBest[splits[0].stageId]??null);
   const delta=prevTotal===null?null:total-prevTotal;
@@ -6968,7 +7025,7 @@ function RaceComplete({base,course,splits,courseStages,totalStages,onSave,user})
         <div style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:12}}>Stage Breakdown</div>
         {splits.map((s,i)=><RaceRow key={i} i={i} name={s.name} time={s.time} out={stageOutcome(base,s.stageId,s.time)}/>)}
       </div>
-      <H2hSaveStrip user={user}/>
+      <H2hSaveStrip live={liveChallenges} count={addedRuns}/>
       <RaceNextBtn onClick={onSave}>Save Results</RaceNextBtn>
     </div>
   );
@@ -7019,7 +7076,7 @@ function RaceScreen({course,stages,user,onFinish,onActivity,liveChallenges}){
   const countRef=useRef(null);
   const gpsRef=useRef(null);
   const startTimeRef=useRef(0);
-  const [addedIds,setAddedIds]=useState([]);const addedRef=useRef([]);
+  const [addedIds,setAddedIds]=useState([]);const addedRef=useRef([]);const [addedRuns,setAddedRuns]=useState(0);
   const toggleChallenge=id=>{const n=addedRef.current.includes(id)?addedRef.current.filter(x=>x!==id):[...addedRef.current,id];addedRef.current=n;setAddedIds(n);};
   
   const prevGpsRef=useRef(null);
@@ -7118,6 +7175,7 @@ return{...prev,[currentStage.id]:(!current||finalTime<current)?finalTime:current
 setPhase("split");
 if(saveTime&&!isPractice){
   const entry={stage_id:currentStage.id,stage_name:currentStage.name,user_id:user.id,time_ms:finalTime,created_at:new Date(crossTs||Date.now()).toISOString(),bike_id:ACTIVE_BIKE_ID,trace:compactTrace(traceRef.current),challenge_ids:addedRef.current.length?addedRef.current.slice():undefined};
+  if(addedRef.current.length)setAddedRuns(n=>n+1);
   addedRef.current=[];setAddedIds([]);
   saveStageTime(entry).then(()=>onActivity&&onActivity()).catch(err=>{console.log('save failed, storing offline',err);queueOfflineTime(entry);onActivity&&onActivity();});
 }
@@ -7486,7 +7544,7 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
   if(phase==="done"){
     const finalTotal=isPractice?null:isMashup?mashupTotal:splits.reduce((a,s)=>a+s.time,0);
     const saveRaceResults=async()=>{if(totalStages>1){const{error}=await supabase.from('course_results').insert({course_id:course.id,user_id:user.id,total_time_ms:finalTotal,mode:course.mode});if(error){alert("Couldn't save course result: "+error.message);}else{logEvent(user.id,'course_finish',`finished ${course.name} · ${formatTime(finalTotal)}`,null,{course_id:course.id,total_time_ms:finalTotal,stage_count:totalStages}).then(()=>onActivity&&onActivity());}}try{localStorage.removeItem(progressKey);}catch(e){}onFinish();};
-    if(!isPractice&&!isMashup)return <RaceComplete base={raceBase.current} course={course} splits={splits} courseStages={courseStages} totalStages={totalStages} onSave={saveRaceResults} user={user}/>;
+    if(!isPractice&&!isMashup)return <RaceComplete base={raceBase.current} course={course} splits={splits} courseStages={courseStages} totalStages={totalStages} onSave={saveRaceResults} user={user} liveChallenges={liveChallenges} addedRuns={addedRuns}/>;
     const headerBg=isPractice?"#15803D":isMashup?C.blue:C.orange;
     return(
       <div style={{position:"fixed",inset:0,background:"#fff",zIndex:100,display:"flex",flexDirection:"column"}}>
@@ -8230,6 +8288,7 @@ export default function App(){
   const gActiveCount=gRideList.filter(g=>g.my_status==='joined'&&g.status==='active').length;
   const challengeBadge=h2hRequests+gInvites;
   const [h2hFromFeed,setH2hFromFeed]=useState(false);
+  const [h2hStart,setH2hStart]=useState(null);
   useEffect(()=>{if(!user)return;supabase.rpc('follow_counts').then(({data,error})=>{if(!error&&data)setFollowerCount(data.followers);});},[user,refreshTick,showFollow]);
   useEffect(()=>{if(!user)return;supabase.rpc('list_connections').then(({data,error})=>{if(!error&&data)setFollowingCount((data.following||[]).length);});},[user,refreshTick,showFollow]);
     useEffect(()=>{
@@ -8663,7 +8722,7 @@ if(showBikeSetup)return(
   if(showH2h)return(
     <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
       <style>{STYLES}</style>
-      <H2hScreen user={user} units={settings.units} heightUnit={settings.heightUnit} onBack={()=>{setShowH2h(false);if(!h2hFromFeed)setShowGroups(true);}} onActivity={()=>setRefreshTick(t=>t+1)}/>
+      <H2hScreen user={user} units={settings.units} heightUnit={settings.heightUnit} startId={h2hStart} onBack={()=>{setH2hStart(null);setShowH2h(false);if(!h2hFromFeed)setShowGroups(true);}} onActivity={()=>setRefreshTick(t=>t+1)}/>
     </div>
   );
   if(showGroups)return(
@@ -8756,6 +8815,7 @@ if(showBikeSetup)return(
               </div>
             </div>
           )}
+          <H2hLiveStrip user={user} list={h2hList} onOpen={id=>{setH2hStart(id);setH2hFromFeed(true);setShowH2h(true);}}/>
           {feed.length===0?<div style={{textAlign:"center",padding:"48px 20px",color:C.muted,fontSize:13}}>No activity yet — set a record, finish a course, or add a stage to get things started.</div>:feed.map(item=><FeedCard key={item.id} item={item} stage={stages.find(s=>String(s.id)===String(item.stage_id))} onViewStage={goToStage} units={settings.units}/>)}
         </div>
       )}
