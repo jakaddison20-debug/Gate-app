@@ -112,7 +112,7 @@ function formatDist(m){return m>=1000?`${(m/1000).toFixed(1)}km`:`${Math.round(m
 function timeAgo(iso){const s=(Date.now()-new Date(iso).getTime())/1000;if(s<60)return'just now';if(s<3600)return`${Math.floor(s/60)}m ago`;if(s<86400)return`${Math.floor(s/3600)}h ago`;if(s<604800)return`${Math.floor(s/86400)}d ago`;return new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short'});}
 function playBeep(freq=880,duration=150){try{const ctx=new(window.AudioContext||window.webkitAudioContext)();const osc=ctx.createOscillator();const gain=ctx.createGain();osc.connect(gain);gain.connect(ctx.destination);osc.frequency.value=freq;osc.type='sine';gain.gain.setValueAtTime(0.3,ctx.currentTime);gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+duration/1000);osc.start();osc.stop(ctx.currentTime+duration/1000);}catch(e){console.log(e);}}
 function logEvent(userId,type,message,stageId=null,context=null){if(!userId)return Promise.resolve();return supabase.from('app_events').insert({user_id:userId,event_type:type,message,stage_id:stageId?String(stageId):null,context}).then(()=>{}).catch(err=>console.log('logEvent failed:',err?.message||err));}
-async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,bike_id,trace}){
+async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,bike_id,trace,challenge_ids}){
   const overallRes=await supabase.from('stage_times').select('time_ms').eq('stage_id',stage_id).order('time_ms',{ascending:true}).limit(1);
   const ownRes=await supabase.from('stage_times').select('time_ms').eq('stage_id',stage_id).eq('user_id',user_id).order('time_ms',{ascending:true}).limit(1);
   const prevBest=overallRes.data&&overallRes.data[0]?overallRes.data[0].time_ms:null;
@@ -120,6 +120,7 @@ async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,bik
   const payload={stage_id,user_id,time_ms};
   if(created_at)payload.created_at=created_at;
   if(bike_id)payload.bike_id=bike_id;
+  if(challenge_ids&&challenge_ids.length)payload.challenge_ids=challenge_ids;
   const{error}=await supabase.from('stage_times').insert(payload);
   if(error)throw error;
   // Keep the GPS path of your best run on this stage (powers the speed/gap charts). Never fails the save.
@@ -658,136 +659,341 @@ map.current.addImage('stage-pin',ctx.getImageData(0,0,24,24));
 function Avatar({size=40,url=null}){return <div style={{width:size,height:size,borderRadius:"50%",background:C.surface,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden"}}>{url?<img src={url} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<Icon.User size={size*0.5} color={C.muted}/>}</div>;
 }
 
-function SectionBuilderMap({stage,startIdx,endIdx,onTapPoint}){
-  const mapContainer=useRef(null);
-  const map=useRef(null);
-  const onTapPointRef=useRef(onTapPoint);
-  useEffect(()=>{onTapPointRef.current=onTapPoint;},[onTapPoint]);
-  const coords=stage.line_coords&&stage.line_coords.length>1?stage.line_coords:[stage.start,stage.finish];
+// ── Sections ──────────────────────────────────────────────────────────────────
+// A section is a piece of a stage line (start + finish point on the line). No leaderboard: you see your own
+// times through it, worked out from the GPS traces of your runs (run_traces / run_trace_history).
+const SEC_MUTED="#9A9CA4";
+function lineCum(coords){const c=[0];for(let i=1;i<coords.length;i++)c.push(c[i-1]+haversine(coords[i-1],coords[i]));return c;}
+function lineAt(coords,cum,m){
+  const tot=cum[cum.length-1];m=Math.max(0,Math.min(tot,m));
+  let i=1;while(i<cum.length-1&&cum[i]<m)i++;
+  const a=coords[i-1],b=coords[i],seg=cum[i]-cum[i-1],f=seg>0?(m-cum[i-1])/seg:0;
+  return{lat:a.lat+(b.lat-a.lat)*f,lng:a.lng+(b.lng-a.lng)*f};
+}
+function lineSlice(coords,cum,m0,m1){
+  const out=[lineAt(coords,cum,m0)];
+  for(let i=0;i<coords.length;i++)if(cum[i]>m0&&cum[i]<m1)out.push(coords[i]);
+  out.push(lineAt(coords,cum,m1));return out;
+}
+// metres along the line of the point on the line nearest pt
+function lineDistOf(coords,cum,pt){
+  let best=Infinity,at=0;
+  for(let i=1;i<coords.length;i++){
+    const a=metersOffset(pt,coords[i-1]),b=metersOffset(pt,coords[i]);
+    const dx=b.x-a.x,dy=b.y-a.y,l2=dx*dx+dy*dy;
+    let t=l2?-(a.x*dx+a.y*dy)/l2:0;t=Math.max(0,Math.min(1,t));
+    const d=Math.hypot(a.x+t*dx,a.y+t*dy);
+    if(d<best){best=d;at=cum[i-1]+t*(cum[i]-cum[i-1]);}
+  }
+  return at;
+}
+// time (ms) a saved run spent between a section's start and finish; null if the trace doesn't pass both
+function sectionTimeFromTrace(points,sec){
+  if(!Array.isArray(points)||points.length<3)return null;
+  const P=points.map(p=>({ts:p[0],lat:p[1],lng:p[2]}));
+  const S={lat:sec.start_lat,lng:sec.start_lng},F={lat:sec.finish_lat,lng:sec.finish_lng};
+  const pass=(gate,from)=>{let best=null;for(let i=Math.max(1,from);i<P.length;i++){const c=segClosest(P[i-1],P[i],gate);if(!best||c.d<best.d)best={d:c.d,ts:c.ts,i};}return best;};
+  const s=pass(S,1);if(!s||s.d>40)return null;
+  const f=pass(F,s.i);if(!f||f.d>40)return null;
+  const ms=Math.round(f.ts-s.ts);
+  return ms>500?ms:null;
+}
+function fmtSecDist(m,units){if(m===null||m===undefined)return"—";return units==="imperial"?`${Math.round(m*3.28084)} ft`:m>=1000?`${(m/1000).toFixed(2)} km`:`${Math.round(m)} m`;}
+function fmtSecDelta(ms){return`${ms>0?"+":"−"}${(Math.abs(ms)/1000).toFixed(2)}`;}
+function secRunDate(iso){if(!iso)return"Best run";const d=new Date(iso);return d.toDateString()===new Date().toDateString()?"Today":d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});}
+const SEC_BOLT='<svg width="19" height="19" viewBox="0 0 24 24" style="display:block"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" fill="#2563EB" stroke="#fff" stroke-width="4.5" stroke-linejoin="round" paint-order="stroke"/></svg>';
+const SEC_DOT_S='<div style="width:13px;height:13px;border-radius:50%;background:#fff;border:2.5px solid #2563EB;box-sizing:border-box"></div>';
+const SEC_DOT_F='<div style="width:13px;height:13px;border-radius:50%;background:#2563EB;border:2px solid #fff;box-sizing:border-box"></div>';
+// small, non-interactive Mapbox map of the stage (grey line). Resolves to the map, or null if it can't load.
+function secMapInit(container,coords){
+  const token=import.meta.env.VITE_MAPBOX_TOKEN;
+  if(!token||!container)return Promise.resolve(null);
+  return import('https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js').then(()=>{
+    const mapboxgl=window.mapboxgl;mapboxgl.accessToken=token;
+    const lats=coords.map(c=>c.lat),lngs=coords.map(c=>c.lng);
+    const map=new mapboxgl.Map({container,style:'mapbox://styles/mapbox/outdoors-v12',interactive:false,bounds:[[Math.min(...lngs),Math.min(...lats)],[Math.max(...lngs),Math.max(...lats)]],fitBoundsOptions:{padding:38}});
+    return new Promise(res=>map.on('load',()=>{
+      map.addSource('sec-line',{type:'geojson',data:{type:'Feature',geometry:{type:'LineString',coordinates:coords.map(c=>[c.lng,c.lat])}}});
+      map.addLayer({id:'sec-line-case',type:'line',source:'sec-line',layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'#fff','line-width':5,'line-opacity':0.8}});
+      map.addLayer({id:'sec-line-base',type:'line',source:'sec-line',layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'#6F7680','line-width':2.5}});
+      res(map);
+    }));
+  }).catch(()=>null);
+}
+const secMarkerEl=html=>{const d=document.createElement('div');d.innerHTML=html;return d.firstChild;};
 
+// Builder map: grey stage line, blue section, Rivl bolt follows the slider
+function SectionBuilderMap({stage,coords,cum,step,startM,pos,units}){
+  const box=useRef(null),mapRef=useRef(null),mk=useRef({});
+  const [ready,setReady]=useState(false);
   useEffect(()=>{
-    if(map.current)return;
-    const token=import.meta.env.VITE_MAPBOX_TOKEN;
-    if(!token)return;
-    import('https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js').then(()=>{
-      const mapboxgl=window.mapboxgl;
-      mapboxgl.accessToken=token;
-      const lats=coords.map(c=>c.lat),lngs=coords.map(c=>c.lng);
-      map.current=new mapboxgl.Map({
-        container:mapContainer.current,
-        style:'mapbox://styles/mapbox/outdoors-v12',
-        bounds:[[Math.min(...lngs),Math.min(...lats)],[Math.max(...lngs),Math.max(...lats)]],
-        fitBoundsOptions:{padding:40},
-      });
-      map.current.on('load',()=>{
-        map.current.addSource('section-line',{type:'geojson',data:{type:'Feature',geometry:{type:'LineString',coordinates:coords.map(c=>[c.lng,c.lat])}}});
-        map.current.addLayer({id:'section-line-layer',type:'line',source:'section-line',paint:{'line-color':'#F59E0B','line-width':4,'line-opacity':0.55}});
-        map.current.addSource('section-highlight',{type:'geojson',data:{type:'Feature',geometry:{type:'LineString',coordinates:[]}}});
-        map.current.addLayer({id:'section-highlight-layer',type:'line',source:'section-highlight',paint:{'line-color':'#2563EB','line-width':6}});
-        map.current.addSource('section-points',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
-        map.current.addLayer({id:'section-points-layer',type:'circle',source:'section-points',paint:{'circle-radius':7,'circle-color':['get','color'],'circle-stroke-width':2,'circle-stroke-color':'#fff'}});
-        map.current.on('click',e=>{onTapPointRef.current({lat:e.lngLat.lat,lng:e.lngLat.lng});});
-      });
+    let dead=false;
+    secMapInit(box.current,coords).then(map=>{
+      if(!map)return;
+      if(dead){map.remove();return;}
+      const g=window.mapboxgl;
+      map.addSource('sec-hi',{type:'geojson',data:{type:'Feature',geometry:{type:'LineString',coordinates:[]}}});
+      map.addLayer({id:'sec-hi-layer',type:'line',source:'sec-hi',layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':C.blue,'line-width':5}});
+      const p0=[coords[0].lng,coords[0].lat];
+      mk.current={bolt:new g.Marker({element:secMarkerEl(SEC_BOLT)}).setLngLat(p0),s:new g.Marker({element:secMarkerEl(SEC_DOT_S)}).setLngLat(p0),f:new g.Marker({element:secMarkerEl(SEC_DOT_F)}).setLngLat(p0)};
+      mapRef.current=map;setReady(true);
     });
+    return()=>{dead=true;if(mapRef.current){mapRef.current.remove();mapRef.current=null;}};
   },[]);
-
   useEffect(()=>{
-    if(!map.current||!map.current.getSource('section-highlight'))return;
-    if(startIdx===null||endIdx===null){
-      map.current.getSource('section-highlight').setData({type:'Feature',geometry:{type:'LineString',coordinates:[]}});
-    } else {
-      const lo=Math.min(startIdx,endIdx),hi=Math.max(startIdx,endIdx);
-      map.current.getSource('section-highlight').setData({type:'Feature',geometry:{type:'LineString',coordinates:coords.slice(lo,hi+1).map(c=>[c.lng,c.lat])}});
-    }
-    const features=[];
-    if(startIdx!==null)features.push({type:'Feature',properties:{color:'#15803D'},geometry:{type:'Point',coordinates:[coords[startIdx].lng,coords[startIdx].lat]}});
-    if(endIdx!==null)features.push({type:'Feature',properties:{color:'#2563EB'},geometry:{type:'Point',coordinates:[coords[endIdx].lng,coords[endIdx].lat]}});
-    if(map.current.getSource('section-points'))map.current.getSource('section-points').setData({type:'FeatureCollection',features});
-  },[startIdx,endIdx]);
-
+    const map=mapRef.current;if(!ready||!map)return;
+    const m=mk.current,hi=map.getSource('sec-hi'),ll=d=>{const p=lineAt(coords,cum,d);return[p.lng,p.lat];};
+    if(step===1||startM===null){hi.setData({type:'Feature',geometry:{type:'LineString',coordinates:[]}});m.s.remove();}
+    else{hi.setData({type:'Feature',geometry:{type:'LineString',coordinates:lineSlice(coords,cum,startM,pos).map(p=>[p.lng,p.lat])}});m.s.setLngLat(ll(startM)).addTo(map);}
+    if(step===3){m.bolt.remove();m.f.setLngLat(ll(pos)).addTo(map);}
+    else{m.f.remove();m.bolt.setLngLat(ll(pos)).addTo(map);}
+  },[ready,step,startM,pos]);
   return(
-    <div style={{position:"relative",width:"100%",height:220,borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`}}>
+    <div style={{position:"relative",width:"100%",height:236,borderRadius:22,overflow:"hidden",background:"#E3EAE0",boxShadow:"inset 0 0 0 1px rgba(0,0,0,0.06)"}}>
       <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet"/>
-      <div ref={mapContainer} style={{width:"100%",height:"100%"}}/>
+      <div ref={box} style={{position:"absolute",inset:0}}/>
+      <div style={{position:"absolute",left:12,top:12,zIndex:2,display:"flex",alignItems:"center",gap:7,padding:"7px 11px 7px 9px",borderRadius:999,background:"rgba(255,255,255,0.82)",WebkitBackdropFilter:"blur(10px) saturate(1.4)",backdropFilter:"blur(10px) saturate(1.4)",boxShadow:"0 1px 3px rgba(0,0,0,0.12)",fontSize:12,fontWeight:600,color:C.text,whiteSpace:"nowrap",maxWidth:"calc(100% - 24px)"}}>
+        <svg width="12" height="12" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" fill={C.blue}/></svg>
+        <span style={{overflow:"hidden",textOverflow:"ellipsis"}}>{stage.name}</span><span style={{color:"#55565C",fontWeight:500}}>{fmtSecDist(cum[cum.length-1],units)}</span>
+      </div>
     </div>
   );
 }
 
-function SectionsSheet({stage,user,onClose}){
-  const [sections,setSections]=useState([]);
-  const [adding,setAdding]=useState(false);
-  const [startIdx,setStartIdx]=useState(null);
-  const [endIdx,setEndIdx]=useState(null);
-  const [name,setName]=useState("");
-  const isCreator=stage.created_by===user.id;
-  const coords=stage.line_coords&&stage.line_coords.length>1?stage.line_coords:[stage.start,stage.finish];
-
-  useEffect(()=>{
-    supabase.from('stage_sections').select('*').eq('stage_id',stage.id).order('created_at',{ascending:true}).then(({data})=>{if(data)setSections(data);});
-  },[stage.id]);
-
-  const bothPlaced=startIdx!==null&&endIdx!==null;
-  const loIdx=bothPlaced?Math.min(startIdx,endIdx):null;
-  const hiIdx=bothPlaced?Math.max(startIdx,endIdx):null;
-  const sectionDist=bothPlaced?(()=>{let d=0;for(let i=loIdx;i<hiIdx;i++){d+=haversine(coords[i],coords[i+1]);}return Math.round(d);})():0;
-
-  const nearestPointIdx=pt=>{let best=0,bestD=Infinity;coords.forEach((c,i)=>{const d=haversine(pt,c);if(d<bestD){bestD=d;best=i;}});return best;};
-  const handleTap=pt=>{const idx=nearestPointIdx(pt);if(startIdx===null)setStartIdx(idx);else if(endIdx===null)setEndIdx(idx);};
-  const resetPoints=()=>{setStartIdx(null);setEndIdx(null);};
-
-  const saveSection=async()=>{
-    if(!name.trim()||!bothPlaced)return;
-    const startPt=coords[loIdx],finishPt=coords[hiIdx];
-    const{data,error}=await supabase.from('stage_sections').insert({stage_id:stage.id,name:name.trim(),start_lat:startPt.lat,start_lng:startPt.lng,finish_lat:finishPt.lat,finish_lng:finishPt.lng,created_by:user.id}).select().single();
-    if(error){alert("Couldn't save section: "+error.message);return;}
-    setSections(prev=>[...prev,data]);
-    setAdding(false);resetPoints();setName("");
-  };
-
+// The slider: black grip handle, thin rail, blue fill from the start point to the handle
+function SectionSlider({value,total,fillFrom,onChange}){
+  const box=useRef(null);
+  const [drag,setDrag]=useState(false);
+  const fromX=x=>{const r=box.current.getBoundingClientRect();onChange(Math.max(0,Math.min(1,(x-r.left)/r.width))*total);};
+  const pc=v=>`${Math.max(0,Math.min(100,v/total*100))}%`;
   return(
-    <div style={{padding:"0 16px 40px"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0 16px"}}>
-        <div style={{fontSize:17,fontWeight:700,color:C.text}}>Sections</div>
-        <button className="tap" onClick={onClose} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 14px",color:C.text,fontSize:13}}>Done</button>
+    <div tabIndex={0} role="slider" aria-label="Position along the stage" aria-valuemin={0} aria-valuemax={total} aria-valuenow={Math.round(value)}
+      onKeyDown={e=>{if(e.key==="ArrowLeft"){e.preventDefault();onChange(value-5);}if(e.key==="ArrowRight"){e.preventDefault();onChange(value+5);}}}
+      style={{margin:"0 2px",touchAction:"none",cursor:drag?"grabbing":"grab",userSelect:"none",WebkitUserSelect:"none",outline:"none"}}>
+      <div ref={box} onPointerDown={e=>{e.currentTarget.setPointerCapture(e.pointerId);setDrag(true);fromX(e.clientX);}} onPointerMove={e=>{if(drag)fromX(e.clientX);}} onPointerUp={()=>setDrag(false)} onPointerCancel={()=>setDrag(false)} style={{position:"relative",height:36,margin:"0 12px"}}>
+        <div style={{position:"absolute",left:-12,right:-12,top:16,height:4,borderRadius:2,background:"#E4E6EB"}}/>
+        {fillFrom!==null&&<div style={{position:"absolute",top:16,height:4,borderRadius:2,background:C.blue,left:pc(fillFrom),width:`${Math.max(0,(value-fillFrom)/total*100)}%`}}/>}
+        <div style={{position:"absolute",top:9,left:pc(value),width:24,height:18,marginLeft:-12,borderRadius:9,background:"#111",display:"flex",alignItems:"center",justifyContent:"center",transform:drag?"scale(1.1)":"none",transition:"transform .12s ease"}}>
+          {[0,1,2].map(k=><i key={k} style={{display:"block",width:2,height:8,borderRadius:1,background:"#fff",margin:"0 1.5px"}}/>)}
+        </div>
       </div>
+      <div style={{display:"flex",justifyContent:"space-between",margin:"3px 12px 0",fontSize:10,fontWeight:500,letterSpacing:0.2,color:SEC_MUTED}}><span>Start</span><span>Finish</span></div>
+    </div>
+  );
+}
 
-      {!adding?(
-        <>
-          {isCreator&&(
-            <button className="tap" onClick={()=>setAdding(true)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"11px",color:C.blue,fontSize:13,fontWeight:600,marginBottom:16}}>
-              <Icon.Plus size={14} color={C.blue}/>Add Section
-            </button>
-          )}
-          {sections.length===0?(
-            <div style={{textAlign:"center",padding:"24px",color:C.muted,fontSize:13}}>No sections yet{isCreator?" — add a sprint or feature to split this stage up.":"."}</div>
-          ):sections.map(s=>(
-            <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 12px",background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,marginBottom:8}}>
-              <div style={{width:32,height:32,borderRadius:8,background:`${C.blue}12`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.Lightning size={15} color={C.blue}/></div>
-              <div style={{flex:1}}>
-                <div style={{fontSize:13,fontWeight:600,color:C.text}}>{s.name}</div>
-                <div style={{display:"flex",alignItems:"center",gap:3,fontSize:10,color:C.orange,background:`${C.orange}15`,borderRadius:4,padding:"1px 5px",marginTop:2,width:"fit-content"}}><Icon.Trophy size={9} color="#92400E"/>Leaderboard</div>
-              </div>
-              <Icon.ChevronRight size={16} color={C.mutedL}/>
-            </div>
-          ))}
-          <div style={{fontSize:11,color:C.mutedL,marginTop:14,textAlign:"center",lineHeight:1.5}}>Section times have their own leaderboard and don't affect your overall stage time.</div>
-        </>
+// Section builder (opens from "Add section" on the stage's Sections card)
+function SectionsSheet({stage,user,units,onClose}){
+  const coords=useMemo(()=>stage.line_coords&&stage.line_coords.length>1?stage.line_coords:[stage.start,stage.finish],[stage]);
+  const cum=useMemo(()=>lineCum(coords),[coords]);
+  const total=Math.max(30,Math.round(cum[cum.length-1]));
+  const [step,setStep]=useState(1);
+  const [startM,setStartM]=useState(null);
+  const [pos,setPos]=useState(()=>Math.round(total*0.35/5)*5);
+  const [name,setName]=useState("");
+  const [focus,setFocus]=useState(false);
+  const [saving,setSaving]=useState(false);
+  const lo=step===1?0:(startM||0)+10,hi=step===1?total-10:total;
+  const setP=m=>setPos(Math.max(lo,Math.min(hi,Math.round(m/5)*5)));
+  const canGo=step<3||(name.trim().length>0&&!saving);
+  const go=async()=>{
+    if(step===1){setStartM(pos);setPos(Math.min(total,pos+20));setStep(2);return;}
+    if(step===2){setStep(3);return;}
+    const nm=name.trim();if(!nm||saving)return;
+    const p0=lineAt(coords,cum,startM),p1=lineAt(coords,cum,pos);
+    setSaving(true);
+    const{error}=await supabase.from('stage_sections').insert({stage_id:stage.id,name:nm,start_lat:p0.lat,start_lng:p0.lng,finish_lat:p1.lat,finish_lng:p1.lng,created_by:user.id});
+    setSaving(false);
+    if(error){alert("Couldn't save section: "+error.message);return;}
+    onClose();
+  };
+  const again=()=>{setStep(1);setPos(startM===null?pos:startM);setName("");};
+  const vStart=startM!==null?startM:step===1?pos:null;
+  const vFin=step>=2?pos:null;
+  const vLen=vStart!==null&&vFin!==null?vFin-vStart:null;
+  const cells=[["Start",vStart,step===1],["Finish",vFin,step===2],["Length",vLen,false]];
+  return(
+    <div style={{padding:"0 20px 40px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 0 14px"}}>
+        <div style={{fontSize:12,fontWeight:600,letterSpacing:1.1,textTransform:"uppercase",color:SEC_MUTED}}>{step===3?"New section":`New section · ${step} of 2`}</div>
+        <button className="tap" onClick={onClose} style={{background:C.surface,border:"none",borderRadius:999,padding:"8px 15px",color:C.text,fontSize:13,fontWeight:600}}>Done</button>
+      </div>
+      <SectionBuilderMap stage={stage} coords={coords} cum={cum} step={step} startM={startM} pos={pos} units={units}/>
+      <div style={{marginTop:14,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",background:C.surface,borderRadius:18,padding:"10px 0"}}>
+        {cells.map(([l,v,on],k)=>(
+          <div key={l} style={{padding:"0 14px",position:"relative"}}>
+            {k>0&&<div style={{position:"absolute",left:0,top:3,bottom:3,width:1,background:"#E3E4E8"}}/>}
+            <div style={{fontSize:9,fontWeight:600,letterSpacing:0.9,textTransform:"uppercase",color:on?C.blue:SEC_MUTED}}>{l}</div>
+            <div style={{marginTop:3,fontSize:13,fontWeight:600,fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap",color:v!==null?C.text:SEC_MUTED}}>{fmtSecDist(v,units)}</div>
+          </div>
+        ))}
+      </div>
+      {step<3?(
+        <div style={{marginTop:18}}>
+          <div style={{textAlign:"center",fontSize:13,fontWeight:600,letterSpacing:-0.1,color:C.blue,marginBottom:2}}>{step===1?"← Drag for start →":"← Drag for finish →"}</div>
+          <SectionSlider value={pos} total={total} fillFrom={step===2?startM:null} onChange={setP}/>
+        </div>
       ):(
-        <>
-          <div style={{fontSize:12,color:C.muted,marginBottom:10}}>{startIdx===null?"Tap the line to place the section start":endIdx===null?"Now tap where the section ends":"Section placed — name it below"}</div>
-          <SectionBuilderMap stage={stage} startIdx={startIdx} endIdx={endIdx} onTapPoint={handleTap}/>
-          {(startIdx!==null||endIdx!==null)&&(
-            <button className="tap" onClick={resetPoints} style={{background:"none",border:"none",color:C.muted,fontSize:12,marginTop:10}}>Reset points</button>
-          )}
-          {bothPlaced&&(
-            <>
-              <div style={{textAlign:"center",fontSize:13,color:C.blue,fontWeight:600,margin:"14px 0"}}>Section length: {formatDist(sectionDist)}</div>
-              <input value={name} onChange={e=>setName(e.target.value)} placeholder="Section name e.g. Sprint 2" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"13px 14px",fontSize:15,color:C.text,background:C.surface,marginBottom:16}}/>
-              <button className="tap" onClick={saveSection} disabled={!name.trim()} style={{width:"100%",background:name.trim()?C.blue:C.surface,border:"none",borderRadius:12,padding:15,color:name.trim()?"#fff":C.muted,fontSize:15,fontWeight:700}}>Save Section</button>
-            </>
-          )}
-           <button className="tap" onClick={()=>{setAdding(false);resetPoints();setName("");}} style={{width:"100%",background:"none",border:`1px solid ${C.border}`,borderRadius:12,padding:13,color:C.muted,fontSize:14,marginTop:10,marginBottom:40}}>Cancel</button>
-        </>
+        <div style={{marginTop:20}}>
+          <div style={{fontSize:10,fontWeight:600,letterSpacing:1,textTransform:"uppercase",color:SEC_MUTED,margin:"0 2px 8px"}}>Name</div>
+          <input value={name} maxLength={40} onChange={e=>setName(e.target.value)} onFocus={()=>setFocus(true)} onBlur={()=>setFocus(false)} placeholder="e.g. Sprint 2" autoComplete="off" style={{width:"100%",boxSizing:"border-box",border:"none",borderRadius:16,padding:"16px 18px",fontSize:17,fontWeight:500,letterSpacing:-0.2,color:C.text,background:focus?"#fff":C.surface,boxShadow:`inset 0 0 0 1.5px ${focus?C.blue:"transparent"}`,outline:"none"}}/>
+        </div>
+      )}
+      <button className="tap" onClick={go} disabled={!canGo} style={{width:"100%",marginTop:22,height:54,borderRadius:17,border:"none",fontSize:16,fontWeight:600,letterSpacing:-0.2,background:canGo?"#fff":C.surface,color:canGo?C.blue:SEC_MUTED,boxShadow:canGo?`inset 0 0 0 1.5px ${C.blue}`:"none"}}>{step===1?"Place start":step===2?"Place finish":saving?"Saving…":"Save section"}</button>
+      {step>1&&<button className="tap" onClick={again} style={{display:"block",margin:"12px auto 0",background:"none",border:"none",color:"#55565C",fontSize:14,fontWeight:500,padding:"4px 10px"}}>Start again</button>}
+    </div>
+  );
+}
+
+// Map of the stage with each section picked out in blue and a numbered pin; tap a pin to pick a section
+function SectionsOverviewMap({coords,cum,secs,sel,onSelect}){
+  const box=useRef(null),mapRef=useRef(null),pins=useRef([]),selRef=useRef(onSelect);
+  const [ready,setReady]=useState(false);
+  useEffect(()=>{selRef.current=onSelect;});
+  useEffect(()=>{
+    let dead=false;
+    secMapInit(box.current,coords).then(map=>{
+      if(!map)return;
+      if(dead){map.remove();return;}
+      const g=window.mapboxgl;
+      map.addSource('sec-all',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+      map.addLayer({id:'sec-all-layer',type:'line',source:'sec-all',layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':C.blue,'line-width':5,'line-opacity':['case',['==',['get','dim'],1],0.3,1]}});
+      pins.current=secs.map((s,i)=>{
+        const el=document.createElement('div');
+        el.style.cssText='width:24px;height:24px;border-radius:50%;background:#2563EB;border:2px solid #fff;color:#fff;font:700 12px/20px -apple-system,BlinkMacSystemFont,sans-serif;text-align:center;box-sizing:border-box;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.25)';
+        el.textContent=String(i+1);
+        el.addEventListener('click',e=>{e.stopPropagation();selRef.current(i);});
+        const p=lineAt(coords,cum,(s.a+s.b)/2);
+        return new g.Marker({element:el,offset:[0,-16]}).setLngLat([p.lng,p.lat]).addTo(map);
+      });
+      mapRef.current=map;setReady(true);
+    });
+    return()=>{dead=true;if(mapRef.current){mapRef.current.remove();mapRef.current=null;}};
+  },[]);
+  useEffect(()=>{
+    const map=mapRef.current;if(!ready||!map)return;
+    map.getSource('sec-all').setData({type:'FeatureCollection',features:secs.map((s,i)=>({type:'Feature',properties:{dim:sel>=0&&sel!==i?1:0},geometry:{type:'LineString',coordinates:lineSlice(coords,cum,s.a,s.b).map(p=>[p.lng,p.lat])}}))});
+    pins.current.forEach((m,i)=>{m.getElement().style.opacity=sel<0||sel===i?"1":"0.35";});
+  },[ready,sel]);
+  return(
+    <div style={{position:"relative",width:"100%",height:210,borderRadius:16,overflow:"hidden",background:"#E3EAE0",boxShadow:"inset 0 0 0 1px rgba(0,0,0,0.06)"}}>
+      <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet"/>
+      <div ref={box} style={{position:"absolute",inset:0}}/>
+    </div>
+  );
+}
+
+let sectionsCardOpenFor=null; // keeps the card open when you come back from the builder
+// Stage details card: map of the sections + a drop-down box per section with your own times
+function StageSectionsCard({stage,user,units,onAdd}){
+  const [open,setOpen]=useState(sectionsCardOpenFor===stage.id);
+  const [rows,setRows]=useState(null);
+  const [runs,setRuns]=useState(null);
+  const [sel,setSel]=useState(-1);
+  const isCreator=!!(user&&stage.created_by&&stage.created_by===user.id);
+  const coords=useMemo(()=>stage.line_coords&&stage.line_coords.length>1?stage.line_coords:[stage.start,stage.finish],[stage]);
+  const cum=useMemo(()=>lineCum(coords),[coords]);
+  useEffect(()=>{
+    let off=false;
+    supabase.from('stage_sections').select('*').eq('stage_id',stage.id).then(({data})=>{if(!off)setRows(data||[]);});
+    return()=>{off=true;};
+  },[stage.id]);
+  const secs=useMemo(()=>(rows||[]).map(s=>{
+    const x=lineDistOf(coords,cum,{lat:s.start_lat,lng:s.start_lng}),y=lineDistOf(coords,cum,{lat:s.finish_lat,lng:s.finish_lng});
+    const a=Math.min(x,y),b=Math.max(x,y),p0=lineAt(coords,cum,a),p1=lineAt(coords,cum,b);
+    return{id:s.id,name:s.name,a,b,len:b-a,start_lat:p0.lat,start_lng:p0.lng,finish_lat:p1.lat,finish_lng:p1.lng};
+  }).sort((p,q)=>p.a-q.a),[rows,coords,cum]);
+  const n=secs.length;
+  const wantRuns=open&&n>0&&!!user;
+  useEffect(()=>{
+    if(!wantRuns||runs)return;
+    let off=false;
+    (async()=>{
+      let list=[];
+      try{const{data}=await supabase.from('run_trace_history').select('time_ms,created_at,points').eq('user_id',user.id).eq('stage_id',String(stage.id)).order('created_at',{ascending:false}).limit(20);list=data||[];}catch(e){}
+      try{const{data}=await supabase.from('run_traces').select('time_ms,points').eq('user_id',user.id).eq('stage_id',String(stage.id)).maybeSingle();if(data&&!list.some(r=>r.time_ms===data.time_ms))list.push({time_ms:data.time_ms,created_at:null,points:data.points});}catch(e){}
+      if(!off)setRuns(list);
+    })();
+    return()=>{off=true;};
+  },[wantRuns,stage.id]);
+  const splits=useMemo(()=>secs.map(sec=>{
+    const all=(runs||[]).map(r=>({created_at:r.created_at,ms:sectionTimeFromTrace(r.points,sec)})).filter(x=>x.ms!==null);
+    const dated=all.filter(x=>x.created_at).sort((p,q)=>new Date(q.created_at)-new Date(p.created_at));
+    return{best:all.length?Math.min(...all.map(x=>x.ms)):null,latest:dated.length?dated[0].ms:null,recent:dated.slice(0,5)};
+  }),[secs,runs]);
+  const r=22,circ=2*Math.PI*r;
+  const toggle=()=>{setOpen(o=>!o);};
+  const add=()=>{sectionsCardOpenFor=stage.id;onAdd&&onAdd();};
+  return(
+    <div style={{margin:"16px 16px 0",background:C.surface,borderRadius:16,border:`1px solid ${C.border}`,overflow:"hidden"}}>
+      <button className="tap" onClick={toggle} style={{width:"100%",display:"flex",alignItems:"center",gap:16,padding:"18px 16px",background:C.surface,border:"none",textAlign:"left"}}>
+        <div style={{position:"relative",width:56,height:56,flexShrink:0}}>
+          <svg width="56" height="56" viewBox="0 0 56 56" style={{transform:"rotate(-90deg)"}}>
+            <circle cx="28" cy="28" r={r} fill="none" stroke={n>0?C.blue:C.border} strokeWidth="6"/>
+          </svg>
+          <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,fontWeight:800,letterSpacing:-0.5,color:C.text}}>{n}</div>
+        </div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:16,fontWeight:700,color:C.text}}>Sections</div>
+          <div style={{fontSize:12,color:C.muted,marginTop:4}}>{rows===null?"":n>0?`${n} section${n===1?"":"s"} · your times`:"No sections yet"}</div>
+        </div>
+        {open?<Icon.ChevronUp size={16} color={C.mutedL}/>:<Icon.ChevronDown size={16} color={C.mutedL}/>}
+      </button>
+      {open&&(
+        <div style={{padding:"0 12px 12px"}}>
+          {n>0&&<SectionsOverviewMap coords={coords} cum={cum} secs={secs} sel={sel} onSelect={i=>setSel(s=>s===i?-1:i)}/>}
+          {n===0&&<div style={{background:"#fff",borderRadius:16,padding:"22px 16px",textAlign:"center",fontSize:13,color:C.muted,lineHeight:1.5}}>{isCreator?"Split this stage up into sections, like a sprint or a rock garden.":"This stage has no sections yet."}</div>}
+          <div style={{marginTop:n>0?10:0,display:"flex",flexDirection:"column",gap:8}}>
+            {secs.map((s,i)=>{
+              const on=sel===i,sp=splits[i];
+              const dif=sp.best!==null&&sp.latest!==null?sp.latest-sp.best:null;
+              const isBest=dif!==null&&dif<5;
+              return(
+                <div key={s.id} style={{background:"#fff",borderRadius:16,boxShadow:`0 1px 2px rgba(20,24,40,0.05), inset 0 0 0 1.5px ${on?C.blue:"transparent"}`}}>
+                  <button className="tap" onClick={()=>setSel(on?-1:i)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"13px 14px",background:"none",border:"none",textAlign:"left"}}>
+                    <div style={{width:26,height:26,borderRadius:"50%",background:C.surface,color:SEC_MUTED,fontSize:12,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{i+1}</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:15,fontWeight:600,letterSpacing:-0.2,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}</div>
+                      <div style={{fontSize:12,color:SEC_MUTED}}>{fmtSecDist(s.len,units)}</div>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:16,fontWeight:600,letterSpacing:-0.3,color:C.text,fontVariantNumeric:"tabular-nums"}}>{sp.best!==null?formatTime(sp.best):"—"}</div>
+                      <div style={{fontSize:11,color:SEC_MUTED}}>Best</div>
+                    </div>
+                    {on?<Icon.ChevronUp size={16} color={C.mutedL}/>:<Icon.ChevronDown size={16} color={C.mutedL}/>}
+                  </button>
+                  {on&&(
+                    <div style={{padding:"0 14px 14px"}}>
+                      {sp.best===null?(
+                        <div style={{background:C.surface,borderRadius:12,padding:"14px",fontSize:12,color:C.muted,lineHeight:1.5,textAlign:"center"}}>{runs===null&&user?"Loading your times…":"Ride this stage with the timer on and your times through this section show up here."}</div>
+                      ):(
+                        <>
+                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",background:C.surface,borderRadius:12,padding:"10px 0"}}>
+                            {[["Best",formatTime(sp.best),C.text],["Latest",sp.latest!==null?formatTime(sp.latest):"—",C.text],["Difference",dif===null?"—":isBest?"Best":fmtSecDelta(dif),dif===null?C.text:isBest?C.green:C.red]].map(([l,v,c],k)=>(
+                              <div key={l} style={{padding:"0 12px",position:"relative"}}>
+                                {k>0&&<div style={{position:"absolute",left:0,top:2,bottom:2,width:1,background:"#E3E4E8"}}/>}
+                                <div style={{fontSize:9,fontWeight:600,letterSpacing:0.9,textTransform:"uppercase",color:SEC_MUTED}}>{l}</div>
+                                <div style={{marginTop:3,fontSize:14,fontWeight:600,letterSpacing:-0.2,color:c,fontVariantNumeric:"tabular-nums"}}>{v}</div>
+                              </div>
+                            ))}
+                          </div>
+                          {sp.recent.length>0&&<div style={{fontSize:10,fontWeight:600,letterSpacing:1,textTransform:"uppercase",color:SEC_MUTED,margin:"14px 2px 4px"}}>Recent runs</div>}
+                          {sp.recent.map((x,k)=>{const d=x.ms-sp.best,b=d<5;return(
+                            <div key={k} style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",padding:"8px 2px",borderTop:k?`1px solid ${C.border}`:"none",fontVariantNumeric:"tabular-nums"}}>
+                              <span style={{fontSize:13,color:SEC_MUTED}}>{secRunDate(x.created_at)}</span>
+                              <span><span style={{fontSize:14,fontWeight:600,color:C.text}}>{formatTime(x.ms)}</span><span style={{display:"inline-block",minWidth:46,textAlign:"right",marginLeft:10,fontSize:12,fontWeight:600,color:b?C.green:C.red}}>{b?"Best":fmtSecDelta(d)}</span></span>
+                            </div>
+                          );})}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {isCreator&&<button className="tap" onClick={add} style={{width:"100%",marginTop:10,height:44,borderRadius:14,background:"#fff",border:`1.5px solid ${C.blue}`,color:C.blue,fontSize:14,fontWeight:600}}>Add section</button>}
+        </div>
       )}
     </div>
   );
@@ -2037,6 +2243,7 @@ if(lbFiltered){
     
             <StageInfoRow stage={stage} units={units} heightUnit={heightUnit}/>
             <StageLeaderboardCard lb={lbView.lb} rank={lbView.rank} user={user} stage={stage} period={lbPeriod} onPeriod={setLbPeriod} cat={lbCat} onCat={setLbCat}/>
+<StageSectionsCard stage={stage} user={user} units={units} onAdd={onOpenSections}/>
             <StageProgressCard stage={stage} user={user} lb={lb} myAttempts={myAttempts}/>
 <StageConsistencyCard runs={myAttempts} wet={wetDays} onToggleWet={toggleWetDay}/>
 <StageTimeDeltaCard stage={stage} lb={lb} all={lbAll} myAttempts={myAttempts} user={user} units={units} heightUnit={heightUnit}/>
@@ -2045,7 +2252,6 @@ if(lbFiltered){
 <div style={{padding:"16px 16px 0"}}>
         
                 <button className="tap" onClick={onRace} style={{width:"100%",background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"12px 16px",color:C.blue,fontSize:14,fontWeight:700,marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><Icon.Flag size={16} color={C.blue}/>Race Stage</button>
-        <button className="tap" onClick={onOpenSections} style={{width:"100%",background:"none",border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 16px",color:C.text,fontSize:13,fontWeight:600,marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><Icon.Lightning size={15} color={C.muted}/>Sections</button>
         {isCreator&&onDelete&&<button className="tap" onClick={()=>onDelete(stage.id)} style={{width:"100%",background:"none",border:"none",padding:"8px 0 12px",color:C.red,fontSize:13,fontWeight:600}}>Delete stage</button>}
 
                 <button className="tap" style={{width:"100%",height:38,background:"#fff",border:`1px solid ${C.border}`,borderRadius:11,display:"flex",alignItems:"center",justifyContent:"center",gap:7,boxShadow:"0 1px 2px rgba(0,0,0,0.04)",marginTop:8}}>
@@ -4131,7 +4337,36 @@ function H2hGapGraph({me,them}){
   );
 }
 
-function H2hStageCard({s,otherName}){
+// Real time delta (same charts as the stage Time delta) for one stage of a head to head
+function H2hTimeDelta({c,s,otherName,units,heightUnit}){
+  const [tr,setTr]=useState(undefined);       // undefined = loading, null = none
+  const [terrain,setTerrain]=useState(undefined);
+  useEffect(()=>{
+    let off=false;
+    supabase.rpc("get_challenge_traces",{p_id:c.id,p_stage:String(s.stageId)}).then(({data,error})=>{if(!off)setTr(error?null:data);});
+    (async()=>{
+      try{
+        const{data}=await supabase.from("stages").select("id,start_lat,start_lng,finish_lat,finish_lng,line_coords").eq("id",s.stageId).maybeSingle();
+        if(!data){if(!off)setTerrain(null);return;}
+        const st={id:data.id,start:{lat:data.start_lat,lng:data.start_lng},finish:{lat:data.finish_lat,lng:data.finish_lng},line_coords:data.line_coords||null};
+        const p=await stageElevProfile(st);
+        if(!off)setTerrain(p||null);
+      }catch(e){if(!off)setTerrain(null);}
+    })();
+    return()=>{off=true;};
+  },[c.id,s.stageId]);
+  const note=t=><div style={{fontSize:12,color:C.muted,padding:"10px 12px",background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,lineHeight:1.5}}>{t}</div>;
+  if(tr===undefined||terrain===undefined)return <div style={{fontSize:12,color:C.mutedL}}>Loading speed data…</div>;
+  const mine=tr&&tr.mine?traceProfile(tr.mine):null;
+  const theirs=tr&&tr.theirs?traceProfile(tr.theirs):null;
+  if(!mine)return note("No speed data was saved for your run on this stage. Runs you record from now on will have it.");
+  return <>
+    <RunStackCharts mine={mine} theirs={theirs} name={otherName} units={units} heightUnit={heightUnit} terrain={terrain||null}/>
+    {!theirs&&<div style={{marginTop:14}}>{note(`No speed data was saved for ${otherName}'s run, so only yours is shown.`)}</div>}
+  </>;
+}
+
+function H2hStageCard({c,s,otherName,user,units,heightUnit}){
   const [open,setOpen]=useState(false);
   const lab={fontSize:10,color:C.muted,fontWeight:600};
   if(!s.them||!s.me){
@@ -4163,8 +4398,7 @@ function H2hStageCard({s,otherName}){
       </button>
       {open&&(
         <div style={{borderTop:`1px solid ${C.border}`,marginTop:12,paddingTop:12}}>
-          <div style={{fontSize:12,fontWeight:600,color:C.text,marginBottom:10}}>Your gap to {otherName}</div>
-          <H2hGapGraph me={s.me} them={s.them}/>
+          <H2hTimeDelta c={c} s={s} otherName={otherName} units={units} heightUnit={heightUnit}/>
         </div>
       )}
     </div>
@@ -4190,7 +4424,7 @@ function H2hPodium({sum,otherName,meAvatar,otherAvatar,bare}){
   return <div style={{display:"flex",justifyContent:"center",alignItems:"flex-end",gap:6,padding:"8px 16px 0",borderBottom:bare?"none":`1px solid ${C.border}`}}>{mePos<=thPos?<>{mine}{theirs}</>:<>{theirs}{mine}</>}</div>;
 }
 
-function H2hDetail({c,user,meAvatar,onBack,onReload,onActivity}){
+function H2hDetail({c,user,meAvatar,onBack,onReload,onActivity,units,heightUnit}){
   const [runs,setRuns]=useState(null);
   const [confirming,setConfirming]=useState(false);
   const [busy,setBusy]=useState(false);
@@ -4251,7 +4485,7 @@ function H2hDetail({c,user,meAvatar,onBack,onReload,onActivity}){
             <H2hPodium sum={sum} otherName={name} meAvatar={meAvatar} otherAvatar={c.other_avatar}/>
             <div style={{padding:"14px 16px 16px"}}>
               <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:10}}>Stages</div>
-              {sum.stages.length===0?<div style={{fontSize:13,color:C.mutedL}}>No runs were saved</div>:sum.stages.map(s=><H2hStageCard key={s.stageId} s={s} otherName={name}/>)}
+              {sum.stages.length===0?<div style={{fontSize:13,color:C.mutedL}}>No runs were saved</div>:sum.stages.map(s=><H2hStageCard key={s.stageId} c={c} s={s} otherName={name} user={user} units={units} heightUnit={heightUnit}/>)}
             </div>
           </>
         ):(
@@ -4274,9 +4508,9 @@ function H2hDetail({c,user,meAvatar,onBack,onReload,onActivity}){
               <div style={{textAlign:"center",padding:"28px 20px",color:C.muted}}>
                 <Icon.Flag size={32} color={C.mutedL}/>
                 <div style={{fontSize:15,fontWeight:500,marginTop:12,marginBottom:4,color:C.text}}>No runs yet</div>
-                <div style={{fontSize:13,color:C.mutedL}}>Ride any stage and save it. It shows up here.</div>
+                <div style={{fontSize:13,color:C.mutedL}}>Tap Add to current challenge before a run and it shows up here.</div>
               </div>
-            ):sum.stages.map(s=><H2hStageCard key={s.stageId} s={s} otherName={name}/>)}
+            ):sum.stages.map(s=><H2hStageCard key={s.stageId} c={c} s={s} otherName={name} user={user} units={units} heightUnit={heightUnit}/>)}
           </div>
         )}
       </div>
@@ -4563,9 +4797,9 @@ function ChallengeIcon({type,count,bg,size=44}){
   );
 }
 
-function H2hScreen({user,onBack,onActivity}){
+function H2hScreen({user,onBack,onActivity,units,heightUnit,startId}){
   const [list,setList]=useState(null);
-  const [view,setView]=useState({name:"home"});
+  const [view,setView]=useState(startId?{name:"detail",id:startId}:{name:"home"});
   const [meAvatar,setMeAvatar]=useState(null);
   const [sums,setSums]=useState({});
   const [mates,setMates]=useState(null);
@@ -4652,7 +4886,7 @@ function H2hScreen({user,onBack,onActivity}){
   // ── detail
   if(view.name==="detail"&&list){
     const c=list.find(x=>x.id===view.id);
-    if(c)return <H2hDetail c={c} user={user} meAvatar={meAvatar} onBack={()=>setView({name:"home"})} onReload={reload} onActivity={onActivity}/>;
+    if(c)return <H2hDetail c={c} user={user} units={units} heightUnit={heightUnit} meAvatar={meAvatar} onBack={()=>setView({name:"home"})} onReload={reload} onActivity={onActivity}/>;
   }
 
   // ── pick a mate
@@ -4873,7 +5107,64 @@ function H2hScreen({user,onBack,onActivity}){
 }
 
 // Strip for the Race complete screen
-function H2hSaveStrip({user}){
+// Feed strip: your live head to heads, who is leading, tap to open
+function H2hLiveStrip({user,list,onOpen}){
+  const act=(list||[]).filter(c=>c.status==="active"&&new Date(c.ends_at)>new Date());
+  const key=act.map(c=>c.id).join(",");
+  const [sums,setSums]=useState({});
+  useEffect(()=>{
+    if(!key)return;
+    let off=false;
+    const go=()=>act.forEach(c=>supabase.rpc("get_challenge_runs",{p_id:c.id}).then(({data,error})=>{if(!off&&!error&&Array.isArray(data))setSums(s=>({...s,[c.id]:h2hSummarise(data,user.id)}));}));
+    go();
+    const t=setInterval(go,30000);
+    return()=>{off=true;clearInterval(t);};
+  },[key,user.id]);
+  if(!act.length)return null;
+  return(
+    <div style={{padding:"0 16px"}}>
+      <style>{"@keyframes h2hpulse{0%{box-shadow:0 0 0 0 rgba(21,128,61,.5)}70%{box-shadow:0 0 0 6px rgba(21,128,61,0)}100%{box-shadow:0 0 0 0 rgba(21,128,61,0)}}"}</style>
+      {act.map(c=>{
+        const s=sums[c.id];
+        let txt="",col=C.muted;
+        if(s){
+          if(s.both>0){if(s.winner==="me"){txt="Leading";col=C.green;}else if(s.winner==="them"){txt="Behind";col=C.red;}else txt="Level";}
+          else txt=s.stages.length?"In progress":"No runs yet";
+        }
+        return(
+          <button key={c.id} className="tap" onClick={()=>onOpen(c.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"10px 12px",marginBottom:12,background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,textAlign:"left"}}>
+            <div style={{width:36,height:36,borderRadius:10,background:"#FFFBEB",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#92400E" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="16" r="3"/><path d="M10.5 10.5l3 3"/></svg>
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,fontSize:14,fontWeight:700,color:C.text}}><span style={{width:7,height:7,borderRadius:"50%",background:C.green,animation:"h2hpulse 1.8s infinite",flexShrink:0}}/>You vs {c.other_name||"Rider"}</div>
+              <div style={{fontSize:12,color:C.muted,marginTop:2}}>{h2hLeft(c.ends_at).replace("Ends in ","")} left</div>
+            </div>
+            {txt&&<span style={{fontSize:13,fontWeight:700,color:col}}>{txt}</span>}
+            <Icon.ChevronRight size={16} color={C.mutedL}/>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// Shown on the course results screen: says whether the runs counted in your head to head
+function H2hSaveStrip({live,count}){
+  if(!live||live.length===0)return null;
+  const name=live.length===1?(live[0].other_name||"your mate"):`${live.length} mates`;
+  const on=count>0;
+  return(
+    <div style={{padding:"0 20px 4px"}}>
+      <div style={{background:on?"#EFF6FF":C.surface,border:`1px solid ${on?"#BFD3F8":C.border}`,borderRadius:12,padding:"12px 14px"}}>
+        <div style={{fontSize:10,fontWeight:800,color:on?C.blue:C.muted,letterSpacing:0.8}}>HEAD TO HEAD</div>
+        <div style={{fontSize:14,fontWeight:600,color:C.text,marginTop:2}}>{on?`${count} run${count===1?"":"s"} added to your head to head with ${name}`:`No runs added to your head to head with ${name}`}</div>
+      </div>
+    </div>
+  );
+}
+
+function H2hSaveStripOld({user}){
   const [name,setName]=useState(null);
   useEffect(()=>{
     if(!user)return;
@@ -6708,7 +6999,7 @@ function RaceStageComplete({base,splits,courseStages,stageIndex,totalStages,isLa
 }
 
 // Race complete (Race mode)
-function RaceComplete({base,course,splits,courseStages,totalStages,onSave,user}){
+function RaceComplete({base,course,splits,courseStages,totalStages,onSave,user,liveChallenges,addedRuns}){
   const total=splits.reduce((a,s)=>a+s.time,0);
   const prevTotal=totalStages>1?(base.courseBest===undefined?null:base.courseBest):(base.stageBest[splits[0].stageId]??null);
   const delta=prevTotal===null?null:total-prevTotal;
@@ -6734,13 +7025,36 @@ function RaceComplete({base,course,splits,courseStages,totalStages,onSave,user})
         <div style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:12}}>Stage Breakdown</div>
         {splits.map((s,i)=><RaceRow key={i} i={i} name={s.name} time={s.time} out={stageOutcome(base,s.stageId,s.time)}/>)}
       </div>
-      <H2hSaveStrip user={user}/>
+      <H2hSaveStrip live={liveChallenges} count={addedRuns}/>
       <RaceNextBtn onClick={onSave}>Save Results</RaceNextBtn>
     </div>
   );
 }
 
-function RaceScreen({course,stages,user,onFinish,onActivity}){
+// "Add to current challenge" on the arm screen: each rider opts a run in themselves
+function AddToChallengeBtn({list,ids,onToggle}){
+  if(!list||list.length===0)return null;
+  const one=list.length===1,nm=(list[0].other_name||"Rider");
+  const anyOn=ids.length>0;
+  return(
+    <div style={{width:"100%",maxWidth:300,display:"flex",flexDirection:"column",alignItems:"center",marginBottom:16}}>
+      {list.map(c=>{
+        const on=ids.includes(c.id),who=c.other_name||"Rider";
+        return(
+          <button key={c.id} className="tap" onClick={()=>onToggle(c.id)} style={{width:"100%",height:46,borderRadius:14,marginBottom:list.length>1?8:0,background:on?"rgba(37,99,235,0.08)":"#fff",border:`1.5px solid ${C.blue}`,color:C.blue,fontSize:14,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+            {on
+              ?<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+              :<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>}
+            {one?(on?"Added to your challenge":"Add to current challenge"):(on?`Added · vs ${who}`:`Add to challenge vs ${who}`)}
+          </button>
+        );
+      })}
+      <div style={{marginTop:7,fontSize:12,color:C.muted}}>{one?(anyOn?`This run counts in You vs ${nm}`:`You vs ${nm} · not counted unless added`):(anyOn?"This run counts in the challenges you added":"Not counted unless added")}</div>
+    </div>
+  );
+}
+
+function RaceScreen({course,stages,user,onFinish,onActivity,liveChallenges}){
 
   const courseStages=course.stageIds.map(id=>stages.find(s=>s.id===id)).filter(Boolean);
   const isPractice=course.mode==="practice";
@@ -6762,6 +7076,8 @@ function RaceScreen({course,stages,user,onFinish,onActivity}){
   const countRef=useRef(null);
   const gpsRef=useRef(null);
   const startTimeRef=useRef(0);
+  const [addedIds,setAddedIds]=useState([]);const addedRef=useRef([]);const [addedRuns,setAddedRuns]=useState(0);
+  const toggleChallenge=id=>{const n=addedRef.current.includes(id)?addedRef.current.filter(x=>x!==id):[...addedRef.current,id];addedRef.current=n;setAddedIds(n);};
   
   const prevGpsRef=useRef(null);
   const traceRef=useRef([]);
@@ -6858,7 +7174,9 @@ return{...prev,[currentStage.id]:(!current||finalTime<current)?finalTime:current
 }
 setPhase("split");
 if(saveTime&&!isPractice){
-  const entry={stage_id:currentStage.id,stage_name:currentStage.name,user_id:user.id,time_ms:finalTime,created_at:new Date(crossTs||Date.now()).toISOString(),bike_id:ACTIVE_BIKE_ID,trace:compactTrace(traceRef.current)};
+  const entry={stage_id:currentStage.id,stage_name:currentStage.name,user_id:user.id,time_ms:finalTime,created_at:new Date(crossTs||Date.now()).toISOString(),bike_id:ACTIVE_BIKE_ID,trace:compactTrace(traceRef.current),challenge_ids:addedRef.current.length?addedRef.current.slice():undefined};
+  if(addedRef.current.length)setAddedRuns(n=>n+1);
+  addedRef.current=[];setAddedIds([]);
   saveStageTime(entry).then(()=>onActivity&&onActivity()).catch(err=>{console.log('save failed, storing offline',err);queueOfflineTime(entry);onActivity&&onActivity();});
 }
 };
@@ -7066,6 +7384,7 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
 <div style={{fontSize:20,fontWeight:700,color:C.text,marginBottom:8}}>{stageIndex===0?`Head to Stage 1`:`Transfer to Stage ${stageIndex+1}`}</div>
 <div style={{fontSize:14,color:C.muted,marginBottom:20,maxWidth:260}}>Gate detection is off. Tap below once you're ready — the app will start watching for the start gate.</div>
 <GpsPill acc={gpsAcc}/>
+{!isPractice&&<AddToChallengeBtn list={liveChallenges} ids={addedIds} onToggle={toggleChallenge}/>}
 <button className="tap" onClick={tryArm} style={{background:C.blue,border:"none",borderRadius:14,padding:"14px 28px",color:"#fff",fontSize:15,fontWeight:700}}>Arm Start Gate</button>
 </>
 ):(
@@ -7225,7 +7544,7 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
   if(phase==="done"){
     const finalTotal=isPractice?null:isMashup?mashupTotal:splits.reduce((a,s)=>a+s.time,0);
     const saveRaceResults=async()=>{if(totalStages>1){const{error}=await supabase.from('course_results').insert({course_id:course.id,user_id:user.id,total_time_ms:finalTotal,mode:course.mode});if(error){alert("Couldn't save course result: "+error.message);}else{logEvent(user.id,'course_finish',`finished ${course.name} · ${formatTime(finalTotal)}`,null,{course_id:course.id,total_time_ms:finalTotal,stage_count:totalStages}).then(()=>onActivity&&onActivity());}}try{localStorage.removeItem(progressKey);}catch(e){}onFinish();};
-    if(!isPractice&&!isMashup)return <RaceComplete base={raceBase.current} course={course} splits={splits} courseStages={courseStages} totalStages={totalStages} onSave={saveRaceResults} user={user}/>;
+    if(!isPractice&&!isMashup)return <RaceComplete base={raceBase.current} course={course} splits={splits} courseStages={courseStages} totalStages={totalStages} onSave={saveRaceResults} user={user} liveChallenges={liveChallenges} addedRuns={addedRuns}/>;
     const headerBg=isPractice?"#15803D":isMashup?C.blue:C.orange;
     return(
       <div style={{position:"fixed",inset:0,background:"#fff",zIndex:100,display:"flex",flexDirection:"column"}}>
@@ -7960,7 +8279,7 @@ export default function App(){
   const{rows:titleRows,reload:reloadTitles}=useRivlTitles(user);
   useEffect(()=>{if(refreshTick)reloadTitles();},[refreshTick]);
   const myTitles=titlesOf(titleRows,user&&user.id);
-  useEffect(()=>{if(!user)return;supabase.rpc('list_challenges').then(({data,error})=>{if(!error&&Array.isArray(data))setH2hList(data);});},[user,refreshTick,showH2h]);
+  useEffect(()=>{if(!user)return;supabase.rpc('list_challenges').then(({data,error})=>{if(!error&&Array.isArray(data))setH2hList(data);});},[user,refreshTick,showH2h,activeRace]);
   const h2hRequests=h2hList.filter(c=>c.status==='pending'&&c.opponent_id===user?.id).length;
   const h2hActive=h2hList.filter(c=>c.status==='active').length;
   const [gRideList,setGRideList]=useState([]);
@@ -7969,6 +8288,7 @@ export default function App(){
   const gActiveCount=gRideList.filter(g=>g.my_status==='joined'&&g.status==='active').length;
   const challengeBadge=h2hRequests+gInvites;
   const [h2hFromFeed,setH2hFromFeed]=useState(false);
+  const [h2hStart,setH2hStart]=useState(null);
   useEffect(()=>{if(!user)return;supabase.rpc('follow_counts').then(({data,error})=>{if(!error&&data)setFollowerCount(data.followers);});},[user,refreshTick,showFollow]);
   useEffect(()=>{if(!user)return;supabase.rpc('list_connections').then(({data,error})=>{if(!error&&data)setFollowingCount((data.following||[]).length);});},[user,refreshTick,showFollow]);
     useEffect(()=>{
@@ -8402,7 +8722,7 @@ if(showBikeSetup)return(
   if(showH2h)return(
     <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
       <style>{STYLES}</style>
-      <H2hScreen user={user} onBack={()=>{setShowH2h(false);if(!h2hFromFeed)setShowGroups(true);}} onActivity={()=>setRefreshTick(t=>t+1)}/>
+      <H2hScreen user={user} units={settings.units} heightUnit={settings.heightUnit} startId={h2hStart} onBack={()=>{setH2hStart(null);setShowH2h(false);if(!h2hFromFeed)setShowGroups(true);}} onActivity={()=>setRefreshTick(t=>t+1)}/>
     </div>
   );
   if(showGroups)return(
@@ -8433,7 +8753,7 @@ if(showBikeSetup)return(
   if(activeRace)return(
     <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif"}}>
       <style>{STYLES}</style>
-      <RaceScreen course={activeRace} stages={stages} user={user} onFinish={()=>setActiveRace(null)} onActivity={()=>setRefreshTick(t=>t+1)}/>
+      <RaceScreen course={activeRace} stages={stages} user={user} liveChallenges={h2hList.filter(c=>c.status==='active'&&new Date(c.ends_at)>new Date())} onFinish={()=>setActiveRace(null)} onActivity={()=>setRefreshTick(t=>t+1)}/>
 
     </div>
   );
@@ -8495,6 +8815,7 @@ if(showBikeSetup)return(
               </div>
             </div>
           )}
+          <H2hLiveStrip user={user} list={h2hList} onOpen={id=>{setH2hStart(id);setH2hFromFeed(true);setShowH2h(true);}}/>
           {feed.length===0?<div style={{textAlign:"center",padding:"48px 20px",color:C.muted,fontSize:13}}>No activity yet — set a record, finish a course, or add a stage to get things started.</div>:feed.map(item=><FeedCard key={item.id} item={item} stage={stages.find(s=>String(s.id)===String(item.stage_id))} onViewStage={goToStage} units={settings.units}/>)}
         </div>
       )}
@@ -8663,7 +8984,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
              
           {/* Sections */}
             {sheet==='sections'&&selectedStage&&(
-        <><div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:45}} onClick={()=>setSheet(null)}/><div className="slide-up" style={{position:"fixed",top:44,bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:46,overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><SectionsSheet stage={selectedStage} user={user} onClose={()=>setSheet(null)}/></div></>
+        <><div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.3)",zIndex:45}} onClick={()=>setSheet(null)}/><div className="slide-up" style={{position:"fixed",top:44,bottom:0,left:0,right:0,background:"#fff",borderRadius:"16px 16px 0 0",zIndex:46,overflowY:"auto"}}><div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:36,height:4,borderRadius:2,background:"#E0E0E0"}}/></div><SectionsSheet stage={selectedStage} user={user} units={settings.units} onClose={()=>setSheet(null)}/></div></>
       )}
 
       {sheet&&sheet.startsWith('stat-')&&(
