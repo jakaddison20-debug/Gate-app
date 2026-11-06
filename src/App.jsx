@@ -4293,9 +4293,10 @@ function h2hSummarise(runs,meId){
     const o=by[r.stage_id]||(by[r.stage_id]={stageId:r.stage_id,name:r.stage_name||"Stage",me:null,them:null});
     if(r.user_id===meId)o.me=r;else o.them=r;
   });
-  const stages=Object.values(by).sort((a,b)=>(b.me&&b.them?1:0)-(a.me&&a.them?1:0)||a.name.localeCompare(b.name));
+  // a stage scores once both riders have added the same number of runs
+  const stages=Object.values(by).map(o=>({...o,ready:!!(o.me&&o.them&&Number(o.me.runs||1)===Number(o.them.runs||1))})).sort((a,b)=>(b.ready?1:0)-(a.ready?1:0)||a.name.localeCompare(b.name));
   let meWins=0,themWins=0,gap=0,both=0;
-  stages.forEach(s=>{if(s.me&&s.them){both++;gap+=s.me.time_ms-s.them.time_ms;if(s.me.time_ms<s.them.time_ms)meWins++;else if(s.them.time_ms<s.me.time_ms)themWins++;}});
+  stages.forEach(s=>{if(s.ready){both++;gap+=s.me.time_ms-s.them.time_ms;if(s.me.time_ms<s.them.time_ms)meWins++;else if(s.them.time_ms<s.me.time_ms)themWins++;}});
   const winner=meWins>themWins?"me":themWins>meWins?"them":gap<0?"me":gap>0?"them":"draw";
   return{stages,meWins,themWins,gap,both,winner};
 }
@@ -4369,6 +4370,17 @@ function H2hTimeDelta({c,s,otherName,units,heightUnit}){
 function H2hStageCard({c,s,otherName,user,units,heightUnit}){
   const [open,setOpen]=useState(false);
   const lab={fontSize:10,color:C.muted,fontWeight:600};
+  if(s.me&&s.them&&!s.ready){
+    const mr=Number(s.me.runs||1),tr=Number(s.them.runs||1);
+    const col=(who,t,n)=><div style={{flex:1}}><div style={lab}>{who}</div><div style={{fontSize:16,fontWeight:700,color:C.text,fontVariantNumeric:"tabular-nums"}}>{formatTime(t)}</div><div style={{fontSize:11,color:C.mutedL,marginTop:1}}>{n} run{n===1?"":"s"} added</div></div>;
+    return(
+      <div style={{border:`1px dashed ${C.border}`,borderRadius:12,padding:"12px 14px",marginBottom:8}}>
+        <div style={{fontSize:14,fontWeight:600,color:C.text,marginBottom:8}}>{s.name}</div>
+        <div style={{display:"flex"}}>{col("YOU",s.me.time_ms,mr)}{col(otherName.toUpperCase(),s.them.time_ms,tr)}</div>
+        <div style={{fontSize:12,color:C.muted,marginTop:8}}>Counts once you've both added the same number of runs</div>
+      </div>
+    );
+  }
   if(!s.them||!s.me){
     const mine=!!s.me,t=mine?s.me:s.them;
     return(
