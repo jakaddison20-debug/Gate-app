@@ -112,7 +112,7 @@ function formatDist(m){return m>=1000?`${(m/1000).toFixed(1)}km`:`${Math.round(m
 function timeAgo(iso){const s=(Date.now()-new Date(iso).getTime())/1000;if(s<60)return'just now';if(s<3600)return`${Math.floor(s/60)}m ago`;if(s<86400)return`${Math.floor(s/3600)}h ago`;if(s<604800)return`${Math.floor(s/86400)}d ago`;return new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short'});}
 function playBeep(freq=880,duration=150){try{const ctx=new(window.AudioContext||window.webkitAudioContext)();const osc=ctx.createOscillator();const gain=ctx.createGain();osc.connect(gain);gain.connect(ctx.destination);osc.frequency.value=freq;osc.type='sine';gain.gain.setValueAtTime(0.3,ctx.currentTime);gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+duration/1000);osc.start();osc.stop(ctx.currentTime+duration/1000);}catch(e){console.log(e);}}
 function logEvent(userId,type,message,stageId=null,context=null){if(!userId)return Promise.resolve();return supabase.from('app_events').insert({user_id:userId,event_type:type,message,stage_id:stageId?String(stageId):null,context}).then(()=>{}).catch(err=>console.log('logEvent failed:',err?.message||err));}
-async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,bike_id,trace}){
+async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,bike_id,trace,challenge_ids}){
   const overallRes=await supabase.from('stage_times').select('time_ms').eq('stage_id',stage_id).order('time_ms',{ascending:true}).limit(1);
   const ownRes=await supabase.from('stage_times').select('time_ms').eq('stage_id',stage_id).eq('user_id',user_id).order('time_ms',{ascending:true}).limit(1);
   const prevBest=overallRes.data&&overallRes.data[0]?overallRes.data[0].time_ms:null;
@@ -120,6 +120,7 @@ async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,bik
   const payload={stage_id,user_id,time_ms};
   if(created_at)payload.created_at=created_at;
   if(bike_id)payload.bike_id=bike_id;
+  if(challenge_ids&&challenge_ids.length)payload.challenge_ids=challenge_ids;
   const{error}=await supabase.from('stage_times').insert(payload);
   if(error)throw error;
   // Keep the GPS path of your best run on this stage (powers the speed/gap charts). Never fails the save.
@@ -4336,7 +4337,36 @@ function H2hGapGraph({me,them}){
   );
 }
 
-function H2hStageCard({s,otherName}){
+// Real time delta (same charts as the stage Time delta) for one stage of a head to head
+function H2hTimeDelta({c,s,otherName,units,heightUnit}){
+  const [tr,setTr]=useState(undefined);       // undefined = loading, null = none
+  const [terrain,setTerrain]=useState(undefined);
+  useEffect(()=>{
+    let off=false;
+    supabase.rpc("get_challenge_traces",{p_id:c.id,p_stage:String(s.stageId)}).then(({data,error})=>{if(!off)setTr(error?null:data);});
+    (async()=>{
+      try{
+        const{data}=await supabase.from("stages").select("id,start_lat,start_lng,finish_lat,finish_lng,line_coords").eq("id",s.stageId).maybeSingle();
+        if(!data){if(!off)setTerrain(null);return;}
+        const st={id:data.id,start:{lat:data.start_lat,lng:data.start_lng},finish:{lat:data.finish_lat,lng:data.finish_lng},line_coords:data.line_coords||null};
+        const p=await stageElevProfile(st);
+        if(!off)setTerrain(p||null);
+      }catch(e){if(!off)setTerrain(null);}
+    })();
+    return()=>{off=true;};
+  },[c.id,s.stageId]);
+  const note=t=><div style={{fontSize:12,color:C.muted,padding:"10px 12px",background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,lineHeight:1.5}}>{t}</div>;
+  if(tr===undefined||terrain===undefined)return <div style={{fontSize:12,color:C.mutedL}}>Loading speed data…</div>;
+  const mine=tr&&tr.mine?traceProfile(tr.mine):null;
+  const theirs=tr&&tr.theirs?traceProfile(tr.theirs):null;
+  if(!mine)return note("No speed data was saved for your run on this stage. Runs you record from now on will have it.");
+  return <>
+    <RunStackCharts mine={mine} theirs={theirs} name={otherName} units={units} heightUnit={heightUnit} terrain={terrain||null}/>
+    {!theirs&&<div style={{marginTop:14}}>{note(`No speed data was saved for ${otherName}'s run, so only yours is shown.`)}</div>}
+  </>;
+}
+
+function H2hStageCard({c,s,otherName,user,units,heightUnit}){
   const [open,setOpen]=useState(false);
   const lab={fontSize:10,color:C.muted,fontWeight:600};
   if(!s.them||!s.me){
@@ -4368,8 +4398,7 @@ function H2hStageCard({s,otherName}){
       </button>
       {open&&(
         <div style={{borderTop:`1px solid ${C.border}`,marginTop:12,paddingTop:12}}>
-          <div style={{fontSize:12,fontWeight:600,color:C.text,marginBottom:10}}>Your gap to {otherName}</div>
-          <H2hGapGraph me={s.me} them={s.them}/>
+          <H2hTimeDelta c={c} s={s} otherName={otherName} units={units} heightUnit={heightUnit}/>
         </div>
       )}
     </div>
@@ -4395,7 +4424,7 @@ function H2hPodium({sum,otherName,meAvatar,otherAvatar,bare}){
   return <div style={{display:"flex",justifyContent:"center",alignItems:"flex-end",gap:6,padding:"8px 16px 0",borderBottom:bare?"none":`1px solid ${C.border}`}}>{mePos<=thPos?<>{mine}{theirs}</>:<>{theirs}{mine}</>}</div>;
 }
 
-function H2hDetail({c,user,meAvatar,onBack,onReload,onActivity}){
+function H2hDetail({c,user,meAvatar,onBack,onReload,onActivity,units,heightUnit}){
   const [runs,setRuns]=useState(null);
   const [confirming,setConfirming]=useState(false);
   const [busy,setBusy]=useState(false);
@@ -4456,7 +4485,7 @@ function H2hDetail({c,user,meAvatar,onBack,onReload,onActivity}){
             <H2hPodium sum={sum} otherName={name} meAvatar={meAvatar} otherAvatar={c.other_avatar}/>
             <div style={{padding:"14px 16px 16px"}}>
               <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:10}}>Stages</div>
-              {sum.stages.length===0?<div style={{fontSize:13,color:C.mutedL}}>No runs were saved</div>:sum.stages.map(s=><H2hStageCard key={s.stageId} s={s} otherName={name}/>)}
+              {sum.stages.length===0?<div style={{fontSize:13,color:C.mutedL}}>No runs were saved</div>:sum.stages.map(s=><H2hStageCard key={s.stageId} c={c} s={s} otherName={name} user={user} units={units} heightUnit={heightUnit}/>)}
             </div>
           </>
         ):(
@@ -4479,9 +4508,9 @@ function H2hDetail({c,user,meAvatar,onBack,onReload,onActivity}){
               <div style={{textAlign:"center",padding:"28px 20px",color:C.muted}}>
                 <Icon.Flag size={32} color={C.mutedL}/>
                 <div style={{fontSize:15,fontWeight:500,marginTop:12,marginBottom:4,color:C.text}}>No runs yet</div>
-                <div style={{fontSize:13,color:C.mutedL}}>Ride any stage and save it. It shows up here.</div>
+                <div style={{fontSize:13,color:C.mutedL}}>Tap Add to current challenge before a run and it shows up here.</div>
               </div>
-            ):sum.stages.map(s=><H2hStageCard key={s.stageId} s={s} otherName={name}/>)}
+            ):sum.stages.map(s=><H2hStageCard key={s.stageId} c={c} s={s} otherName={name} user={user} units={units} heightUnit={heightUnit}/>)}
           </div>
         )}
       </div>
@@ -4768,7 +4797,7 @@ function ChallengeIcon({type,count,bg,size=44}){
   );
 }
 
-function H2hScreen({user,onBack,onActivity}){
+function H2hScreen({user,onBack,onActivity,units,heightUnit}){
   const [list,setList]=useState(null);
   const [view,setView]=useState({name:"home"});
   const [meAvatar,setMeAvatar]=useState(null);
@@ -4857,7 +4886,7 @@ function H2hScreen({user,onBack,onActivity}){
   // ── detail
   if(view.name==="detail"&&list){
     const c=list.find(x=>x.id===view.id);
-    if(c)return <H2hDetail c={c} user={user} meAvatar={meAvatar} onBack={()=>setView({name:"home"})} onReload={reload} onActivity={onActivity}/>;
+    if(c)return <H2hDetail c={c} user={user} units={units} heightUnit={heightUnit} meAvatar={meAvatar} onBack={()=>setView({name:"home"})} onReload={reload} onActivity={onActivity}/>;
   }
 
   // ── pick a mate
@@ -6945,7 +6974,30 @@ function RaceComplete({base,course,splits,courseStages,totalStages,onSave,user})
   );
 }
 
-function RaceScreen({course,stages,user,onFinish,onActivity}){
+// "Add to current challenge" on the arm screen: each rider opts a run in themselves
+function AddToChallengeBtn({list,ids,onToggle}){
+  if(!list||list.length===0)return null;
+  const one=list.length===1,nm=(list[0].other_name||"Rider");
+  const anyOn=ids.length>0;
+  return(
+    <div style={{width:"100%",maxWidth:300,display:"flex",flexDirection:"column",alignItems:"center",marginBottom:16}}>
+      {list.map(c=>{
+        const on=ids.includes(c.id),who=c.other_name||"Rider";
+        return(
+          <button key={c.id} className="tap" onClick={()=>onToggle(c.id)} style={{width:"100%",height:46,borderRadius:14,marginBottom:list.length>1?8:0,background:on?"rgba(37,99,235,0.08)":"#fff",border:`1.5px solid ${C.blue}`,color:C.blue,fontSize:14,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+            {on
+              ?<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+              :<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>}
+            {one?(on?"Added to your challenge":"Add to current challenge"):(on?`Added · vs ${who}`:`Add to challenge vs ${who}`)}
+          </button>
+        );
+      })}
+      <div style={{marginTop:7,fontSize:12,color:C.muted}}>{one?(anyOn?`This run counts in You vs ${nm}`:`You vs ${nm} · not counted unless added`):(anyOn?"This run counts in the challenges you added":"Not counted unless added")}</div>
+    </div>
+  );
+}
+
+function RaceScreen({course,stages,user,onFinish,onActivity,liveChallenges}){
 
   const courseStages=course.stageIds.map(id=>stages.find(s=>s.id===id)).filter(Boolean);
   const isPractice=course.mode==="practice";
@@ -6967,6 +7019,8 @@ function RaceScreen({course,stages,user,onFinish,onActivity}){
   const countRef=useRef(null);
   const gpsRef=useRef(null);
   const startTimeRef=useRef(0);
+  const [addedIds,setAddedIds]=useState([]);const addedRef=useRef([]);
+  const toggleChallenge=id=>{const n=addedRef.current.includes(id)?addedRef.current.filter(x=>x!==id):[...addedRef.current,id];addedRef.current=n;setAddedIds(n);};
   
   const prevGpsRef=useRef(null);
   const traceRef=useRef([]);
@@ -7063,7 +7117,8 @@ return{...prev,[currentStage.id]:(!current||finalTime<current)?finalTime:current
 }
 setPhase("split");
 if(saveTime&&!isPractice){
-  const entry={stage_id:currentStage.id,stage_name:currentStage.name,user_id:user.id,time_ms:finalTime,created_at:new Date(crossTs||Date.now()).toISOString(),bike_id:ACTIVE_BIKE_ID,trace:compactTrace(traceRef.current)};
+  const entry={stage_id:currentStage.id,stage_name:currentStage.name,user_id:user.id,time_ms:finalTime,created_at:new Date(crossTs||Date.now()).toISOString(),bike_id:ACTIVE_BIKE_ID,trace:compactTrace(traceRef.current),challenge_ids:addedRef.current.length?addedRef.current.slice():undefined};
+  addedRef.current=[];setAddedIds([]);
   saveStageTime(entry).then(()=>onActivity&&onActivity()).catch(err=>{console.log('save failed, storing offline',err);queueOfflineTime(entry);onActivity&&onActivity();});
 }
 };
@@ -7271,6 +7326,7 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
 <div style={{fontSize:20,fontWeight:700,color:C.text,marginBottom:8}}>{stageIndex===0?`Head to Stage 1`:`Transfer to Stage ${stageIndex+1}`}</div>
 <div style={{fontSize:14,color:C.muted,marginBottom:20,maxWidth:260}}>Gate detection is off. Tap below once you're ready — the app will start watching for the start gate.</div>
 <GpsPill acc={gpsAcc}/>
+{!isPractice&&<AddToChallengeBtn list={liveChallenges} ids={addedIds} onToggle={toggleChallenge}/>}
 <button className="tap" onClick={tryArm} style={{background:C.blue,border:"none",borderRadius:14,padding:"14px 28px",color:"#fff",fontSize:15,fontWeight:700}}>Arm Start Gate</button>
 </>
 ):(
@@ -8165,7 +8221,7 @@ export default function App(){
   const{rows:titleRows,reload:reloadTitles}=useRivlTitles(user);
   useEffect(()=>{if(refreshTick)reloadTitles();},[refreshTick]);
   const myTitles=titlesOf(titleRows,user&&user.id);
-  useEffect(()=>{if(!user)return;supabase.rpc('list_challenges').then(({data,error})=>{if(!error&&Array.isArray(data))setH2hList(data);});},[user,refreshTick,showH2h]);
+  useEffect(()=>{if(!user)return;supabase.rpc('list_challenges').then(({data,error})=>{if(!error&&Array.isArray(data))setH2hList(data);});},[user,refreshTick,showH2h,activeRace]);
   const h2hRequests=h2hList.filter(c=>c.status==='pending'&&c.opponent_id===user?.id).length;
   const h2hActive=h2hList.filter(c=>c.status==='active').length;
   const [gRideList,setGRideList]=useState([]);
@@ -8607,7 +8663,7 @@ if(showBikeSetup)return(
   if(showH2h)return(
     <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif",background:"#fff"}}>
       <style>{STYLES}</style>
-      <H2hScreen user={user} onBack={()=>{setShowH2h(false);if(!h2hFromFeed)setShowGroups(true);}} onActivity={()=>setRefreshTick(t=>t+1)}/>
+      <H2hScreen user={user} units={settings.units} heightUnit={settings.heightUnit} onBack={()=>{setShowH2h(false);if(!h2hFromFeed)setShowGroups(true);}} onActivity={()=>setRefreshTick(t=>t+1)}/>
     </div>
   );
   if(showGroups)return(
@@ -8638,7 +8694,7 @@ if(showBikeSetup)return(
   if(activeRace)return(
     <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif"}}>
       <style>{STYLES}</style>
-      <RaceScreen course={activeRace} stages={stages} user={user} onFinish={()=>setActiveRace(null)} onActivity={()=>setRefreshTick(t=>t+1)}/>
+      <RaceScreen course={activeRace} stages={stages} user={user} liveChallenges={h2hList.filter(c=>c.status==='active'&&new Date(c.ends_at)>new Date())} onFinish={()=>setActiveRace(null)} onActivity={()=>setRefreshTick(t=>t+1)}/>
 
     </div>
   );
