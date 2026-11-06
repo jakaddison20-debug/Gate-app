@@ -5152,13 +5152,13 @@ function H2hLiveStrip({user,list,onOpen}){
 // Shown on the course results screen: says whether the runs counted in your head to head
 function H2hSaveStrip({live,count}){
   if(!live||live.length===0)return null;
-  const name=live.length===1?(live[0].other_name||"your mate"):`${live.length} mates`;
+  const where=live.length===1?(live[0].group?"the group ride":`your head to head with ${live[0].other_name||"your mate"}`):"your challenges";
   const on=count>0;
   return(
     <div style={{padding:"0 20px 4px"}}>
       <div style={{background:on?"#EFF6FF":C.surface,border:`1px solid ${on?"#BFD3F8":C.border}`,borderRadius:12,padding:"12px 14px"}}>
         <div style={{fontSize:10,fontWeight:800,color:on?C.blue:C.muted,letterSpacing:0.8}}>HEAD TO HEAD</div>
-        <div style={{fontSize:14,fontWeight:600,color:C.text,marginTop:2}}>{on?`${count} run${count===1?"":"s"} added to your head to head with ${name}`:`No runs added to your head to head with ${name}`}</div>
+        <div style={{fontSize:14,fontWeight:600,color:C.text,marginTop:2}}>{on?`${count} run${count===1?"":"s"} added to ${where}`:`No runs added to ${where}`}</div>
       </div>
     </div>
   );
@@ -7034,22 +7034,22 @@ function RaceComplete({base,course,splits,courseStages,totalStages,onSave,user,l
 // "Add to current challenge" on the arm screen: each rider opts a run in themselves
 function AddToChallengeBtn({list,ids,onToggle}){
   if(!list||list.length===0)return null;
-  const one=list.length===1,nm=(list[0].other_name||"Rider");
+  const one=list.length===1,g1=!!list[0].group,nm=(list[0].other_name||"Rider");
   const anyOn=ids.length>0;
   return(
     <div style={{width:"100%",maxWidth:300,display:"flex",flexDirection:"column",alignItems:"center",marginBottom:16}}>
       {list.map(c=>{
-        const on=ids.includes(c.id),who=c.other_name||"Rider";
+        const on=ids.includes(c.id),lab=c.group?"group ride":`challenge vs ${c.other_name||"Rider"}`;
         return(
           <button key={c.id} className="tap" onClick={()=>onToggle(c.id)} style={{width:"100%",height:46,borderRadius:14,marginBottom:list.length>1?8:0,background:on?"rgba(37,99,235,0.08)":"#fff",border:`1.5px solid ${C.blue}`,color:C.blue,fontSize:14,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
             {on
               ?<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
               :<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>}
-            {one?(on?"Added to your challenge":"Add to current challenge"):(on?`Added · vs ${who}`:`Add to challenge vs ${who}`)}
+            {one?(on?"Added to your challenge":"Add to current challenge"):(on?`Added · ${lab}`:`Add to ${lab}`)}
           </button>
         );
       })}
-      <div style={{marginTop:7,fontSize:12,color:C.muted}}>{one?(anyOn?`This run counts in You vs ${nm}`:`You vs ${nm} · not counted unless added`):(anyOn?"This run counts in the challenges you added":"Not counted unless added")}</div>
+      <div style={{marginTop:7,fontSize:12,color:C.muted}}>{one?(anyOn?`This run counts in ${g1?"the group ride":`You vs ${nm}`}`:`${g1?"Group ride":`You vs ${nm}`} · not counted unless added`):(anyOn?"This run counts in what you added":"Not counted unless added")}</div>
     </div>
   );
 }
@@ -8283,7 +8283,7 @@ export default function App(){
   const h2hRequests=h2hList.filter(c=>c.status==='pending'&&c.opponent_id===user?.id).length;
   const h2hActive=h2hList.filter(c=>c.status==='active').length;
   const [gRideList,setGRideList]=useState([]);
-  useEffect(()=>{if(!user)return;supabase.rpc('list_group_rides').then(({data,error})=>{if(!error&&Array.isArray(data))setGRideList(data);});},[user,refreshTick,showH2h]);
+  useEffect(()=>{if(!user)return;supabase.rpc('list_group_rides').then(({data,error})=>{if(!error&&Array.isArray(data))setGRideList(data);});},[user,refreshTick,showH2h,activeRace]);
   const gInvites=gRideList.filter(g=>g.my_status==='invited').length;
   const gActiveCount=gRideList.filter(g=>g.my_status==='joined'&&g.status==='active').length;
   const challengeBadge=h2hRequests+gInvites;
@@ -8753,7 +8753,7 @@ if(showBikeSetup)return(
   if(activeRace)return(
     <div ref={containerRef} style={{width:"100%",height:"var(--app-h)",position:"relative",overflow:"hidden",fontFamily:"'Inter',sans-serif"}}>
       <style>{STYLES}</style>
-      <RaceScreen course={activeRace} stages={stages} user={user} liveChallenges={h2hList.filter(c=>c.status==='active'&&new Date(c.ends_at)>new Date())} onFinish={()=>setActiveRace(null)} onActivity={()=>setRefreshTick(t=>t+1)}/>
+      <RaceScreen course={activeRace} stages={stages} user={user} liveChallenges={[...h2hList.filter(c=>c.status==='active'&&new Date(c.ends_at)>new Date()),...gRideList.filter(g=>g.my_status==='joined'&&g.status==='active'&&new Date(g.ends_at)>new Date()).map(g=>({id:g.id,group:true,ends_at:g.ends_at,other_name:"Group ride"}))]} onFinish={()=>setActiveRace(null)} onActivity={()=>setRefreshTick(t=>t+1)}/>
 
     </div>
   );
