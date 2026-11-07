@@ -4293,8 +4293,8 @@ function h2hSummarise(runs,meId){
     const o=by[r.stage_id]||(by[r.stage_id]={stageId:r.stage_id,name:r.stage_name||"Stage",me:null,them:null});
     if(r.user_id===meId)o.me=r;else o.them=r;
   });
-  // a stage scores once both riders have added the same number of runs
-  const stages=Object.values(by).map(o=>({...o,ready:!!(o.me&&o.them&&Number(o.me.runs||1)===Number(o.them.runs||1))})).sort((a,b)=>(b.ready?1:0)-(a.ready?1:0)||a.name.localeCompare(b.name));
+  // a stage scores once both riders have a run on it (each rider's best added run counts)
+  const stages=Object.values(by).map(o=>({...o,ready:!!(o.me&&o.them)})).sort((a,b)=>(b.ready?1:0)-(a.ready?1:0)||a.name.localeCompare(b.name));
   let meWins=0,themWins=0,gap=0,both=0;
   stages.forEach(s=>{if(s.ready){both++;gap+=s.me.time_ms-s.them.time_ms;if(s.me.time_ms<s.them.time_ms)meWins++;else if(s.them.time_ms<s.me.time_ms)themWins++;}});
   const winner=meWins>themWins?"me":themWins>meWins?"them":gap<0?"me":gap>0?"them":"draw";
