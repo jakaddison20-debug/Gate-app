@@ -5427,6 +5427,23 @@ function TouchLock({title,sub,label,foot,dim,onUnlock}){
   );
 }
 
+function HoldCancelBtn({onCancel}){
+  const timer=useRef(null);
+  const [holding,setHolding]=useState(false);
+  const begin=e=>{e.preventDefault();setHolding(true);clearTimeout(timer.current);timer.current=setTimeout(()=>{setHolding(false);onCancel&&onCancel();},1500);};
+  const end=()=>{setHolding(false);clearTimeout(timer.current);};
+  useEffect(()=>()=>clearTimeout(timer.current),[]);
+  return(
+    <div onContextMenu={e=>e.preventDefault()} style={{userSelect:"none",WebkitUserSelect:"none",WebkitTouchCallout:"none"}}>
+      <div onPointerDown={begin} onPointerUp={end} onPointerLeave={end} onPointerCancel={end} style={{position:"relative",overflow:"hidden",width:"100%",background:"transparent",border:"1.5px solid rgba(248,113,113,0.7)",borderRadius:14,padding:15,color:"#F87171",fontSize:15,fontWeight:700,textAlign:"center",touchAction:"none"}}>
+        <div style={{position:"absolute",left:0,top:0,bottom:0,width:holding?"100%":"0%",background:"rgba(248,113,113,0.28)",transition:holding?"width 1.5s linear":"none"}}/>
+        <span style={{position:"relative"}}>Hold to cancel run</span>
+      </div>
+      <div style={{textAlign:"center",fontSize:11,color:"rgba(255,255,255,0.45)",marginTop:9}}>Nothing is saved if you cancel</div>
+    </div>
+  );
+}
+
 function HowItWorksScreen({onClose}){
   const steps=[
     {Ic:Icon.Location,t:"Make a stage",b:"Stand at the top and tap Place Start Gate. Ride the trail, then tap Place Finish Gate at the bottom. Name it and tap Create Stage."},
@@ -7084,6 +7101,7 @@ function RaceScreen({course,stages,user,onFinish,onActivity,liveChallenges}){
   const [bestPerStage,setBestPerStage]=useState(savedProgress?savedProgress.bestPerStage:{}); // mashup: best time per stage id
   const [runCount,setRunCount]=useState(savedProgress?savedProgress.runCount:0); // how many full runs completed
   const [gateStatus,setGateStatus]=useState("waiting");
+  const [cancelToast,setCancelToast]=useState(false);
   const [distToGate,setDistToGate]=useState(null); const [armed,setArmed]=useState(false); const [touchLocked,setTouchLocked]=useState(false); const [gpsAcc,setGpsAcc]=useState(null); const timerRef=useRef(null); const finishTimeoutRef=useRef(null);
   const countRef=useRef(null);
   const gpsRef=useRef(null);
@@ -7251,6 +7269,17 @@ setStageIndex(i=>i+1);setPhase("transfer");setArmed(false);
 setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
 };
 
+  const cancelRun=()=>{
+    clearInterval(timerRef.current);timerRef.current=null;
+    clearTimeout(finishTimeoutRef.current);finishTimeoutRef.current=null;
+    logEvent(user?.id,"run_cancelled","Cancelled a run",currentStage?.id,{ms:Math.round(timerMsRef.current)});
+    traceRef.current=[];
+    timerMsRef.current=0;setTimerMs(0);
+    setArmed(false);setTouchLocked(false);setGateStatus("waiting");setDistToGate(null);
+    setPhase("transfer");
+    setCancelToast(true);
+  };
+  useEffect(()=>{if(!cancelToast)return;const t=setTimeout(()=>setCancelToast(false),3500);return()=>clearTimeout(t);},[cancelToast]);
   useEffect(()=>()=>{clearInterval(timerRef.current);clearTimeout(finishTimeoutRef.current);clearInterval(countRef.current);clearInterval(gpsRef.current);},[]);
 
   const mashupTotal=Object.values(bestPerStage).reduce((a,b)=>a+b,0);
@@ -7396,6 +7425,7 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
 <div style={{fontSize:20,fontWeight:700,color:C.text,marginBottom:8}}>{stageIndex===0?`Head to Stage 1`:`Transfer to Stage ${stageIndex+1}`}</div>
 <div style={{fontSize:14,color:C.muted,marginBottom:20,maxWidth:260}}>Gate detection is off. Tap below once you're ready — the app will start watching for the start gate.</div>
 <GpsPill acc={gpsAcc}/>
+{cancelToast&&<div style={{position:"fixed",top:"calc(env(safe-area-inset-top, 0px) + 16px)",left:16,right:16,zIndex:200,background:"#1A1A1A",borderRadius:14,padding:"12px 16px",textAlign:"left",boxShadow:"0 8px 24px rgba(0,0,0,0.25)"}}><div style={{fontSize:14,fontWeight:700,color:"#fff"}}>Run cancelled</div><div style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginTop:2}}>Nothing was saved</div></div>}
 {!isPractice&&<AddToChallengeBtn list={liveChallenges} ids={addedIds} onToggle={toggleChallenge}/>}
 <button className="tap" onClick={tryArm} style={{background:C.blue,border:"none",borderRadius:14,padding:"14px 28px",color:"#fff",fontSize:15,fontWeight:700}}>Arm Start Gate</button>
 </>
@@ -7494,7 +7524,8 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
         <div style={{padding:"0 20px 44px"}}>
           {isPractice
             ?<button className="tap" onClick={()=>stopStage(false)} style={{width:"100%",background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:14,padding:18,color:"#fff",fontSize:16,fontWeight:700}}>✓  Finish Gate — Next Stage</button>
-            :<div style={{textAlign:"center",fontSize:13,color:"rgba(255,255,255,0.4)",paddingBottom:8}}>Timer stops automatically at the finish gate</div>}
+            :<><div style={{textAlign:"center",fontSize:13,color:"rgba(255,255,255,0.4)",paddingBottom:12}}>Timer stops automatically at the finish gate</div>
+            {!touchLocked&&<HoldCancelBtn onCancel={cancelRun}/>}</>}
         {touchLocked&&!isPractice&&<TouchLock title="Screen locked" sub="Taps and swipes are ignored, so rain can't change anything." foot="Unlocks by itself when your run finishes" onUnlock={()=>setTouchLocked(false)}/>}
         </div>
       </div>
