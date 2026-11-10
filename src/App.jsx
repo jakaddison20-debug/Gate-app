@@ -6853,7 +6853,40 @@ function NewStageSheet({onClose,onSave}){
 }
 
 // ── Course Builder Sheet ──────────────────────────────────────────────────────
- function CourseStagesMap({courseStages}){
+ function courseDiffColor(stage){return(DIFFICULTIES.find(d=>d.val===stage.difficulty)||DIFFICULTIES[0]).color;}
+function coursePinHtml(n,done){const c=done?"#15803D":"#2563EB";return `<svg width="30" height="38" viewBox="-26 -62 52 66" style="display:block;overflow:visible"><path d="M0,0 C-6,-12 -22,-22 -22,-36 A22,22 0 1 1 22,-36 C22,-22 6,-12 0,0 Z" fill="${c}" fill-opacity="0.16" stroke="${c}" stroke-width="5" stroke-linejoin="round"/><text x="0" y="-27" text-anchor="middle" font-family="Inter,sans-serif" font-weight="800" font-size="27" fill="${c}" stroke="#fff" stroke-width="5" stroke-linejoin="round" paint-order="stroke">${n}</text></svg>`;}
+function coursePinEl(n,done){const el=document.createElement('div');el.style.cssText='width:30px;height:38px;';el.innerHTML=coursePinHtml(n,done);return el;}
+function CourseFeedCard({item,course,stages,onOpen}){
+  const cs=course.stageIds.map(id=>stages.find(s=>s.id===id)).filter(Boolean);
+  const map=useMemo(()=>recapMapPaths(cs.map((s,i)=>({n:i+1,line:s.line_coords&&s.line_coords.length>1?s.line_coords:[s.start,s.finish]}))),[course.id,cs.length]);
+  const recap={map,stages:cs.map(s=>({diff:s.difficulty}))};
+  const url=recapMapUrl(map);
+  const total=cs.reduce((a,s)=>a+haversine(s.start,s.finish),0);
+  const mode=({race:"Race",mashup:"Mashup",practice:"Practice"})[course.mode||"race"]||"Race";
+  const box=(v,l)=><div style={{background:"#fff",borderRadius:10,padding:"10px 8px",textAlign:"center",border:`1px solid ${C.border}`}}><div style={{fontSize:14,fontWeight:700,color:C.text}}>{v}</div><div style={{fontSize:10,color:C.muted,marginTop:2}}>{l}</div></div>;
+  return(
+    <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.border}`}}>
+      <div className="tap" onClick={()=>onOpen&&onOpen(course)} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,overflow:"hidden",cursor:"pointer"}}>
+        <div style={{display:"flex",alignItems:"flex-start",gap:12,padding:"14px 14px 12px"}}>
+          <Avatar size={38} url={item.avatarUrl}/>
+          <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,color:C.text,lineHeight:1.4}}><span style={{fontWeight:700}}>{item.userName}</span> created a new course</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>{item.ago}</div></div>
+          <div style={{width:30,height:30,borderRadius:8,background:`${C.blue}15`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.Flag size={15} color={C.blue}/></div>
+        </div>
+        <div style={{margin:"0 12px",borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`,background:C.mapPark,aspectRatio:"16 / 9",position:"relative"}}>
+          {url&&<img src={url} alt="" style={{width:"100%",height:"100%",display:"block",objectFit:"cover"}} onError={e=>{e.currentTarget.style.display="none";}}/>}
+          <RecapMapOverlay recap={recap}/>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,padding:"12px 12px 0"}}>{box(cs.length,"Stages")}{box(formatDist(total),"Distance")}{box(mode,"Mode")}</div>
+        <div style={{margin:12,background:"#fff",border:`1px solid ${C.border}`,borderRadius:12,display:"flex",alignItems:"center",gap:12,padding:"13px 14px"}}>
+          <div style={{width:40,height:40,borderRadius:12,background:`${C.blue}15`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.Flag size={18} color={C.blue}/></div>
+          <div style={{flex:1,minWidth:0}}><div style={{fontSize:15,fontWeight:700,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{course.name}</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>Tap to open the course</div></div>
+          <span style={{fontSize:12,fontWeight:700,color:C.blue,flexShrink:0}}>View course →</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+function CourseStagesMap({courseStages}){
   const mapContainer=useRef(null);
   const map=useRef(null);
   const layerIdsRef=useRef([]);
@@ -6881,7 +6914,7 @@ function NewStageSheet({onClose,onSave}){
       const el=document.createElement('div');
       el.style.cssText='width:24px;height:24px;border-radius:50%;background:#2563EB;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;font-family:Inter,sans-serif;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3);';
       el.textContent=String(i+1);
-      const marker=new window.mapboxgl.Marker({element:el}).setLngLat([stage.start.lng,stage.start.lat]).addTo(map.current);
+      map.current.setPaintProperty(id,'line-color',courseDiffColor(stage));const marker=new window.mapboxgl.Marker({element:coursePinEl(i+1,!!stage.time),anchor:'bottom'}).setLngLat([stage.start.lng,stage.start.lat]).addTo(map.current);
       markersRef.current.push(marker);
     });
     if(boundsPoints.length>0){
@@ -6938,16 +6971,16 @@ function CourseStagePickerMap({stages,selectedIds,onToggle}){
     markersRef.current.forEach(m=>m.remove());
     markersRef.current=[];
     stages.forEach(stage=>{
-      const idx=selectedIds.indexOf(stage.id);
+      const idx=selectedIds.indexOf(stage.id);try{const lid='pick-line-'+stage.id;const co=stage.line_coords&&stage.line_coords.length>1?stage.line_coords:[stage.start,stage.finish];const gj={type:'Feature',geometry:{type:'LineString',coordinates:co.map(c=>[c.lng,c.lat])}};if(map.current.getSource(lid)){map.current.getSource(lid).setData(gj);}else{map.current.addSource(lid,{type:'geojson',data:gj});map.current.addLayer({id:lid,type:'line',source:lid,layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':courseDiffColor(stage),'line-width':4}});}map.current.setPaintProperty(lid,'line-opacity',idx>=0?1:0.55);}catch(e){}
       const on=idx>=0;
       const pt=midpoint(stage);
       const el=document.createElement('div');
       el.style.cssText='display:flex;flex-direction:column;align-items:center;cursor:pointer;';
       el.innerHTML=on
-        ?`<div style="width:30px;height:30px;border-radius:50%;background:#2563EB;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700;font-family:Inter,sans-serif;">${idx+1}</div><div style="margin-top:2px;font-size:10px;font-weight:600;color:#1A1A1A;background:rgba(255,255,255,0.9);border-radius:4px;padding:1px 5px;white-space:nowrap;">${stage.name}</div>`
+        ?`${coursePinHtml(idx+1,false)}<div style="margin-top:2px;font-size:10px;font-weight:600;color:#1A1A1A;background:rgba(255,255,255,0.9);border-radius:4px;padding:1px 5px;white-space:nowrap;">${stage.name}</div>`
         :`<div style="width:26px;height:26px;border-radius:50%;background:#fff;border:2px solid #C4C4C4;box-shadow:0 2px 6px rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;"><svg width="13" height="13" viewBox="0 0 24 24"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10" fill="#8A8A8A"/></svg></div><div style="margin-top:2px;font-size:10px;font-weight:600;color:#6B6B6B;background:rgba(255,255,255,0.9);border-radius:4px;padding:1px 5px;white-space:nowrap;">${stage.name}</div>`;
       el.addEventListener('click',()=>onToggleRef.current(stage.id));
-      const marker=new window.mapboxgl.Marker({element:el}).setLngLat([pt.lng,pt.lat]).addTo(map.current);
+      const marker=new window.mapboxgl.Marker(on?{element:el,anchor:'bottom',offset:[0,18]}:{element:el}).setLngLat([pt.lng,pt.lat]).addTo(map.current);
       markersRef.current.push(marker);
     });
   };
@@ -6994,10 +7027,12 @@ function CourseBuilderSheet({stages,course,onClose,onSave}){
   const moveDown=i=>setSelectedIds(prev=>{if(i===prev.length-1)return prev;const a=[...prev];[a[i],a[i+1]]=[a[i+1],a[i]];return a;});
   const totalDist=selectedIds.reduce((acc,id)=>{const s=stages.find(x=>x.id===id);return s?acc+haversine(s.start,s.finish):acc;},0);
   const canSave=name.trim()&&selectedIds.length>=2;
+  const rootRef=useRef(null);
+  useEffect(()=>{const hd=rootRef.current;const el=hd&&hd.parentElement,sc=hd&&hd.nextElementSibling;if(!el||!sc)return;let y0=0;const ts=e=>{y0=e.touches[0].clientY;};const tm=e=>{const t=e.target;if(t.closest&&t.closest('.mapboxgl-map'))return;const dy=e.touches[0].clientY-y0;if(!sc.contains(t)){e.preventDefault();return;}if((sc.scrollTop<=0&&dy>0)||(sc.scrollTop+sc.clientHeight>=sc.scrollHeight-1&&dy<0))e.preventDefault();};el.addEventListener('touchstart',ts,{passive:true});el.addEventListener('touchmove',tm,{passive:false});return()=>{el.removeEventListener('touchstart',ts);el.removeEventListener('touchmove',tm);};},[]);
 
   return(
     <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
-      <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+      <div ref={rootRef} style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
         <div>
           <div style={{fontSize:17,fontWeight:700,color:C.text}}>{course?"Edit Course":"Build Course"}</div>
           <div style={{fontSize:12,color:C.muted,marginTop:2}}>{course?"Rename, add or remove stages":"String stages into a race"}</div>
@@ -7092,7 +7127,7 @@ function CourseBuilderSheet({stages,course,onClose,onSave}){
       </div>
 
       <div style={{padding:"12px 16px",borderTop:`1px solid ${C.border}`,flexShrink:0}}>
-        <button className="tap" onClick={()=>canSave&&onSave({id:course?.id||Date.now(),name:name.trim(),stageIds:selectedIds,privacy,mode,times:{},bestPerStage:{}})} style={{width:"100%",background:canSave?"#fff":C.surface,border:`1.5px solid ${canSave?C.blue:C.border}`,borderRadius:12,padding:15,color:canSave?C.blue:C.muted,fontSize:15,fontWeight:700,transition:"all 0.2s"}}>
+        <button className="tap" onClick={()=>canSave&&onSave({id:course?.id||Date.now(),name:name.trim(),stageIds:selectedIds,privacy,mode,times:{},bestPerStage:{}})} style={{width:"100%",background:canSave?"rgba(250,250,248,0.95)":C.surface,border:`1.5px solid ${canSave?"#E2E2DE":C.border}`,borderRadius:14,boxShadow:canSave?"0 2px 8px rgba(0,0,0,0.06)":"none",padding:15,color:canSave?C.text:C.muted,fontSize:15,fontWeight:700,transition:"all 0.2s"}}>
           {canSave?(course?"Save Changes":`Create ${mode==="mashup"?"Mashup":"Race"} Course`):"Select at least 2 stages"}
         </button>
       </div>
@@ -7147,7 +7182,7 @@ function RaceMapOverlay({courseStages,onClose}){
           const el=document.createElement('div');
           el.style.cssText='width:26px;height:26px;border-radius:50%;background:#2563EB;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;font-family:Inter,sans-serif;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3);';
           el.textContent=String(i+1);
-          new mapboxgl.Marker({element:el}).setLngLat([stage.start.lng,stage.start.lat]).addTo(map.current);
+          map.current.setPaintProperty(id,'line-color',courseDiffColor(stage));new mapboxgl.Marker({element:coursePinEl(i+1,!!stage.time),anchor:'bottom'}).setLngLat([stage.start.lng,stage.start.lat]).addTo(map.current);
         });
       });
     });
@@ -7173,7 +7208,7 @@ function RaceMapOverlay({courseStages,onClose}){
   return(
     <div style={{position:"fixed",inset:0,background:"#fff",zIndex:150,display:"flex",flexDirection:"column"}}>
       <div style={{position:"absolute",top:52,left:16,right:16,zIndex:10,display:"flex",justifyContent:"flex-end"}}>
-        <button className="tap" onClick={onClose} style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 14px",color:C.text,fontSize:13,fontWeight:600,boxShadow:"0 2px 10px rgba(0,0,0,0.1)",display:"flex",alignItems:"center",gap:6}}><Icon.Close size={14} color={C.text}/>Close Map</button>
+        <button className="tap" onClick={onClose} style={{background:"rgba(250,250,248,0.95)",border:"1.5px solid #E2E2DE",borderRadius:14,padding:"7px 14px",color:C.text,fontSize:14,fontWeight:700,boxShadow:"0 2px 8px rgba(0,0,0,0.06)",display:"flex",alignItems:"center",gap:7}}><Icon.Close size={14} color={C.blue}/>Close Map</button>
       </div>
       <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet"/>
       <div ref={mapContainer} style={{width:"100%",height:"100%"}}/>
@@ -7895,13 +7930,14 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
 }
 
 // ── Course Card ───────────────────────────────────────────────────────────────
-function CourseCard({course,stages,userId,onStart,onDelete,onEdit}){
+function CourseCard({course,stages,userId,onStart,onDelete,onEdit,startOpen}){
+  const [open,setOpen]=useState(!!startOpen);
   const courseStages=course.stageIds.map(id=>stages.find(s=>s.id===id)).filter(Boolean);
   const totalDist=courseStages.reduce((a,s)=>a+haversine(s.start,s.finish),0);
   const modeInfo={practice:{color:C.green,Ic:Icon.Flag,label:"Practice"},race:{color:C.blue,Ic:Icon.Flag,label:"Race"},mashup:{color:C.blue,Ic:Icon.Lightning,label:"Mashup"}}[course.mode||"race"];
   return(
     <div style={{background:"white",border:`1px solid ${C.border}`,borderRadius:16,padding:"16px",marginBottom:12,boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+      <div onClick={()=>setOpen(o=>!o)} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10,cursor:"pointer"}}>
         <div>
           <div style={{fontSize:16,fontWeight:700,color:C.text,marginBottom:4}}>{course.name}</div>
           <div style={{display:"flex",alignItems:"center",gap:6}}>
@@ -7909,9 +7945,9 @@ function CourseCard({course,stages,userId,onStart,onDelete,onEdit}){
              <div style={{fontSize:11,fontWeight:600,color:modeInfo.color,background:`${modeInfo.color}15`,borderRadius:6,padding:"2px 7px",display:"flex",alignItems:"center",gap:4}}><modeInfo.Ic size={11} color={modeInfo.color}/>{modeInfo.label}</div>
           </div>
         </div>
-       <div style={{display:"flex",alignItems:"center"}}><div style={{width:40,height:40,borderRadius:10,background:`${modeInfo.color}15`,display:"flex",alignItems:"center",justifyContent:"center"}}><modeInfo.Ic size={18} color={modeInfo.color}/></div>{onEdit&&course.created_by===userId&&<button className="tap" onClick={()=>onEdit(course)} style={{background:"none",border:"none",padding:"4px 0 4px 10px",color:C.blue,fontSize:13,fontWeight:600}}>Edit</button>}{onDelete&&course.created_by===userId&&<button className="tap" onClick={()=>onDelete(course.id)} style={{background:"none",border:"none",padding:"4px 0 4px 8px",color:C.red,fontSize:15,fontWeight:600}}>✕</button>}</div>
+       <div style={{display:"flex",alignItems:"center"}}><div style={{width:40,height:40,borderRadius:10,background:`${modeInfo.color}15`,display:"flex",alignItems:"center",justifyContent:"center"}}><modeInfo.Ic size={18} color={modeInfo.color}/></div>{onEdit&&course.created_by===userId&&<button className="tap" onClick={e=>{e.stopPropagation();onEdit(course);}} style={{background:"none",border:"none",padding:"4px 0 4px 10px",color:C.blue,fontSize:13,fontWeight:600}}>Edit</button>}{onDelete&&course.created_by===userId&&<button className="tap" onClick={e=>{e.stopPropagation();onDelete(course.id);}} style={{background:"none",border:"none",padding:"4px 0 4px 8px",color:C.red,fontSize:15,fontWeight:600}}>✕</button>}<span style={{display:"flex",marginLeft:10}}>{open?<Icon.ChevronUp size={18} color={C.mutedL}/>:<Icon.ChevronDown size={18} color={C.mutedL}/>}</span></div>
       </div>
-      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}}>
+      <div style={{display:open?"flex":"none",gap:6,flexWrap:"wrap",marginBottom:14}}>
         {courseStages.map((stage,i)=>(
           <div key={stage.id} style={{display:"flex",alignItems:"center",gap:5,background:C.surface,borderRadius:8,padding:"5px 10px",border:`1px solid ${C.border}`}}>
             <div style={{width:18,height:18,borderRadius:"50%",background:stage.time?C.green:C.mutedL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:"white"}}>{i+1}</div>
@@ -7920,8 +7956,8 @@ function CourseCard({course,stages,userId,onStart,onDelete,onEdit}){
           </div>
         ))}
       </div>
-            <button className="tap" onClick={()=>onStart(course)} style={{width:"100%",background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"12px 16px",color:C.blue,fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-               <Icon.Flag size={16} color={C.blue}/>Start {modeInfo.label}
+            <button className="tap" onClick={()=>onStart(course)} style={{width:"100%",background:"rgba(250,250,248,0.95)",border:"1.5px solid #E2E2DE",borderRadius:14,boxShadow:"0 2px 8px rgba(0,0,0,0.06)",padding:"12px 16px",color:C.text,fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+               <modeInfo.Ic size={16} color={C.blue}/>Start {modeInfo.label}
       </button>
     </div>
   );
@@ -8683,6 +8719,7 @@ export default function App(){
   const [showCourseBuilder,setShowCourseBuilder]=useState(false);
   const [stagesFilter,setStagesFilter]=useState("all");
   const [coursesFilter,setCoursesFilter]=useState("stages");
+  const [openCourseId,setOpenCourseId]=useState(null);
   const [activeRace,setActiveRace]=useState(null);
   const [selectedStage,setSelectedStage]=useState(null);
   const [showSettings,setShowSettings]=useState(false);
@@ -8710,6 +8747,8 @@ export default function App(){
   const updUi=useAppUpdates(user);
   const [inviteCode,setInviteCode]=useState(inviteRead);
   const [inviteMsg,setInviteMsg]=useState("");
+    const feedCourse=(item)=>{const ctx=item.context||{};return courses.find(c=>String(c.id)===String(ctx.course_id))||courses.find(c=>(item.message||"").endsWith(": "+c.name))||null;};
+    const openCourse=(c)=>{setOpenCourseId(c.id);setCoursesFilter('courses');setTab('stages');};
     const goToStage=(stageId)=>{
   const stage=stages.find(s=>String(s.id)===String(stageId));
   if(!stage){alert("Couldn't find that stage");return;}
@@ -9159,7 +9198,7 @@ if(showBikeSetup)return(
       <style>{STYLES}</style>
       <div style={{height:44,background:"#fff"}}/>
       <div style={{height:"calc(var(--app-h) - 44px)"}}>
-        <CourseBuilderSheet stages={stages} course={editingCourse} onClose={()=>{setShowCourseBuilder(false);setEditingCourse(null);}} onSave={async c=>{if(c.id&&courses.some(x=>x.id===c.id)){const{error}=await supabase.from('courses').update({name:c.name,privacy:c.privacy,mode:c.mode,stage_ids:c.stageIds}).eq('id',c.id);if(error){alert(error.message);}else{setCourses(prev=>prev.map(x=>x.id===c.id?{...x,name:c.name,privacy:c.privacy,mode:c.mode,stageIds:c.stageIds}:x));}setShowCourseBuilder(false);setEditingCourse(null);}else{const{data,error}=await supabase.from('courses').insert({name:c.name,privacy:c.privacy,mode:c.mode,stage_ids:c.stageIds,created_by:user.id}).select().single();if(!error){setCourses(prev=>[...prev,{...c,id:data.id,created_by:user.id}]);if(c.privacy!=="private"&&window.confirm(`Share "${c.name}" to the feed?`)){logEvent(user.id,'course_created',`created a new course: ${c.name}`).then(()=>setRefreshTick(t=>t+1));}}setShowCourseBuilder(false);setCoursesFilter("courses");setTab("stages");}}}/>
+        <CourseBuilderSheet stages={stages} course={editingCourse} onClose={()=>{setShowCourseBuilder(false);setEditingCourse(null);}} onSave={async c=>{if(c.id&&courses.some(x=>x.id===c.id)){const{error}=await supabase.from('courses').update({name:c.name,privacy:c.privacy,mode:c.mode,stage_ids:c.stageIds}).eq('id',c.id);if(error){alert(error.message);}else{setCourses(prev=>prev.map(x=>x.id===c.id?{...x,name:c.name,privacy:c.privacy,mode:c.mode,stageIds:c.stageIds}:x));}setShowCourseBuilder(false);setEditingCourse(null);}else{const{data,error}=await supabase.from('courses').insert({name:c.name,privacy:c.privacy,mode:c.mode,stage_ids:c.stageIds,created_by:user.id}).select().single();if(!error){setCourses(prev=>[...prev,{...c,id:data.id,created_by:user.id}]);if(c.privacy!=="private"&&window.confirm(`Share "${c.name}" to the feed?`)){logEvent(user.id,'course_created',`created a new course: ${c.name}`,null,{course_id:data.id}).then(()=>setRefreshTick(t=>t+1));}}setShowCourseBuilder(false);setCoursesFilter("courses");setTab("stages");}}}/>
       </div>
     </div>
   );
@@ -9273,7 +9312,7 @@ if(showBikeSetup)return(
             </div>
           )}
           <H2hLiveStrip user={user} list={h2hList} onOpen={id=>{setH2hStart(id);setH2hFromFeed(true);setShowH2h(true);}}/>
-          {feed.length===0?<div style={{textAlign:"center",padding:"48px 20px",color:C.muted,fontSize:13}}>No activity yet — set a record, finish a course, or add a stage to get things started.</div>:feed.map(item=><div key={item.id} className="feedItem"><FeedCard item={item} stage={stages.find(s=>String(s.id)===String(item.stage_id))} onViewStage={goToStage} units={settings.units} onOpenH2h={id=>{setH2hStart(id);setH2hFromFeed(true);setShowH2h(true);}} h2hIds={h2hList.map(c=>c.id)}/></div>)}
+          {feed.length===0?<div style={{textAlign:"center",padding:"48px 20px",color:C.muted,fontSize:13}}>No activity yet — set a record, finish a course, or add a stage to get things started.</div>:feed.map(item=><div key={item.id} className="feedItem">{(item.event_type==='course_created'&&feedCourse(item))?<CourseFeedCard item={item} course={feedCourse(item)} stages={stages} onOpen={openCourse}/>:<FeedCard item={item} stage={stages.find(s=>String(s.id)===String(item.stage_id))} onViewStage={goToStage} units={settings.units} onOpenH2h={id=>{setH2hStart(id);setH2hFromFeed(true);setShowH2h(true);}} h2hIds={h2hList.map(c=>c.id)}/>}</div>)}
         </div>
       )}
 
@@ -9402,7 +9441,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
                   <div style={{fontSize:13,color:C.muted,marginBottom:20,lineHeight:1.5}}>Choose Race or Mashup mode when building</div>
                   <button className="tap" onClick={()=>{setEditingCourse(null);setShowCourseBuilder(true);}} style={{background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:12,padding:"12px 24px",color:C.blue,fontSize:14,fontWeight:600}}>Build Your First Course</button>
                 </div>
-                ):courses.map(course=><CourseCard key={course.id} course={course} stages={stages} userId={user.id} onStart={c=>setActiveRace(c)} onEdit={c=>{setEditingCourse(c);setShowCourseBuilder(true);}} onDelete={async id=>{if(!window.confirm("Delete this course?"))return;await supabase.from('courses').delete().eq('id',id).eq('created_by',user.id);setCourses(prev=>prev.filter(c=>c.id!==id));}}/>)}
+                ):courses.map(course=><CourseCard key={course.id} startOpen={String(openCourseId)===String(course.id)} course={course} stages={stages} userId={user.id} onStart={c=>setActiveRace(c)} onEdit={c=>{setEditingCourse(c);setShowCourseBuilder(true);}} onDelete={async id=>{if(!window.confirm("Delete this course?"))return;await supabase.from('courses').delete().eq('id',id).eq('created_by',user.id);setCourses(prev=>prev.filter(c=>c.id!==id));}}/>)}
             </div>
           )}
         </div>
