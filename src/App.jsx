@@ -7272,7 +7272,8 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
   const cancelRun=()=>{
     clearInterval(timerRef.current);timerRef.current=null;
     clearTimeout(finishTimeoutRef.current);finishTimeoutRef.current=null;
-    logEvent(user?.id,"run_cancelled","Cancelled a run",currentStage?.id,{ms:Math.round(timerMsRef.current)});
+    const lf=prevGpsRef.current;
+    logEvent(user?.id,"run_cancelled","Cancelled a run",currentStage?.id,{ms:Math.round(timerMsRef.current),to_finish_m:lf?Math.round(haversine(lf,currentStage.finish)):null,acc_m:lf?Math.round(lf.acc):null});
     traceRef.current=[];
     timerMsRef.current=0;setTimerMs(0);
     setArmed(false);setTouchLocked(false);setGateStatus("waiting");setDistToGate(null);
