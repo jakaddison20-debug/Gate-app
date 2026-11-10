@@ -298,6 +298,7 @@ const STYLES=`
   .tap{transition:opacity 0.12s;} .tap:active{opacity:0.65;}
   button{cursor:pointer;border:none;font-family:'Inter',sans-serif;} .segrow:last-child .segdiv{display:none;} .segrow>svg:last-child{opacity:.75;}
   input,textarea{font-family:'Inter',sans-serif;}
+  .feedItem>div{border-bottom:none!important;padding:7px 16px!important}
   input::placeholder,textarea::placeholder{color:#C4C4C4;}
   input:focus,textarea:focus{outline:none;} textarea{resize:none;}
 `;
@@ -2353,6 +2354,9 @@ function FeedStageCard({item,stage,onViewStage,units}){
     return()=>{off=true;};
   },[stage.id,isNew]);
   const W=334,H=160;
+  const mapPaths=isNew?recapMapPaths([{n:1,line:stage.line_coords&&stage.line_coords.length>1?stage.line_coords:[stage.start,stage.finish]}]):[];
+  const mapUrl=mapPaths.length?recapMapUrl(mapPaths):null;
+  const recapLike={map:mapPaths,stages:[{diff:stage.difficulty}]};
   const pts=isNew?feedRoutePts(stage,W,H,24):null;
   const d=pts?feedSmoothPath(pts):"";
   const st=pts&&pts[0],en=pts&&pts[pts.length-1];
@@ -2365,6 +2369,20 @@ function FeedStageCard({item,stage,onViewStage,units}){
   const text=isNew?"created a new stage":isPb?"set a new personal best":"set a new record";
   const chip=isNew?{bg:`${C.blue}15`,ic:<Icon.Lightning size={15} color={C.blue}/>}:isPb?{bg:"#EFF6FF",ic:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>}:{bg:"#FFFBEB",ic:<Icon.Crown size={15} color="#92400E"/>};
   const go=()=>onViewStage&&onViewStage(item.stage_id);
+  if(!isNew)return(
+    <div style={{padding:"7px 16px"}}>
+      <button className="tap" onClick={go} style={{width:"100%",display:"flex",alignItems:"center",gap:12,background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:"12px 14px",textAlign:"left"}}>
+        <Avatar size={38} url={item.avatarUrl}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:12,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}><span style={{fontWeight:700,color:C.text}}>{item.userName}</span> · {item.ago}</div>
+          <div style={{display:"flex",alignItems:"center",gap:7,margin:"3px 0 2px"}}><TallDiamond color={color} size={13}/><span style={{fontSize:15,fontWeight:700,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{stage.name}</span></div>
+          <div style={{display:"flex",alignItems:"center",gap:5,fontSize:11,fontWeight:700,color:isPb?C.blue:"#92400E"}}>{isPb?<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>:<GoldCrown size={12}/>}{isPb?"Personal best":"Course record"}</div>
+        </div>
+        <span style={{fontSize:20,fontWeight:800,letterSpacing:-0.5,color:C.text,fontVariantNumeric:"tabular-nums",flexShrink:0}}>{timeTxt}</span>
+        <span style={{fontSize:12,fontWeight:700,color:C.blue}}>→</span>
+      </button>
+    </div>
+  );
   return(
     <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.border}`}}>
       <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,overflow:"hidden"}}>
@@ -2373,15 +2391,9 @@ function FeedStageCard({item,stage,onViewStage,units}){
           <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,color:C.text,lineHeight:1.4}}><span style={{fontWeight:700}}>{item.userName}</span> {text}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>{item.ago}</div></div>
           <div style={{width:30,height:30,borderRadius:8,background:chip.bg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{chip.ic}</div>
         </div>
-        {isNew&&pts&&<div style={{margin:"0 12px",borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`,background:C.mapPark}}>
-          <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{display:"block"}}>
-            <path d={d} fill="none" stroke="#fff" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round"/>
-            <path d={d} fill="none" stroke={color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
-            <circle cx={st[0]} cy={st[1]} r="6.6" fill={color} stroke="#fff" strokeWidth="2.4"/>
-            <circle cx={st[0]} cy={st[1]} r="2.2" fill="#fff"/>
-            <circle cx={en[0]} cy={en[1]} r="6.6" fill="#fff" stroke={C.text} strokeWidth="2.4"/>
-            <circle cx={en[0]} cy={en[1]} r="2.3" fill={C.text}/>
-          </svg>
+        {isNew&&mapPaths.length>0&&<div style={{margin:"0 12px",borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`,background:C.mapPark,aspectRatio:"16 / 9",position:"relative"}}>
+          {mapUrl&&<img src={mapUrl} alt="" style={{width:"100%",height:"100%",display:"block",objectFit:"cover"}} onError={e=>{e.currentTarget.style.display="none";}}/>}
+          <RecapMapOverlay recap={recapLike} noNum/>
         </div>}
         <button className="tap" onClick={go} style={{display:"flex",alignItems:"center",gap:10,width:"calc(100% - 24px)",margin:12,background:"#fff",border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px",textAlign:"left"}}>
           <span style={{display:"flex",flexShrink:0}}><TallDiamond color={color} size={16}/></span>
@@ -2397,13 +2409,44 @@ function FeedStageCard({item,stage,onViewStage,units}){
     </div>
   );
 }
-function FeedCard({item,stage,onViewStage,units}){
+const FeedCrown=({size=15})=><GoldCrown size={size}/>;
+function H2hFeedCard({item,canOpen,onOpen}){
+  const x=item.context||{};
+  const sum={meWins:x.me_wins||0,themWins:x.them_wins||0,winner:x.winner||"draw",both:x.both||0,gap:x.gap_ms||0};
+  const other=x.other_name||"Rider";
+  const title=sum.winner==="me"?`${item.userName} won`:sum.winner==="them"?`${other} won`:"Draw";
+  const said=(item.message||"").split(" · ")[0];
+  return(
+    <div style={{padding:"7px 16px"}}>
+      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,overflow:"hidden"}}>
+        <div style={{display:"flex",alignItems:"flex-start",gap:12,padding:"14px 14px 12px"}}>
+          <Avatar size={38} url={item.avatarUrl}/>
+          <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,color:C.text,lineHeight:1.4}}><span style={{fontWeight:700}}>{item.userName}</span> {said}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>{item.ago}</div></div>
+          <div style={{width:30,height:30,borderRadius:8,background:"#FFFBEB",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><GoldCrown size={16}/></div>
+        </div>
+        <div style={{margin:"0 12px 12px",background:"#fff",border:`1px solid ${C.border}`,borderRadius:12,overflow:"hidden"}}>
+          <div style={{padding:"16px 14px 10px",textAlign:"center"}}>
+            <div style={{fontSize:22,fontWeight:800,color:C.text,marginBottom:3}}>{title}</div>
+            {sum.both>0&&<><div style={{fontSize:13,color:C.muted,marginBottom:9}}>Stages won {sum.meWins}–{sum.themWins}</div><H2hPill d={sum.gap}/></>}
+          </div>
+          <H2hPodium sum={sum} otherName={other} meName={item.userName} meAvatar={item.avatarUrl} otherAvatar={x.other_avatar} bare/>
+          {canOpen&&<button className="tap" onClick={onOpen} style={{width:"100%",display:"flex",alignItems:"center",gap:10,background:"#fff",border:"none",borderTop:`1px solid ${C.border}`,padding:"13px 14px",textAlign:"left"}}>
+            <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:700,color:C.text}}>Head to head</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>{sum.both} stage{sum.both===1?"":"s"} · stage by stage times</div></div>
+            <span style={{fontSize:12,fontWeight:700,color:C.blue,flexShrink:0}}>View details →</span>
+          </button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+function FeedCard({item,stage,onViewStage,units,onOpenH2h,h2hIds}){
 if(stage&&["stage_created","stage_record","personal_best"].includes(item.event_type))return <FeedStageCard item={item} stage={stage} onViewStage={onViewStage} units={units}/>;
+if(item.event_type==='h2h_result'&&item.context&&item.context.winner)return <H2hFeedCard item={item} canOpen={!!onOpenH2h&&!!item.context.challenge_id&&(h2hIds||[]).includes(item.context.challenge_id)} onOpen={()=>onOpenH2h(item.context.challenge_id)}/>;
 if(item.event_type==='day_recap'&&item.context&&item.context.stages){
   const n=item.context.stages.length;
   return(<div style={{padding:"14px 16px",borderBottom:`1px solid ${C.border}`}}><DayRecapCard recap={item.context} head={{name:item.userName,avatarUrl:item.avatarUrl,ago:item.ago,text:`rode ${n} stage${n===1?"":"s"} today`}}/></div>);
 }
-const icons={stage_record:{Ic:Icon.Crown,color:"#92400E",bg:"#FFFBEB"},personal_best:{kind:"up",color:C.blue,bg:"#EFF6FF"},course_finish:{Ic:Icon.Flag,color:C.orange,bg:C.orangeL},stage_created:{Ic:Icon.Lightning,color:C.blue,bg:`${C.blue}15`},course_created:{Ic:Icon.Flag,color:C.blue,bg:`${C.blue}15`},day_recap:{Ic:Icon.BarChart,color:C.green,bg:`${C.green}15`},h2h_result:{Ic:Icon.Crown,color:"#92400E",bg:"#FFFBEB"}};
+const icons={stage_record:{Ic:FeedCrown,color:"#C9A227",bg:"#FFFBEB"},personal_best:{kind:"up",color:C.blue,bg:"#EFF6FF"},course_finish:{Ic:Icon.Flag,color:C.orange,bg:C.orangeL},stage_created:{Ic:Icon.Lightning,color:C.blue,bg:`${C.blue}15`},course_created:{Ic:Icon.Flag,color:C.blue,bg:`${C.blue}15`},day_recap:{Ic:Icon.BarChart,color:C.green,bg:`${C.green}15`},h2h_result:{Ic:FeedCrown,color:"#C9A227",bg:"#FFFBEB"}};
 const cfg=icons[item.event_type]||{Ic:Icon.Lightning,color:C.muted,bg:C.surface};
 const showViewStage=item.stage_id&&['stage_record','personal_best','stage_created'].includes(item.event_type);
 return(
@@ -4417,7 +4460,7 @@ function H2hStageCard({c,s,otherName,user,units,heightUnit}){
   );
 }
 
-function H2hPodium({sum,otherName,meAvatar,otherAvatar,bare}){
+function H2hPodium({sum,otherName,meName,meAvatar,otherAvatar,bare}){
   const draw=sum.winner==="draw";
   const meFirst=sum.winner!=="them";
   const col=(name,pos,wins,me,av)=>{
@@ -4432,7 +4475,7 @@ function H2hPodium({sum,otherName,meAvatar,otherAvatar,bare}){
     );
   };
   const mePos=draw||meFirst?1:2,thPos=draw||!meFirst?1:2;
-  const mine=col("You",mePos,sum.meWins,true,meAvatar),theirs=col(otherName,thPos,sum.themWins,false,otherAvatar);
+  const mine=col(meName||"You",mePos,sum.meWins,true,meAvatar),theirs=col(otherName,thPos,sum.themWins,false,otherAvatar);
   return <div style={{display:"flex",justifyContent:"center",alignItems:"flex-end",gap:6,padding:"8px 16px 0",borderBottom:bare?"none":`1px solid ${C.border}`}}>{mePos<=thPos?<>{mine}{theirs}</>:<>{theirs}{mine}</>}</div>;
 }
 
@@ -4463,7 +4506,7 @@ function H2hDetail({c,user,meAvatar,onBack,onReload,onActivity,units,heightUnit}
   const shareToFeed=()=>{
     const tail=sum.gap!==0?` · ${h2hDelta(sum.gap)}`:"";
     const msg=sum.winner==="me"?`beat ${name} ${scoreText} in a head to head${tail}`:sum.winner==="them"?`lost ${scoreText} to ${name} in a head to head`:`drew ${scoreText} with ${name} in a head to head`;
-    logEvent(user.id,"h2h_result",msg,null,{challenge_id:c.id});
+    logEvent(user.id,"h2h_result",msg,null,{challenge_id:c.id,other_name:name,other_avatar:c.other_avatar||null,me_wins:sum.meWins,them_wins:sum.themWins,both:sum.both,gap_ms:sum.gap,winner:sum.winner});
     setShared(true);onActivity&&onActivity();
   };
   const shareText=()=>{
@@ -7894,7 +7937,7 @@ function recapMapUrl(paths,w=480,h=270){
   if(!v)return null;
   return `https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/static/${v.lng.toFixed(5)},${v.lat.toFixed(5)},${v.zoom.toFixed(2)}/${w}x${h}@2x?access_token=${import.meta.env.VITE_MAPBOX_TOKEN}`;
 }
-function RecapMapOverlay({recap,w=480,h=270}){
+function RecapMapOverlay({recap,w=480,h=270,noNum=false}){
   const v=recapMapView(recap.map,w,h);
   if(!v)return null;
   const BLUE=C.blue;
@@ -7907,7 +7950,7 @@ function RecapMapOverlay({recap,w=480,h=270}){
       {v.routes.slice().reverse().map(r=>{const p=r.pts[0];return(
         <g key={"p"+r.n} transform={`translate(${p[0].toFixed(1)},${p[1].toFixed(1)}) scale(${RECAP_PIN_K})`}>
           <path d={RECAP_PIN_D} fill={BLUE} fillOpacity="0.16" stroke={BLUE} strokeWidth="5" strokeLinejoin="round"/>
-          <text x="0" y="-27" textAnchor="middle" fontFamily="Inter, sans-serif" fontWeight="800" fontSize="27" fill={BLUE} stroke="#fff" strokeWidth="5" strokeLinejoin="round" paintOrder="stroke">{r.n}</text>
+          <text x="0" y="-27" textAnchor="middle" fontFamily="Inter, sans-serif" fontWeight="800" fontSize="27" fill={BLUE} stroke="#fff" strokeWidth="5" strokeLinejoin="round" paintOrder="stroke">{noNum?"":r.n}</text>
         </g>);})}
     </svg>
   );
@@ -8860,7 +8903,7 @@ if(showBikeSetup)return(
             </div>
           )}
           <H2hLiveStrip user={user} list={h2hList} onOpen={id=>{setH2hStart(id);setH2hFromFeed(true);setShowH2h(true);}}/>
-          {feed.length===0?<div style={{textAlign:"center",padding:"48px 20px",color:C.muted,fontSize:13}}>No activity yet — set a record, finish a course, or add a stage to get things started.</div>:feed.map(item=><FeedCard key={item.id} item={item} stage={stages.find(s=>String(s.id)===String(item.stage_id))} onViewStage={goToStage} units={settings.units}/>)}
+          {feed.length===0?<div style={{textAlign:"center",padding:"48px 20px",color:C.muted,fontSize:13}}>No activity yet — set a record, finish a course, or add a stage to get things started.</div>:feed.map(item=><div key={item.id} className="feedItem"><FeedCard item={item} stage={stages.find(s=>String(s.id)===String(item.stage_id))} onViewStage={goToStage} units={settings.units} onOpenH2h={id=>{setH2hStart(id);setH2hFromFeed(true);setShowH2h(true);}} h2hIds={h2hList.map(c=>c.id)}/></div>)}
         </div>
       )}
 
