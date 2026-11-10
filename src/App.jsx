@@ -5292,7 +5292,7 @@ function H2hScreen({user,onBack,onActivity,units,heightUnit,startId}){
             </button>
           </div>
         </>)}
-        {header("Challenges",<button className="tap" onClick={()=>setSheet(true)} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"7px 12px",color:C.blue,fontSize:13,fontWeight:600}}><Icon.Plus size={14} color={C.blue}/>Start</button>,onBack)}
+        {header("Challenges",<button className="tap newPill" onClick={()=>setSheet(true)} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"7px 12px",color:C.blue,fontSize:13,fontWeight:600}}><Icon.Plus size={17} color={C.blue}/>Start</button>,onBack)}
         <div style={{flex:1,overflowY:"auto",padding:"18px 16px"}}>
           {list===null?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>:(nInv+nAct+nSent+nFin)===0?(
             <div style={{textAlign:"center",padding:"48px 20px",color:C.muted}}>
