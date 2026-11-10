@@ -3568,7 +3568,150 @@ function TeamCalendarScreen({group,user,stages,onBack}){
     </div>
   );
 }
-function PlanRideSheet({group,stages,onClose,onPosted}){
+function MyCalendarCard({user,stages}){
+  const [items,setItems]=useState(null);
+  const [teams,setTeams]=useState([]);
+  const [view,setView]=useState(()=>{const n=new Date();return new Date(n.getFullYear(),n.getMonth(),1);});
+  const [open,setOpen]=useState(false);
+  const [selDay,setSelDay]=useState(null);
+  const [plan,setPlan]=useState(false);
+  const load=async()=>{
+    try{
+      const [tm,mine]=await Promise.all([supabase.rpc("my_teams"),supabase.from("my_rides").select("*")]);
+      const ts=Array.isArray(tm.data)?tm.data:[];
+      setTeams(ts.map(g=>({id:g.id,name:g.name})));
+      const lists=await Promise.all(ts.map(g=>supabase.rpc("team_rides",{p_group_id:g.id}).then(r=>({g,rides:Array.isArray(r.data)?r.data:[]}))));
+      const map={};
+      lists.forEach(({g,rides})=>rides.forEach(r=>{
+        if(r.mine==="no")return;
+        if(r.mine!=="going"&&r.created_by!==user.id)return;
+        const k=`${r.created_by}|${r.starts_at}|${r.title}`;
+        const it=map[k]||(map[k]={key:k,kind:"team",title:r.title,starts_at:r.starts_at,place:r.place,place_lat:r.place_lat,place_lng:r.place_lng,note:r.note,stages:r.stages||[],tags:[],ids:[],created:r.created_by===user.id});
+        it.tags.push(g.name);it.ids.push(r.id);
+      }));
+      const arr=Object.values(map);
+      (mine.data||[]).forEach(r=>arr.push({key:"me|"+r.id,kind:"me",id:r.id,title:r.title,starts_at:r.starts_at,place:r.place,place_lat:r.place_lat,place_lng:r.place_lng,note:r.note,stages:r.stages||[],tags:[],ids:[],created:true}));
+      arr.sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at));
+      setItems(arr);
+    }catch(e){console.log(e);setItems([]);}
+  };
+  useEffect(()=>{load();},[]);
+  const HR=3600000;
+  const future=(items||[]).filter(x=>new Date(x.starts_at).getTime()>=Date.now()-3*HR);
+  const clashOf=it=>{
+    const t=new Date(it.starts_at).getTime();
+    if(t<Date.now()-3*HR)return null;
+    return future.find(x=>x!==it&&Math.abs(new Date(x.starts_at).getTime()-t)<2*HR)||null;
+  };
+  const cancelIt=it=>{
+    if(it.kind==="me"){
+      if(!window.confirm("Delete this ride?"))return;
+      supabase.from("my_rides").delete().eq("id",it.id).then(()=>load());
+    }else if(it.created){
+      if(!window.confirm("Cancel this ride for everyone?"))return;
+      Promise.all(it.ids.map(id=>supabase.rpc("team_ride_delete",{p_ride_id:id}))).then(()=>load());
+    }else{
+      Promise.all(it.ids.map(id=>supabase.rpc("team_ride_rsvp",{p_ride_id:id,p_status:"no"}))).then(()=>load());
+    }
+  };
+  const y=view.getFullYear(),mo=view.getMonth();
+  const now=new Date();
+  const isNowMonth=now.getFullYear()===y&&now.getMonth()===mo;
+  const first=(new Date(y,mo,1).getDay()+6)%7;
+  const dim=new Date(y,mo+1,0).getDate();
+  const inMonth=(items||[]).filter(it=>{const d=new Date(it.starts_at);return d.getFullYear()===y&&d.getMonth()===mo;});
+  const byDay={};
+  inMonth.forEach(it=>{const d=new Date(it.starts_at).getDate();(byDay[d]=byDay[d]||[]).push(it);});
+  const shown=selDay?(byDay[selDay]||[]):inMonth;
+  const n=shown.length;
+  const title=selDay?`${n} event${n===1?"":"s"} on ${CAL_DAYS[new Date(y,mo,selDay).getDay()]} ${selDay} ${CAL_MONTHS[mo].slice(0,3)}`:`${n} event${n===1?"":"s"}`;
+  const sub=selDay?"Tap the day again to see the whole month":inMonth.length?`${isNowMonth?"This month":CAL_MONTHS[mo]} · tap to see them all`:`Nothing planned ${isNowMonth?"this month":"in "+CAL_MONTHS[mo]}`;
+  const svg=(p,c,s,w)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={w||2} strokeLinecap="round" strokeLinejoin="round">{p}</svg>;
+  const linkP=<><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></>;
+  const meP=<><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0116 0"/></>;
+  const warnC="#D97706";
+  const cells=[];
+  for(let i=0;i<first;i++)cells.push(<div key={"b"+i}/>);
+  for(let d=1;d<=dim;d++){
+    const rs=byDay[d]||[];
+    const has=rs.length>0,cl=rs.some(r=>clashOf(r));
+    const today=isNowMonth&&d===now.getDate();
+    const sel=selDay===d;
+    cells.push(
+      <button key={d} className="tap" onClick={()=>{setSelDay(sel?null:d);if(has)setOpen(true);}} style={{height:38,display:"flex",alignItems:"center",justifyContent:"center",background:"none",border:"none",padding:0,fontSize:13,fontWeight:has?700:500,color:has?C.text:C.muted}}>
+        <div style={{width:30,height:30,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:has?(cl?warnC:C.blue):"transparent",color:has?"#fff":"inherit",boxShadow:today?(has?`0 0 0 2px #fff inset,0 0 0 2px ${C.text}`:`0 0 0 2px ${C.text} inset`):"none",outline:sel?`2px solid ${C.blue}`:"none",outlineOffset:2}}>{d}</div>
+      </button>
+    );
+  }
+  const nav=(dir,pts)=><button className="tap" onClick={()=>{setView(new Date(y,mo+dir,1));setSelDay(null);}} style={{width:30,height:30,border:`1px solid ${C.border}`,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points={pts}/></svg></button>;
+  const card=it=>{
+    const d=new Date(it.starts_at);
+    const cl=clashOf(it);
+    const hasPin=it.place_lat!=null&&it.place_lng!=null;
+    const st=it.stages||[];
+    return(
+      <div key={it.key} style={{background:"#fff",border:`1px solid ${cl?"#F3D8A8":C.border}`,borderRadius:14,padding:"12px 13px"}}>
+        <div style={{display:"flex",gap:12,alignItems:"center"}}>
+          <div style={{width:46,borderRadius:10,background:`${C.blue}12`,textAlign:"center",padding:"6px 0",flexShrink:0}}>
+            <div style={{fontSize:10,fontWeight:800,color:C.blue,letterSpacing:0.5}}>{CAL_MONTHS[d.getMonth()].slice(0,3).toUpperCase()}</div>
+            <div style={{fontSize:20,fontWeight:800,lineHeight:1.1,color:C.text}}>{d.getDate()}</div>
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:15,fontWeight:700,color:C.text}}>{it.title}</div>
+            <div style={{fontSize:12,color:C.muted,marginTop:3,display:"flex",alignItems:"center",gap:5}}>{svg(<><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>,C.muted,12)}{CAL_DAYS[d.getDay()]} · {calHM(d)}</div>
+            {(it.place||hasPin)&&(hasPin
+              ?<a href={`https://www.google.com/maps/search/?api=1&query=${it.place_lat},${it.place_lng}`} target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:C.blue,marginTop:2,display:"flex",alignItems:"center",gap:5,textDecoration:"none",fontWeight:600}}>{svg(<><path d="M12 21.5s-6.5-5.6-6.5-10.8a6.5 6.5 0 0113 0c0 5.2-6.5 10.8-6.5 10.8z"/><circle cx="12" cy="10.5" r="2.4"/></>,C.blue,12)}{it.place||"Pinned location"}</a>
+              :<div style={{fontSize:12,color:C.muted,marginTop:2,display:"flex",alignItems:"center",gap:5}}>{svg(<><path d="M12 21.5s-6.5-5.6-6.5-10.8a6.5 6.5 0 0113 0c0 5.2-6.5 10.8-6.5 10.8z"/><circle cx="12" cy="10.5" r="2.4"/></>,C.muted,12)}{it.place}</div>)}
+            {st.length>0&&<div style={{fontSize:12,color:C.muted,marginTop:2,display:"flex",alignItems:"center",gap:5,minWidth:0}}><Icon.Lightning size={12} color={C.muted}/><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{st.map(s=>s.name).join(" · ")}</span></div>}
+          </div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:11,gap:8}}>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6,minWidth:0}}>
+            {it.kind==="me"
+              ?<span style={{display:"inline-flex",alignItems:"center",gap:5,borderRadius:999,padding:"3px 9px",fontSize:11,fontWeight:700,background:"#F0F0F0",color:C.muted}}>{svg(meP,C.muted,11)}Just me</span>
+              :it.tags.map(t=><span key={t} style={{display:"inline-flex",alignItems:"center",gap:5,borderRadius:999,padding:"3px 9px",fontSize:11,fontWeight:700,background:`${C.blue}12`,color:C.blue}}>{svg(linkP,C.blue,11)}{t}</span>)}
+          </div>
+          <span style={{fontSize:11,fontWeight:700,color:it.created?C.muted:C.green,flexShrink:0}}>{it.created?"Created by you":"Going ✓"}</span>
+        </div>
+        {cl&&<div style={{display:"flex",gap:7,alignItems:"flex-start",background:"#FFF7E8",border:"1px solid #F3D8A8",borderRadius:10,padding:"8px 10px",marginTop:9,fontSize:12,color:"#92400E",lineHeight:1.35}}>{svg(<><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18.2v.1"/></>,warnC,14)}<span>Clashes with <b>{cl.title}</b>, {calHM(new Date(cl.starts_at))}</span></div>}
+        <button className="tap" onClick={()=>cancelIt(it)} style={{marginTop:10,background:"none",border:"none",padding:0,fontSize:12,color:C.muted}}>{it.kind==="me"?"Delete":it.created?"Cancel ride":"Can't go"}</button>
+      </div>
+    );
+  };
+  return(
+    <div style={{padding:"26px 16px 0"}}>
+      <div style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase",marginBottom:8}}>My calendar</div>
+      <div style={{border:`1px solid ${C.border}`,borderRadius:14,padding:14}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+          <div style={{fontSize:16,fontWeight:800,color:C.text}}>{CAL_MONTHS[mo]} {y}</div>
+          <button className="tap" onClick={()=>setPlan(true)} style={{display:"flex",alignItems:"center",gap:7,background:"rgba(250,250,248,0.95)",border:"1.5px solid #E2E2DE",borderRadius:14,padding:"7px 14px",color:C.text,fontSize:14,fontWeight:700,boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}><Icon.Plus size={17} color={C.blue}/>Ride</button>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",textAlign:"center",fontSize:11,fontWeight:600,color:C.mutedL,marginBottom:2}}>{["M","T","W","T","F","S","S"].map((x,i)=><div key={i}>{x}</div>)}</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",textAlign:"center"}}>{cells}</div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:8}}>{nav(-1,"15 18 9 12 15 6")}{nav(1,"9 18 15 12 9 6")}</div>
+        <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,overflow:"hidden",marginTop:14}}>
+          <button className="tap" onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:14,background:"none",border:"none",textAlign:"left"}}>
+            <div style={{width:40,height:40,borderRadius:12,background:`${C.blue}12`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{svg(<><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></>,C.blue,20,1.8)}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:16,fontWeight:800,color:C.text}}>{items?title:"Loading…"}</div>
+              <div style={{fontSize:12,color:C.muted,marginTop:2}}>{items?sub:""}</div>
+            </div>
+            <span style={{display:"flex",transform:open?"rotate(180deg)":"none",transition:"transform .2s"}}>{svg(<polyline points="6 9 12 15 18 9"/>,C.muted,20)}</span>
+          </button>
+          {open&&items&&(
+            <div style={{padding:"0 12px 12px",display:"flex",flexDirection:"column",gap:8}}>
+              {shown.length===0
+                ?<div style={{background:"#fff",border:"1px dashed #D0D0D0",borderRadius:14,padding:16,textAlign:"center",fontSize:13,color:C.muted,lineHeight:1.4}}>Nothing here yet. Tap Ride to plan one.</div>
+                :shown.map(card)}
+            </div>
+          )}
+        </div>
+      </div>
+      {plan&&<PlanRideSheet teams={teams} existing={future} stages={stages||[]} onClose={()=>setPlan(false)} onPosted={()=>{setPlan(false);setOpen(true);load();}}/>}
+    </div>
+  );
+}
+function PlanRideSheet({group,teams,existing,stages,onClose,onPosted}){
   const pad=n=>String(n).padStart(2,"0");
   const ymd=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
   const [title,setTitle]=useState("");
@@ -3585,6 +3728,9 @@ function PlanRideSheet({group,stages,onClose,onPosted}){
   const [busy,setBusy]=useState(false);
   const [err,setErr]=useState("");
   const picked=pickedIds.map(id=>stages.find(s=>s.id===id)).filter(Boolean);
+  const [picks,setPicks]=useState([]);
+  const whenT=new Date(`${date}T${time}`).getTime();
+  const clash=!group?(existing||[]).find(x=>Math.abs(new Date(x.starts_at).getTime()-whenT)<2*3600000):null;
   const dd=new Date(date+"T12:00:00");
   const dateLabel=isNaN(dd.getTime())?"Pick a date":`${CAL_DAYS[dd.getDay()]} ${dd.getDate()} ${CAL_MONTHS[dd.getMonth()].slice(0,3)}`;
   const dcol=s=>(DIFFICULTIES.find(d=>d.val===(s.difficulty||"blue"))||DIFFICULTIES[0]).color;
@@ -3599,6 +3745,15 @@ function PlanRideSheet({group,stages,onClose,onPosted}){
     const when=new Date(`${date}T${time}`);
     if(isNaN(when.getTime())){setErr("Pick a date and time");return;}
     setBusy(true);setErr("");
+    if(!group){
+      const sp=picked.map(s=>({id:s.id,name:s.name,difficulty:s.difficulty||"blue"}));
+      const base={p_title:title.trim(),p_starts_at:when.toISOString(),p_place:place.trim()||null,p_lat:lat,p_lng:lng,p_note:note.trim()||null,p_stages:sp};
+      const jobs=picks.length===0
+        ?[supabase.from("my_rides").insert({title:title.trim(),starts_at:when.toISOString(),place:place.trim()||null,place_lat:lat,place_lng:lng,note:note.trim()||null,stages:sp})]
+        :picks.map(gid=>supabase.rpc("team_ride_create",{...base,p_group_id:gid}));
+      Promise.all(jobs).then(rs=>{setBusy(false);const bad=rs.find(r=>r&&r.error);if(bad){setErr(bad.error.message);return;}onPosted(null);});
+      return;
+    }
     supabase.rpc("team_ride_create",{p_group_id:group.id,p_title:title.trim(),p_starts_at:when.toISOString(),p_place:place.trim()||null,p_lat:lat,p_lng:lng,p_note:note.trim()||null,p_stages:picked.map(s=>({id:s.id,name:s.name,difficulty:s.difficulty||"blue"}))}).then(({data,error})=>{
       setBusy(false);
       if(error){setErr(error.message);return;}
@@ -3614,7 +3769,7 @@ function PlanRideSheet({group,stages,onClose,onPosted}){
     </div>
   );
   const svg=(p,c,s)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{p}</svg>;
-  const shell={position:"absolute",inset:0,zIndex:60,background:"#fff",display:"flex",flexDirection:"column"};
+  const shell={position:group?"absolute":"fixed",inset:0,zIndex:group?60:200,background:"#fff",display:"flex",flexDirection:"column"};
   if(picking){
     const list=stages.filter(s=>!q.trim()||s.name.toLowerCase().includes(q.trim().toLowerCase())).sort((a,b)=>a.name.localeCompare(b.name));
     return(
@@ -3647,12 +3802,26 @@ function PlanRideSheet({group,stages,onClose,onPosted}){
             <label style={{position:"relative",flex:1,display:"flex",alignItems:"center",gap:10,border:`1px solid ${C.border}`,borderRadius:12,padding:"13px 14px",fontSize:15,fontWeight:600,color:C.text}}>{svg(<><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>,C.blue,19)}{time}<input type="time" value={time} onChange={e=>e.target.value&&setTime(e.target.value)} style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0,fontSize:16}}/></label>
           </div>
         </div>
+        {clash&&<div style={{display:"flex",gap:8,alignItems:"flex-start",background:"#FFF7E8",border:"1px solid #F3D8A8",borderRadius:10,padding:"9px 11px",marginTop:-6,marginBottom:18,fontSize:12,color:"#92400E",lineHeight:1.35}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:1}}><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18.2v.1"/></svg><span>You already have <b>{clash.title}</b> at {calHM(new Date(clash.starts_at))} around then.</span></div>}
         <div style={{marginBottom:18}}>{lab("Meeting place")}
           <div style={{position:"relative"}}><span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",display:"flex"}}>{svg(<><path d="M12 21.5s-6.5-5.6-6.5-10.8a6.5 6.5 0 0113 0c0 5.2-6.5 10.8-6.5 10.8z"/><circle cx="12" cy="10.5" r="2.4"/></>,C.muted,18)}</span><input className="rfld" value={place} onChange={e=>setPlace(e.target.value)} maxLength={120} placeholder="Car park, cafe, trail head" style={{...fld,paddingLeft:42}}/></div>
           {lat==null
             ?<button className="tap" onClick={here} style={{background:"none",border:"none",color:C.blue,fontSize:13,fontWeight:600,padding:"8px 2px 0"}}>{locBusy?"Finding you…":"Use my current location"}</button>
             :<div style={{display:"flex",alignItems:"center",gap:12,padding:"8px 2px 0"}}><span style={{fontSize:13,fontWeight:600,color:C.green}}>✓ Location pinned</span><button className="tap" onClick={()=>{setLat(null);setLng(null);}} style={{background:"none",border:"none",color:C.muted,fontSize:13,padding:0}}>Remove</button></div>}
         </div>
+        {!group&&(
+          <div style={{marginBottom:18}}>{lab("Who can see it · pick as many as you like")}
+            <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+              {[
+                {id:"me",label:"Just me",on:picks.length===0,press:()=>setPicks([])},
+                ...((teams||[]).length>1?[{id:"all",label:"All my teams",on:picks.length===teams.length,press:()=>setPicks(picks.length===teams.length?[]:teams.map(t=>t.id))}]:[]),
+                ...(teams||[]).map(t=>({id:"t"+t.id,label:t.name,on:picks.includes(t.id),tick:true,press:()=>setPicks(p=>p.includes(t.id)?p.filter(x=>x!==t.id):[...p,t.id])})),
+              ].map(c=>(
+                <button key={c.id} className="tap" onClick={c.press} style={{border:`1px solid ${c.on?C.blue:C.border}`,background:c.on?`${C.blue}14`:"#fff",color:c.on?C.blue:C.muted,borderRadius:999,padding:"8px 13px",fontSize:13,fontWeight:600}}>{c.label}{c.on&&c.tick?" ✓":""}</button>
+              ))}
+            </div>
+          </div>
+        )}
         <div style={{marginBottom:18}}>{lab("Stages to ride · optional")}
           <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
             {picked.map(s=>(
@@ -3665,9 +3834,9 @@ function PlanRideSheet({group,stages,onClose,onPosted}){
           </div>
         </div>
         <div style={{marginBottom:22}}>{lab("Note · optional")}<textarea className="rfld" value={note} onChange={e=>setNote(e.target.value)} maxLength={500} rows={3} placeholder="Anything to bring?" style={{...fld,resize:"none",lineHeight:1.4}}/></div>
-        <button className="tap" onClick={post} style={{width:"100%",background:C.blue,border:"none",borderRadius:14,padding:16,color:"#fff",fontSize:15,fontWeight:700,opacity:title.trim()&&!busy?1:0.4}}>{busy?"Posting…":"Post to team"}</button>
+        <button className="tap" onClick={post} style={{width:"100%",background:C.blue,border:"none",borderRadius:14,padding:16,color:"#fff",fontSize:15,fontWeight:700,opacity:title.trim()&&!busy?1:0.4}}>{busy?"Posting…":group?"Post to team":picks.length===0?"Add to my calendar":picks.length===(teams||[]).length?"Post to all":`Post to ${picks.length} team${picks.length>1?"s":""}`}</button>
         {err&&<div style={{fontSize:12,color:C.red,textAlign:"center",marginTop:10}}>{err}</div>}
-        <div style={{fontSize:12,color:C.muted,textAlign:"center",marginTop:10,lineHeight:1.4}}>Goes on the team calendar. You're marked as going.<br/>Everyone else taps Going or Can't go.</div>
+        <div style={{fontSize:12,color:C.muted,textAlign:"center",marginTop:10,lineHeight:1.4}}>{group?<>Goes on the team calendar. You're marked as going.<br/>Everyone else taps Going or Can't go.</>:picks.length===0?"Only you will see this ride.":"Everyone in the teams you picked will see it. It goes on your calendar too."}</div>
       </div>
     </div>
   );
@@ -6249,7 +6418,7 @@ function ProfileTrophyCard({counts,onOpen,titles}){
   );
 }
 
-function ProfileScreen({trophyCounts,streak,stages,settings,courseResults,pastWeeks,weekByType,onSettingsPress,onGoToStages,onGoToCourses,onOpenProgress,onOpenBikeSetup,followerCount,onOpenFollowers,onOpenTrophies,titles,followingCount,onOpenFollowing}){
+function ProfileScreen({user,trophyCounts,streak,stages,settings,courseResults,pastWeeks,weekByType,onSettingsPress,onGoToStages,onGoToCourses,onOpenProgress,onOpenBikeSetup,followerCount,onOpenFollowers,onOpenTrophies,titles,followingCount,onOpenFollowing}){
   const [selectedWeek,setSelectedWeek]=useState(pastWeeks.length-1);
   const stagesRidden=stages.filter(s=>s.time).length;
   const coursesComplete=courseResults.length;
@@ -6324,6 +6493,8 @@ function ProfileScreen({trophyCounts,streak,stages,settings,courseResults,pastWe
           </div>
         </div>
       </div>
+
+      <MyCalendarCard user={user} stages={stages}/>
 
       <div style={{padding:"18px 16px 24px"}}>
         {[
@@ -9060,7 +9231,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
       {/* PROFILE */}
       {tab==="profile"&&(
         <div style={{height:"calc(var(--app-h) - env(safe-area-inset-top, 0px))",overflowY:"auto",paddingBottom:100}}>
-            <ProfileScreen titles={myTitles} stages={stages} settings={settings} courseResults={courseResults} weeklyActivity={weeklyActivity} pastWeeks={weekStats} weekByType={weekStatsByType} streak={streak} courseCRCount={courseCRCount} onSettingsPress={()=>setShowSettings(true)} onStatPress={key=>setSheet('stat-'+key)} onGoToStages={()=>{setCoursesFilter('stages');setTab('stages');}} onGoToCourses={()=>{setCoursesFilter('courses');setTab('stages');}}onOpenProgress={()=>setShowProgress(true)} onOpenBikeSetup={()=>setShowBikeSetup(true)} followerCount={followerCount} followingCount={followingCount} onOpenFollowers={()=>{setFollowTab("Followers");setShowFollow(true);}} onOpenFollowing={()=>{setFollowTab("Following");setShowFollow(true);}} onOpenTrophies={()=>setShowTrophies(true)} trophyCounts={trophyCounts}/>
+            <ProfileScreen user={user} titles={myTitles} stages={stages} settings={settings} courseResults={courseResults} weeklyActivity={weeklyActivity} pastWeeks={weekStats} weekByType={weekStatsByType} streak={streak} courseCRCount={courseCRCount} onSettingsPress={()=>setShowSettings(true)} onStatPress={key=>setSheet('stat-'+key)} onGoToStages={()=>{setCoursesFilter('stages');setTab('stages');}} onGoToCourses={()=>{setCoursesFilter('courses');setTab('stages');}}onOpenProgress={()=>setShowProgress(true)} onOpenBikeSetup={()=>setShowBikeSetup(true)} followerCount={followerCount} followingCount={followingCount} onOpenFollowers={()=>{setFollowTab("Followers");setShowFollow(true);}} onOpenFollowing={()=>{setFollowTab("Following");setShowFollow(true);}} onOpenTrophies={()=>setShowTrophies(true)} trophyCounts={trophyCounts}/>
 
         </div>
       )}
