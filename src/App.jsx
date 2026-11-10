@@ -3291,18 +3291,19 @@ function GarageScreen({user,settings,setSettings,bikes,setBikes,activeBikeId,set
   );
 }
 
+function TeamLinkIcon({size=20,color}){
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color||C.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>;
+}
 function teamRowSub(g){
   const n=g.memberCount;
   const base=`${n} member${n===1?"":"s"}`;
   if(n<3)return `${base} · needs 3 riders to enter the monthly contest`;
-  if(g.runs===null||g.runs===undefined)return base;
-  if(g.runs>0&&g.rank)return `${base} · ${trophyOrd(g.rank)} this month`;
-  return `${base} · No runs yet this month`;
+  return base;
 }
 function GroupRow({group,onPress}){
   return(
-    <button className="tap" onClick={()=>onPress(group)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"14px 16px",borderBottom:`1px solid ${C.border}`,background:"white",textAlign:"left"}}>
-      <div style={{width:40,height:40,borderRadius:12,background:"#EFF4FF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.Users size={22} color={C.blue}/></div>
+    <button className="tap" onClick={()=>onPress(group)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"12px 14px",border:`1px solid ${C.border}`,borderRadius:14,background:"white",textAlign:"left"}}>
+      <div style={{width:40,height:40,borderRadius:12,background:"#EFF4FF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><TeamLinkIcon size={20}/></div>
       <div style={{flex:1,minWidth:0}}>
         <div style={{fontSize:15,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{group.name}</div>
         <div style={{fontSize:13,color:C.muted,marginTop:2}}>{teamRowSub(group)}</div>
@@ -3320,6 +3321,8 @@ function GroupsScreen({user,onBack,onOpenGroup,h2h,onOpenH2h}){
   const [joinPreview,setJoinPreview]=useState(null);
   const [joinError,setJoinError]=useState("");
   const [joining,setJoining]=useState(false);
+  const [openT,setOpenT]=useState(true);
+  const [openG,setOpenG]=useState(false);
 
   const loadGroupsOld=()=>{
     supabase.from('groups').select('id,name,code,created_by,group_members(count)').then(({data,error})=>{
@@ -3368,8 +3371,8 @@ function GroupsScreen({user,onBack,onOpenGroup,h2h,onOpenH2h}){
     <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
       <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
         <button className="tap" onClick={()=>view==='list'?onBack():setView('list')} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
-        <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>{view==='list'?'Teams':view==='create'?'New Team':'Join Team'}</div>
-        {view==='list'&&<button className="tap" onClick={()=>setView('create')} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"7px 12px",color:C.blue,fontSize:13,fontWeight:600}}><Icon.Plus size={14} color={C.blue}/>New</button>}
+        <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>{view==='list'?'':view==='create'?'New Team':'Join Team'}</div>
+        {view==='list'&&<button className="tap" onClick={()=>setView('create')} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:12,padding:"9px 16px",color:C.blue,fontSize:15,fontWeight:700}}><Icon.Plus size={16} color={C.blue}/>New</button>}
       </div>
       <div style={{flex:1,overflowY:"auto"}}>
         {false&&view==='list'&&onOpenH2h&&(
@@ -3383,14 +3386,30 @@ function GroupsScreen({user,onBack,onOpenGroup,h2h,onOpenH2h}){
             <Icon.ChevronRight size={16} color={C.mutedL}/>
           </button>
         )}
-        {view==='list'&&(groups===null?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>:
-          groups.length===0?(
-            <div style={{textAlign:"center",padding:"48px 20px",color:C.muted}}>
-              <Icon.Users size={36} color={C.mutedL}/>
-              <div style={{fontSize:15,fontWeight:500,marginBottom:4,marginTop:12}}>No teams yet</div>
-              <div style={{fontSize:13,color:C.mutedL,marginBottom:16}}>Create one or join with a code</div>
+        {view==='list'&&(groups===null?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>:(
+          <div style={{padding:"16px 16px 0",display:"flex",flexDirection:"column",gap:14}}>
+            <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:20,overflow:"hidden",flexShrink:0}}>
+              <button className="tap" onClick={()=>setOpenT(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:14,padding:"18px 16px",background:"none",border:"none",textAlign:"left"}}>
+                <div style={{width:52,height:52,borderRadius:16,background:"#EFF6FF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><TeamLinkIcon size={26}/></div>
+                <div style={{flex:1,minWidth:0}}><div style={{fontSize:20,fontWeight:800,letterSpacing:-0.3,color:C.text}}>Teams</div><div style={{fontSize:13,color:C.muted,marginTop:3}}>{groups.length===0?"No teams yet":`${groups.length} team${groups.length===1?"":"s"}`}</div></div>
+                <div style={{display:"flex",transform:openT?"rotate(180deg)":"none",transition:"transform 0.2s"}}><Icon.ChevronDown size={20} color={C.muted}/></div>
+              </button>
+              {openT&&<div style={{padding:"0 12px 12px",display:"flex",flexDirection:"column",gap:8}}>
+                {groups.length===0?<div style={{background:"#fff",border:`1px dashed ${C.border}`,borderRadius:14,padding:16,textAlign:"center",fontSize:13,color:C.muted,lineHeight:1.4}}>No teams yet. Tap New to create one, or join with a code.</div>:groups.map(g=><GroupRow key={g.id} group={g} onPress={onOpenGroup}/>)}
+              </div>}
             </div>
-          ):groups.map(g=><GroupRow key={g.id} group={g} onPress={onOpenGroup}/>))}
+            <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:20,overflow:"hidden",flexShrink:0}}>
+              <button className="tap" onClick={()=>setOpenG(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:14,padding:"18px 16px",background:"none",border:"none",textAlign:"left"}}>
+                <div style={{width:52,height:52,borderRadius:16,background:"#EFF6FF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.Users size={26} color={C.blue}/></div>
+                <div style={{flex:1,minWidth:0}}><div style={{fontSize:20,fontWeight:800,letterSpacing:-0.3,color:C.text}}>Groups</div><div style={{fontSize:13,color:C.muted,marginTop:3}}>None yet</div></div>
+                <div style={{display:"flex",transform:openG?"rotate(180deg)":"none",transition:"transform 0.2s"}}><Icon.ChevronDown size={20} color={C.muted}/></div>
+              </button>
+              {openG&&<div style={{padding:"0 12px 12px"}}>
+                <div style={{background:"#fff",border:`1px dashed ${C.border}`,borderRadius:14,padding:16,textAlign:"center",fontSize:13,color:C.muted,lineHeight:1.4}}>Groups for chilled riding crews are coming soon.</div>
+              </div>}
+            </div>
+          </div>
+        ))}
         {view==='list'&&(
           <div style={{padding:"16px"}}>
             <button className="tap" onClick={()=>setView('join')} style={{width:"100%",background:C.surface,border:`1px dashed ${C.border}`,borderRadius:10,padding:12,fontSize:13,color:C.muted,fontWeight:500}}>Have a code? Join a team</button>
