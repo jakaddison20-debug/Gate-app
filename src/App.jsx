@@ -346,8 +346,8 @@ const Section=({title,children})=>(
   </div>
 );
 
-const Row=({label,sub,right,noBorder=false})=>(
-  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",borderBottom:noBorder?"none":`1px solid ${C.border}`}}>
+const Row=({label,sub,right,noBorder=false,onClick})=>(
+  <div className={onClick?"tap":undefined} onClick={onClick} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",borderBottom:noBorder?"none":`1px solid ${C.border}`,cursor:onClick?"pointer":undefined}}>
     <div style={{flex:1,marginRight:12}}>
       <div style={{fontSize:14,fontWeight:500,color:C.text}}>{label}</div>
       {sub&&<div style={{fontSize:12,color:C.muted,marginTop:2}}>{sub}</div>}
@@ -366,6 +366,7 @@ const SegControl=({options,value,onChange})=>(
 
 function SettingsScreen({settings,onSave,onBack,onHowTo}){
 const [showPw,setShowPw]=useState(false);
+const [acct,setAcct]=useState(null);
 const [legal,setLegal]=useState(null);
 const [s,setS]=useState(settings);
 const [uploading,setUploading]=useState(false);
@@ -489,9 +490,9 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
             <div style={{flex:1}}><div style={{fontSize:14,fontWeight:500,color:C.text}}>Change password</div><div style={{fontSize:12,color:C.muted,marginTop:2}}>Set a new password for your account</div></div>
             <Icon.ChevronRight/>
           </button>
-          <Row label="Export my data" sub="Download all your times and stages" right={<Icon.ChevronRight/>}/>
+          <Row label="Export my data" sub="Download everything Rivl holds about you" onClick={()=>setAcct("export")} right={<Icon.ChevronRight/>}/>
           <Row label="Clear all times" sub="Remove all your stage times" right={<Icon.ChevronRight/>}/>
-          <Row label="Delete account" sub="Permanently delete everything" noBorder right={
+          <Row label="Delete account" sub="Permanently delete everything" noBorder onClick={()=>setAcct("delete")} right={
             <div style={{fontSize:13,fontWeight:600,color:C.red}}>Delete</div>
           }/>
         </Section>
@@ -499,6 +500,8 @@ const handleAvatarUpload=async(e)=>{alert("handler fired");try{const file=e.targ
         <div style={{textAlign:"center",padding:"8px 0 32px"}}>
           <div style={{fontSize:12,color:C.muted}}>Rivl v1.0.0 · Made for mountain bikers</div>
         {showPw&&<NewPasswordScreen onDone={()=>setShowPw(false)} onCancel={()=>setShowPw(false)}/>}
+        {acct==="export"&&<ExportDataScreen onBack={()=>setAcct(null)}/>}
+        {acct==="delete"&&<DeleteAccountScreen onBack={()=>setAcct(null)} onExport={()=>setAcct("export")}/>}
         {legal&&<LegalScreen kind={legal} onBack={()=>setLegal(null)}/>}
         </div>
       </div>
@@ -7999,27 +8002,137 @@ const LEGAL_NAME="YOUR FULL NAME OR COMPANY";
 const LEGAL_EMAIL="YOUR CONTACT EMAIL";
 const LEGAL_UPDATED="10 November 2026";
 const LEGAL_DOCS={
-  terms:{title:"Terms of use",short:"Riding is risky and you do it at your own risk. Times come from your phone's GPS and aren't guaranteed. Be decent to other riders. You can ask us to delete your account any time.",secs:[
+  terms:{title:"Terms of use",short:"Riding is risky and you do it at your own risk. Times come from your phone's GPS and aren't guaranteed. Be decent to other riders. You can delete your account any time in Settings.",secs:[
     ["1. About Rivl",[`Rivl is a GPS timing app for mountain bikers, run by ${LEGAL_NAME}. By creating an account you agree to these terms.`]],
     ["2. Ride safely",["Mountain biking can cause serious injury or death. You ride at your own risk and must ride within your ability, follow the law and trail rules, and respect landowners and other trail users. Never take a risk to beat a time, and don't use your phone in a way that distracts you while riding. Rivl is not responsible for injury, damage or loss."]],
     ["3. Timing and accuracy",["Times use your phone's GPS, so they can be off by a few seconds or miss a gate. Times and leaderboards are provided as they are and aren't official race results."]],
     ["4. Your account",["You must be 16 or over. Keep your login private. You are responsible for what happens on your account."]],
     ["5. Your content",["Stages, photos, names and messages stay yours. You let Rivl show them to the people you choose in the app. Don't post anything illegal, abusive or hateful, or anyone else's private information. Don't create stages on private land without permission, or on routes that put people at unfair risk. We may remove content or accounts that break these rules."]],
     ["6. Teams and chat",["Messages and rides in a team can be seen by everyone in that team. Be kind, and don't spam."]],
-    ["7. Ending your account",[`You can ask us to delete your account at any time by emailing ${LEGAL_EMAIL}. We may suspend accounts that break these terms.`]],
+    ["7. Ending your account",[`You can delete your account at any time in Settings. We may suspend accounts that break these terms.`]],
     ["8. Changes and contact",[`We may update these terms and will tell you in the app if it matters. Questions: ${LEGAL_EMAIL}.`]],
   ]},
-  privacy:{title:"Privacy policy",short:"We collect what the app needs to time your rides and run teams. We don't sell your data or show ads. You choose who sees your times, and you can ask us to export or delete everything.",secs:[
+  privacy:{title:"Privacy policy",short:"We collect what the app needs to time your rides and run teams. We don't sell your data or show ads. You choose who sees your times, and you can export or delete everything in Settings.",secs:[
     ["Who we are",[`Rivl is run by ${LEGAL_NAME}. Contact: ${LEGAL_EMAIL}.`]],
     ["What we collect",[["Account: email, display name and profile photo","Rides: your GPS position while you run a stage, your times, and the routes of stages you create","Activity: follows, teams, calendar rides, feed posts and team messages","Device: the address we use to send push notifications, and error logs to fix bugs"]]],
     ["Why we use it",["To run the app (timing, leaderboards, teams), to keep it working and safe, and to send notifications you have switched on."]],
     ["Who can see it",["Your times and activity are shown according to your Privacy settings. Teammates see what you share in the team. We never sell your data."]],
     ["Where it's stored",["Your data is stored with our providers: Supabase (database and login), Vercel (hosting) and Mapbox (maps)."]],
-    ["How long we keep it",["Until you delete your account. Deleting it removes your times, stages and messages."]],
-    ["Your rights",[`You can see, correct, export or delete your data by emailing ${LEGAL_EMAIL}. If you're unhappy you can complain to the Information Commissioner's Office (ico.org.uk).`]],
+    ["How long we keep it",["Until you delete your account. Deleting it removes your profile, times, messages and personal data. Stages other riders have ridden stay for them, shown as made by “Deleted rider”."]],
+    ["Your rights",[`You can export or delete your data in Settings (Export my data and Delete account), or email ${LEGAL_EMAIL} to see or correct it. If you're unhappy you can complain to the Information Commissioner's Office (ico.org.uk).`]],
     ["Children",["Rivl is not for anyone under 16."]],
   ]},
 };
+// ── Export my data / Delete account ───────────────────────────────────────────
+function AcctShell({title,onBack,children}){
+  return(
+    <div className="slide-up" style={{position:"fixed",inset:0,background:"#fff",zIndex:9500,display:"flex",flexDirection:"column"}}>
+      <div style={{padding:"56px 16px 12px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+        {onBack&&<button className="tap" onClick={onBack} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600,padding:0}}>← Back</button>}
+        <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>{title}</div>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"22px 20px 40px"}}>{children}</div>
+    </div>
+  );
+}
+function AcctList({items,icon}){
+  return(
+    <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"4px 14px"}}>
+      {items.map(([t,s],i)=>(
+        <div key={t} style={{display:"flex",gap:11,alignItems:"flex-start",padding:"11px 0",borderBottom:i<items.length-1?`1px solid ${C.border}`:"none"}}>
+          {icon}
+          <div style={{fontSize:14,lineHeight:1.4,color:C.text}}>{t}{s&&<div style={{fontSize:12,color:C.muted,marginTop:2}}>{s}</div>}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+function ExportDataScreen({onBack}){
+  const [state,setState]=useState("idle");
+  const [err,setErr]=useState("");
+  const go=async()=>{
+    setState("busy");setErr("");
+    const{data,error}=await supabase.rpc("export_my_data");
+    if(error||!data){setErr(error?error.message:"Nothing came back");setState("idle");return;}
+    try{
+      const text=JSON.stringify(data,null,2);
+      const blob=new Blob([text],{type:"application/json"});
+      const file=new File([blob],"rivl-data.json",{type:"application/json"});
+      if(navigator.canShare&&navigator.canShare({files:[file]})){
+        await navigator.share({files:[file],title:"My Rivl data"});
+      }else{
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement("a");a.href=url;a.download="rivl-data.json";document.body.appendChild(a);a.click();a.remove();
+        setTimeout(()=>URL.revokeObjectURL(url),2000);
+      }
+      setState("done");
+    }catch(e){
+      if(e&&e.name==="AbortError"){setState("idle");return;}
+      setErr("Couldn't save the file");setState("idle");
+    }
+  };
+  const tick=<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:1}}><polyline points="20 6 9 17 4 12"/></svg>;
+  return(
+    <AcctShell title="Export my data" onBack={onBack}>
+      <div style={{width:52,height:52,borderRadius:16,background:`${C.blue}1A`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16}}><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg></div>
+      <div style={{fontSize:22,fontWeight:800,color:C.text,letterSpacing:-0.4,marginBottom:6}}>Get a copy of your data</div>
+      <div style={{fontSize:14,lineHeight:1.55,color:C.muted,marginBottom:18}}>One file with everything Rivl holds about you. It stays on your phone, we don't email it.</div>
+      <AcctList icon={tick} items={[["Your profile and settings","Name, photo, units, privacy choices"],["Your times and runs","Every stage time, with dates"],["Stages and courses you created","Names, routes and gates"],["Your garage","Bikes and their types"],["Teams and calendar","Teams you're in, and the rides on your calendar"],["Follows","Who you follow and who follows you"]]}/>
+      <button className="tap" onClick={state==="idle"?go:undefined} style={{width:"100%",border:"none",borderRadius:14,padding:15,fontSize:15,fontWeight:700,marginTop:20,background:state==="idle"?C.blue:state==="busy"?C.surface:C.green,color:state==="busy"?C.muted:"#fff"}}>{state==="idle"?"Download my data":state==="busy"?"Getting your data…":"Saved ✓"}</button>
+      {state==="done"&&<div style={{fontSize:12.5,color:C.green,textAlign:"center",marginTop:10,lineHeight:1.4}}>rivl-data.json is saved. Open it in any text editor, or send it to anyone who needs it.</div>}
+      {err&&<div style={{fontSize:12.5,color:C.red,textAlign:"center",marginTop:10}}>{err}</div>}
+    </AcctShell>
+  );
+}
+function DeleteAccountScreen({onBack,onExport}){
+  const [typed,setTyped]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [err,setErr]=useState("");
+  const [done,setDone]=useState(false);
+  const ok=typed.trim().toUpperCase()==="DELETE";
+  const go=async()=>{
+    if(!ok||busy)return;
+    setBusy(true);setErr("");
+    try{
+      const{data:{user:u}}=await supabase.auth.getUser();
+      if(u){const{data:files}=await supabase.storage.from("avatars").list(u.id);if(files&&files.length)await supabase.storage.from("avatars").remove(files.map(f=>`${u.id}/${f.name}`));}
+    }catch(e){}
+    try{if('serviceWorker' in navigator){const reg=await navigator.serviceWorker.getRegistration();const sub=reg&&await reg.pushManager.getSubscription();if(sub)await sub.unsubscribe();}}catch(e){}
+    const{error}=await supabase.rpc("delete_my_account");
+    if(error){setErr(error.message);setBusy(false);return;}
+    setDone(true);setBusy(false);
+  };
+  const cross=<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.red} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:1}}><path d="M6 6l12 12M18 6L6 18"/></svg>;
+  const info=<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:1}}><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16v.1"/></svg>;
+  const lab=t=><div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:1,margin:"20px 0 6px"}}>{t}</div>;
+  if(done)return(
+    <AcctShell title="Account deleted">
+      <div style={{textAlign:"center",paddingTop:80}}>
+        <div style={{width:52,height:52,borderRadius:16,background:`${C.green}1A`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 18px"}}><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <div style={{fontSize:22,fontWeight:800,color:C.text,marginBottom:6}}>Account deleted</div>
+        <div style={{fontSize:14,lineHeight:1.55,color:C.muted,maxWidth:260,margin:"0 auto"}}>Your Rivl account and data have been removed. Thanks for riding with us.</div>
+        <button className="tap" onClick={()=>supabase.auth.signOut()} style={{width:"100%",maxWidth:260,background:C.blue,border:"none",borderRadius:14,padding:15,color:"#fff",fontSize:15,fontWeight:700,marginTop:24}}>Back to log in</button>
+      </div>
+    </AcctShell>
+  );
+  return(
+    <AcctShell title="Delete account" onBack={onBack}>
+      <div style={{width:52,height:52,borderRadius:16,background:`${C.red}1A`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16}}><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={C.red} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg></div>
+      <div style={{fontSize:22,fontWeight:800,color:C.text,letterSpacing:-0.4,marginBottom:6}}>Delete your account?</div>
+      <div style={{fontSize:14,lineHeight:1.55,color:C.muted}}>This can't be undone. You'll be logged out and won't be able to get anything back.</div>
+      {lab("Deleted for good")}
+      <AcctList icon={cross} items={[["Your profile and photo"],["Every time and run"],["Your garage"],["Your calendar rides, follows and messages"],["Stages and courses nobody else has ridden"]]}/>
+      {lab("What stays")}
+      <AcctList icon={info} items={[["Stages and courses others have ridden stay for them, shown as made by “Deleted rider”"],["Teams you created pass to another member (or go if you're the only one)"]]}/>
+      <div style={{fontSize:13,color:C.muted,margin:"16px 0 4px"}}>Want a copy first? <button className="tap" onClick={onExport} style={{background:"none",border:"none",padding:0,color:C.blue,fontWeight:600,fontSize:13}}>Export my data</button></div>
+      {lab("Type DELETE to confirm")}
+      <input value={typed} onChange={e=>setTyped(e.target.value)} placeholder="DELETE" autoComplete="off" autoCapitalize="characters" style={{width:"100%",border:`1.5px solid ${ok?C.red:C.border}`,borderRadius:10,padding:"13px 14px",fontSize:16,letterSpacing:1,textTransform:"uppercase",background:C.surface,color:C.text,boxSizing:"border-box",outline:"none"}}/>
+      <button className="tap" onClick={go} style={{width:"100%",border:"none",borderRadius:14,padding:15,fontSize:15,fontWeight:700,marginTop:16,background:ok?C.red:C.surface,color:ok?"#fff":C.mutedL}}>{busy?"Deleting…":"Delete my account"}</button>
+      {err&&<div style={{fontSize:12.5,color:C.red,textAlign:"center",marginTop:10,lineHeight:1.4}}>{err}</div>}
+      <button className="tap" onClick={onBack} style={{width:"100%",background:"none",border:"none",color:C.muted,fontSize:14,fontWeight:600,padding:12,marginTop:4}}>Cancel</button>
+    </AcctShell>
+  );
+}
 function LegalScreen({kind,onBack}){
   const d=LEGAL_DOCS[kind];
   if(!d)return null;
