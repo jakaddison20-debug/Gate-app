@@ -296,6 +296,7 @@ const STYLES=`
   .fade-in{animation:fadeIn 0.2s ease;}
   .slide-up{animation:slideUp 0.3s cubic-bezier(0.32,0.72,0,1);}
   .tap{transition:opacity 0.12s;} .tap:active{opacity:0.65;}
+  .newPill{display:flex!important;align-items:center!important;gap:7px!important;background:rgba(250,250,248,0.95)!important;border:1.5px solid #E2E2DE!important;border-radius:14px!important;padding:7px 14px!important;color:#1A1A1A!important;font-size:14px!important;font-weight:700!important;box-shadow:0 2px 8px rgba(0,0,0,0.06)!important;}
   button{cursor:pointer;border:none;font-family:'Inter',sans-serif;} .segrow:last-child .segdiv{display:none;} .segrow>svg:last-child{opacity:.75;}
   input,textarea{font-family:'Inter',sans-serif;}
   .feedItem>div{border-bottom:none!important;padding:7px 16px!important}
@@ -3386,7 +3387,7 @@ function GroupsScreen({user,onBack,onOpenGroup,h2h,onOpenH2h}){
       <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
         <button className="tap" onClick={()=>view==='list'?onBack():setView('list')} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
         <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>{view==='list'?'':view==='create'?'New Team':'Join Team'}</div>
-        {view==='list'&&<button className="tap" onClick={()=>setView('create')} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:12,padding:"9px 16px",color:C.blue,fontSize:15,fontWeight:700}}><Icon.Plus size={16} color={C.blue}/>New</button>}
+        {view==='list'&&<button className="tap newPill" onClick={()=>setView('create')} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:12,padding:"9px 16px",color:C.blue,fontSize:15,fontWeight:700}}><Icon.Plus size={16} color={C.blue}/>New</button>}
       </div>
       <div style={{flex:1,overflowY:"auto"}}>
         {false&&view==='list'&&onOpenH2h&&(
