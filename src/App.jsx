@@ -3274,7 +3274,7 @@ function GarageScreen({user,settings,setSettings,bikes,setBikes,activeBikeId,set
       <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
         <button className="tap" onClick={onBack} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
         <div style={{fontSize:17,fontWeight:700,color:C.text,flex:1}}>Garage</div>
-        <button className="tap" onClick={addBike} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"7px 12px",color:C.blue,fontSize:13,fontWeight:600}}><Icon.Plus size={14} color={C.blue}/>Add bike</button>
+        <button className="tap newPill" onClick={addBike} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"7px 12px",color:C.blue,fontSize:13,fontWeight:600}}><Icon.Plus size={17} color={C.blue}/>Add bike</button>
       </div>
       <div style={{flex:1,overflowY:"auto",padding:"18px 16px 40px"}}>
         <div style={{fontSize:13,color:C.muted,marginBottom:18}}>Your stage times save to the bike you are using.</div>
