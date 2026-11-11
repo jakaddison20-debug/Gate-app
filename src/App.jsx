@@ -3336,7 +3336,7 @@ function GroupsScreen({user,onBack,onOpenGroup,h2h,onOpenH2h}){
   const [joinPreview,setJoinPreview]=useState(null);
   const [joinError,setJoinError]=useState("");
   const [joining,setJoining]=useState(false);
-  const [openT,setOpenT]=useState(true);
+  const [openT,setOpenT]=useState(false);
   const [openG,setOpenG]=useState(false);
 
   const loadGroupsOld=()=>{
