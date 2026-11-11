@@ -7945,7 +7945,7 @@ function CourseCard({course,stages,userId,onStart,onDelete,onEdit,startOpen}){
              <div style={{fontSize:11,fontWeight:600,color:modeInfo.color,background:`${modeInfo.color}15`,borderRadius:6,padding:"2px 7px",display:"flex",alignItems:"center",gap:4}}><modeInfo.Ic size={11} color={modeInfo.color}/>{modeInfo.label}</div>
           </div>
         </div>
-       <div style={{display:"flex",alignItems:"center"}}><div style={{width:40,height:40,borderRadius:10,background:`${modeInfo.color}15`,display:"flex",alignItems:"center",justifyContent:"center"}}><modeInfo.Ic size={18} color={modeInfo.color}/></div>{onEdit&&course.created_by===userId&&<button className="tap" onClick={e=>{e.stopPropagation();onEdit(course);}} style={{background:"none",border:"none",padding:"4px 0 4px 10px",color:C.blue,fontSize:13,fontWeight:600}}>Edit</button>}{onDelete&&course.created_by===userId&&<button className="tap" onClick={e=>{e.stopPropagation();onDelete(course.id);}} style={{background:"none",border:"none",padding:"4px 0 4px 8px",color:C.red,fontSize:15,fontWeight:600}}>✕</button>}<span style={{display:"flex",marginLeft:10}}>{open?<Icon.ChevronUp size={18} color={C.mutedL}/>:<Icon.ChevronDown size={18} color={C.mutedL}/>}</span></div>
+       <div style={{display:"flex",alignItems:"center"}}><div style={{width:40,height:40,borderRadius:10,background:`${modeInfo.color}15`,display:"flex",alignItems:"center",justifyContent:"center"}}><modeInfo.Ic size={18} color={modeInfo.color}/></div>{onEdit&&course.created_by===userId&&<button className="tap" onClick={e=>{e.stopPropagation();onEdit(course);}} style={{background:"none",border:"none",padding:"4px 0 4px 10px",color:C.blue,fontSize:13,fontWeight:600}}>Edit</button>}{onDelete&&course.created_by===userId&&<button className="tap" onClick={e=>{e.stopPropagation();onDelete(course.id);}} style={{background:"none",border:"none",padding:"4px 0 4px 8px",color:C.red,fontSize:15,fontWeight:600}}>✕</button>}</div>
       </div>
       <div style={{display:open?"flex":"none",gap:6,flexWrap:"wrap",marginBottom:14}}>
         {courseStages.map((stage,i)=>(
@@ -7959,6 +7959,7 @@ function CourseCard({course,stages,userId,onStart,onDelete,onEdit,startOpen}){
             <button className="tap" onClick={()=>onStart(course)} style={{width:"100%",background:"rgba(250,250,248,0.95)",border:"1.5px solid #E2E2DE",borderRadius:14,boxShadow:"0 2px 8px rgba(0,0,0,0.06)",padding:"12px 16px",color:C.text,fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
                <modeInfo.Ic size={16} color={C.blue}/>Start {modeInfo.label}
       </button>
+      <button className="tap" onClick={()=>setOpen(o=>!o)} aria-label={open?"Hide stages":"Show stages"} style={{display:"flex",alignItems:"center",justifyContent:"center",width:"100%",background:"none",border:"none",padding:"10px 0 0"}}>{open?<Icon.ChevronUp size={20} color={C.mutedL}/>:<Icon.ChevronDown size={20} color={C.mutedL}/>}</button>
     </div>
   );
 }
@@ -9432,7 +9433,7 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
             <div style={{padding:"16px"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
                 <div style={{fontSize:22,fontWeight:800,color:C.text}}>Courses</div>
-                  <button className="tap" onClick={()=>{setEditingCourse(null);setShowCourseBuilder(true);}} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"9px 14px",color:C.blue,fontSize:13,fontWeight:600}}><Icon.Plus size={16} color={C.blue}/>New</button>
+                  <button className="tap newPill" onClick={()=>{setEditingCourse(null);setShowCourseBuilder(true);}} style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:`1.5px solid ${C.blue}`,borderRadius:10,padding:"9px 14px",color:C.blue,fontSize:13,fontWeight:600}}><Icon.Plus size={17} color={C.blue}/>New</button>
               </div>
               {courses.length===0?(
                 <div style={{textAlign:"center",padding:"48px 20px",color:C.muted}}>
