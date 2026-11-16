@@ -6,7 +6,7 @@ const supabase=createClient(import.meta.env.VITE_SUPABASE_URL,import.meta.env.VI
 const DEFAULT_CENTER={lat:53.4919264,lng:-0.3294266};
 
 const FAT_GATE_RADIUS=10;
-const FINISH_GATE_RADIUS=20;
+const FINISH_GATE_RADIUS=30;
 const START_NEAR_M=40;
 const START_ARM_MIN_M=20;
 const FEED_TYPES=['stage_record','personal_best','course_finish','stage_created','course_created','day_recap','h2h_result'];
@@ -17,14 +17,15 @@ function segmentCrossesGate(prevPos,currPos,gate,radius){if(!prevPos)return fals
 function gateCrossT(prevPos,currPos,gate){const a=metersOffset(gate,prevPos);const b=metersOffset(gate,currPos);const dx=b.x-a.x,dy=b.y-a.y;const lenSq=dx*dx+dy*dy;let t=lenSq===0?0:-(a.x*dx+a.y*dy)/lenSq;return Math.max(0,Math.min(1,t));}
 const GATE_FIT_M=35;        // use GPS fixes within 35 m either side of the gate
 const GATE_AFTER_FIXES=1;   // decide at the first fix past the gate
-const FINISH_NEAR_M=40;     // safety net: came within 40 m of the finish pin...
+const FINISH_NEAR_M=60;     // safety net: came within 60 m of the finish pin...
 const FINISH_LEAVE_M=25;    // ...then got 25 m further away than the closest point...
-const FINISH_END_M=60;      // ...while in the last 60 m of the stage line...
+const FINISH_END_M=90;      // ...while in the last 90 m of the stage line...
 const FINISH_MIN_MS=10000;  // ...and at least 10 s after the start
 const GATE_MOVING_MS=2;     // ignore fixes slower than 2 m/s (standing waiting at the start)
 const START_FIT_M=20;       // shorter window at the start, where you're still speeding up
 const START_GATE_RADIUS=20; // start gate detection radius (timing no longer depends on it)
 const GPS_MAX_ACC_M=50;    // ignore fixes the phone says are worse than 50 m (guesses from wifi/phone masts)
+const GPS_ROUGH_ACC_M=80;  // rough fixes (50-80 m) still count for the finish safety net when good GPS has dropped out
 const GPS_MAX_SPEED_MS=30; // ignore jumps faster than 30 m/s (67 mph)...
 const GPS_MAX_REJECTS=3;   // ...unless it keeps happening, then trust the new position
 function segClosest(prevPos,currPos,gate){
@@ -77,7 +78,8 @@ function makeGateTracker(gate,radius,dir,fitM=GATE_FIT_M,strict=false){
     }
     const q0=buf[buf.length-2],dt0=(loc.ts-q0.ts)/1000;
     if(dt0>0&&haversine(loc,q0)/dt0>=GATE_MOVING_MS)sinceDet++;
-    if(!closest||c.d<closest.d)closest=c;
+    const mv0=dt0>0&&haversine(loc,q0)/dt0>=GATE_MOVING_MS; // only fixes where you're still moving can set the finish moment
+    if(!closest||(mv0&&(!closest.mv||c.d<closest.d))){closest=c;closest.mv=mv0;}
     const u=dir||unitVec(buf[0],loc)||{x:0,y:1};
     const along=p=>{const o=metersOffset(gate,p);return o.x*u.x+o.y*u.y;};
     const pre=[],post=[];
@@ -6364,8 +6366,8 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
                     <div style={{fontSize:14,fontWeight:700,color:"#92400E"}}>{formatTime(c.totalTime)}</div>
                     {isOpen?<Icon.ChevronUp size={14} color={C.mutedL}/>:<Icon.ChevronDown size={14} color={C.mutedL}/>}
                   </button>
-                  {isOpen&&<div style={{padding:"8px 12px 12px",background:C.surface}}>
-                    {trackNames.length===0?<div style={{fontSize:12,color:C.muted}}>No stages found</div>:trackNames.map((name,i)=>(
+                  {isOpen&&<div style={{padding:"8px 12px 12px",background:C.surface,display:"flex",flexDirection:"column"}}>
+                    <RecordRunButton course={c} stages={stages}/>{trackNames.length===0?<div style={{fontSize:12,color:C.muted}}>No stages found</div>:trackNames.map((name,i)=>(
                       <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0"}}>
                         <Icon.Lightning size={13} color={C.blue}/>
                         <div style={{fontSize:13,color:C.text}}>{i+1}. {name}</div>
@@ -6854,8 +6856,109 @@ function NewStageSheet({onClose,onSave}){
 
 // ── Course Builder Sheet ──────────────────────────────────────────────────────
  function courseDiffColor(stage){return(DIFFICULTIES.find(d=>d.val===stage.difficulty)||DIFFICULTIES[0]).color;}
-function coursePinHtml(n,done){const c=done?"#15803D":"#2563EB";return `<svg width="30" height="38" viewBox="-26 -62 52 66" style="display:block;overflow:visible"><path d="M0,0 C-6,-12 -22,-22 -22,-36 A22,22 0 1 1 22,-36 C22,-22 6,-12 0,0 Z" fill="${c}" fill-opacity="0.16" stroke="${c}" stroke-width="5" stroke-linejoin="round"/><text x="0" y="-27" text-anchor="middle" font-family="Inter,sans-serif" font-weight="800" font-size="27" fill="${c}" stroke="#fff" stroke-width="5" stroke-linejoin="round" paint-order="stroke">${n}</text></svg>`;}
-function coursePinEl(n,done){const el=document.createElement('div');el.style.cssText='width:30px;height:38px;';el.innerHTML=coursePinHtml(n,done);return el;}
+function coursePinHtml(n,done,s=30){const c=done?"#15803D":"#2563EB";return `<svg width="${s}" height="${Math.round(s*38/30)}" viewBox="-26 -62 52 66" style="display:block;overflow:visible"><path d="M0,0 C-6,-12 -22,-22 -22,-36 A22,22 0 1 1 22,-36 C22,-22 6,-12 0,0 Z" fill="${c}" fill-opacity="0.16" stroke="${c}" stroke-width="5" stroke-linejoin="round"/><text x="0" y="-27" text-anchor="middle" font-family="Inter,sans-serif" font-weight="800" font-size="27" fill="${c}" stroke="#fff" stroke-width="5" stroke-linejoin="round" paint-order="stroke">${n}</text></svg>`;}
+function coursePinEl(n,done){const el=document.createElement('div');el.style.cssText='width:22px;height:28px;';el.innerHTML=coursePinHtml(n,done,22);return el;}
+function CourseRunChip({record}){return record?<span style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:12.5,fontWeight:700,color:"#92400E",background:"#FFFBEB",border:"1px solid #F5E3A3",borderRadius:999,padding:"4px 11px"}}><GoldCrown size={14}/>Course record</span>:<span style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:12.5,fontWeight:700,color:C.blue,background:`${C.blue}12`,border:`1px solid ${C.blue}40`,borderRadius:999,padding:"4px 11px"}}>New PB</span>;}
+// One course run: total, crown/PB and every stage split. Opened from the feed post or Course Records.
+function CourseRunScreen({run,stages,onClose,onOpenCourse}){
+  const sp=Array.isArray(run.splits)?run.splits:null;
+  const st=id=>stages.find(s=>String(s.id)===String(id));
+  const dist=sp?sp.reduce((a,x)=>{const s=st(x.stage_id);return a+(s?haversine(s.start,s.finish):0);},0):0;
+  const mode=({race:"Race",mashup:"Mashup",practice:"Practice"})[run.mode||"race"]||"Race";
+  const when=run.finished_at?new Date(run.finished_at).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}):"";
+  const n=sp?sp.length:(run.stage_count||0);
+  const better=run.pb_delta_ms!=null&&run.pb_delta_ms<0;
+  return(
+    <div style={{position:"fixed",inset:0,background:"#fff",zIndex:160,display:"flex",flexDirection:"column"}}>
+      <div style={{padding:"calc(env(safe-area-inset-top,0px) + 16px) 16px 12px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+        <button className="tap" onClick={onClose} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:17,fontWeight:700,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{run.course_name||"Course"}</div>
+          <div style={{fontSize:12,color:C.muted}}>{[mode,when,n?`${n} stages`:null].filter(Boolean).join(" · ")}</div>
+        </div>
+      </div>
+      <div style={{flex:1,overflowY:"auto",paddingBottom:24}}>
+        <div style={{textAlign:"center",padding:"22px 20px 18px",borderBottom:`1px solid ${C.border}`}}>
+          {run.record?<CourseRunChip record/>:better?<CourseRunChip/>:null}
+          <div style={{fontSize:46,fontWeight:800,color:C.text,marginTop:10,fontVariantNumeric:"tabular-nums",letterSpacing:"-0.02em"}}>{formatTime(run.total_time_ms)}</div>
+          {dist>0&&<div style={{fontSize:13,color:C.muted,marginTop:4}}>{formatDist(dist)} · {n} stages</div>}
+          {run.pb_delta_ms!=null&&<div style={{marginTop:10,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><H2hPill d={run.pb_delta_ms}/><span style={{fontSize:12,color:C.muted}}>vs previous best</span></div>}
+        </div>
+        <div style={{padding:"16px 16px 0"}}>
+          <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>Splits</div>
+          {!sp?<div style={{fontSize:13,color:C.muted,lineHeight:1.5,padding:"8px 0"}}>Splits weren't saved for this run. Course runs from now on keep every stage split.</div>:(
+            <div style={{border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden"}}>
+              {sp.map((x,i)=>{const s=st(x.stage_id);const col=s?courseDiffColor(s):C.mutedL;return(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderBottom:i<sp.length-1?`1px solid ${C.border}`:"none"}}>
+                  <div style={{width:22,height:22,borderRadius:"50%",background:C.surface,fontSize:11,fontWeight:700,color:C.muted,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{i+1}</div>
+                  <svg width="10" height="13" viewBox="0 0 18 24" style={{flexShrink:0}}><path d="M9 1L17 12 9 23 1 12z" fill={col}/></svg>
+                  <div style={{flex:1,minWidth:0,fontSize:14,fontWeight:600,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{x.name||(s&&s.name)||"Stage"}</div>
+                  <div style={{textAlign:"right",flexShrink:0}}>
+                    <div style={{fontSize:14,fontWeight:700,color:C.text,fontVariantNumeric:"tabular-nums"}}>{formatTime(x.time_ms)}</div>
+                    <div style={{marginTop:3}}>{x.prev_best_ms?<H2hPill d={x.time_ms-x.prev_best_ms}/>:<span style={{fontSize:11,color:C.mutedL}}>First run</span>}</div>
+                  </div>
+                </div>);})}
+            </div>
+          )}
+          {sp&&<div style={{fontSize:11.5,color:C.mutedL,marginTop:8,textAlign:"center"}}>Pills compare each stage with the rider's previous best on it</div>}
+        </div>
+      </div>
+      {onOpenCourse&&<div style={{padding:"12px 16px calc(env(safe-area-inset-bottom,0px) + 16px)",borderTop:`1px solid ${C.border}`,background:"#fff",flexShrink:0}}><button className="tap newPill" onClick={onOpenCourse} style={{width:"100%",justifyContent:"center"}}><Icon.Flag size={16} color={C.blue}/>Race it again</button></div>}
+    </div>
+  );
+}
+// Feed post for a finished course: map with every stage, time, crown/PB, and all the splits on tap.
+function CourseFinishFeedCard({item,stages,courses,onOpenCourse}){
+  const [open,setOpen]=useState(false);
+  const ctx=item.context||{};
+  const sp=Array.isArray(ctx.splits)?ctx.splits:[];
+  const cs=sp.map(x=>stages.find(s=>String(s.id)===String(x.stage_id))).filter(Boolean);
+  const map=useMemo(()=>recapMapPaths(cs.map((s,i)=>({n:i+1,line:s.line_coords&&s.line_coords.length>1?s.line_coords:[s.start,s.finish]}))),[item.id,cs.length]);
+  const recap={map,stages:cs.map(s=>({diff:s.difficulty}))};
+  const url=cs.length?recapMapUrl(map,400,500):null;
+  const dist=cs.reduce((a,s)=>a+haversine(s.start,s.finish),0);
+  const course=(courses||[]).find(c=>String(c.id)===String(ctx.course_id));
+  const better=ctx.pb_delta_ms!=null&&ctx.pb_delta_ms<0;
+  const box=(v,l)=><div style={{background:"#fff",borderRadius:10,padding:"10px 8px",textAlign:"center",border:`1px solid ${C.border}`}}><div style={{fontSize:14,fontWeight:700,color:C.text,fontVariantNumeric:"tabular-nums"}}>{v}</div><div style={{fontSize:10,color:C.muted,marginTop:2}}>{l}</div></div>;
+  return(
+    <div style={{padding:"14px 16px",borderBottom:`1px solid ${C.border}`}}>
+      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,overflow:"hidden"}}>
+        <div style={{display:"flex",alignItems:"flex-start",gap:12,padding:"14px 14px 12px"}}>
+          <Avatar size={38} url={item.avatarUrl}/>
+          <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,color:C.text,lineHeight:1.4}}><span style={{fontWeight:700}}>{item.userName}</span> finished a course</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>{item.ago}</div></div>
+          <div style={{width:30,height:30,borderRadius:8,background:`${C.green}15`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon.Flag size={15} color={C.green}/></div>
+        </div>
+        {cs.length>0&&<div className="tap" onClick={()=>setOpen(true)} style={{margin:"0 12px",borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`,background:C.mapPark,aspectRatio:"4 / 5",position:"relative",cursor:"pointer"}}>
+          {url&&<img src={url} alt="" style={{width:"100%",height:"100%",display:"block",objectFit:"cover"}} onError={e=>{e.currentTarget.style.display="none";}}/>}
+          <RecapMapOverlay recap={recap} w={400} h={500} pinColor={C.green}/>
+        </div>}
+        <div style={{padding:"12px 14px 0",display:"flex",alignItems:"center",gap:8}}>
+          <div style={{flex:1,minWidth:0,fontSize:16,fontWeight:700,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ctx.course_name||(course&&course.name)||"Course"}</div>
+          {ctx.record?<CourseRunChip record/>:better?<CourseRunChip/>:null}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,padding:"10px 12px 0"}}>{box(formatTime(ctx.total_time_ms),"Time")}{box(sp.length||ctx.stage_count||"-","Stages")}{box(dist>0?formatDist(dist):"-","Distance")}</div>
+        <button className="tap" onClick={()=>setOpen(true)} style={{margin:12,width:"calc(100% - 24px)",background:"#fff",border:`1px solid ${C.border}`,borderRadius:12,display:"flex",alignItems:"center",gap:10,padding:"13px 14px",fontSize:14,fontWeight:700,color:C.text,textAlign:"left"}}><span style={{flex:1}}>See all {sp.length} splits</span><Icon.ChevronRight size={16}/></button>
+      </div>
+      {open&&<CourseRunScreen run={ctx} stages={stages} onClose={()=>setOpen(false)} onOpenCourse={course&&onOpenCourse?()=>{setOpen(false);onOpenCourse(course);}:null}/>}
+    </div>
+  );
+}
+// "View record run" on Course Records: loads the fastest run for the course and opens it.
+function RecordRunButton({course,stages}){
+  const [run,setRun]=useState(null);
+  const [busy,setBusy]=useState(false);
+  const open=async()=>{
+    if(busy)return;setBusy(true);
+    const{data}=await supabase.from('course_results').select('total_time_ms,splits,mode,completed_at').eq('course_id',course.id).order('total_time_ms',{ascending:true}).limit(1);
+    setBusy(false);
+    const r=data&&data[0];
+    if(r)setRun({course_id:course.id,course_name:course.name,total_time_ms:r.total_time_ms,splits:r.splits||null,record:true,mode:r.mode,finished_at:r.completed_at,pb_delta_ms:null});
+  };
+  return(<>
+    <button className="tap" onClick={open} style={{order:2,marginTop:8,width:"100%",background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 12px",display:"flex",alignItems:"center",fontSize:14,fontWeight:700,color:C.blue}}><span style={{flex:1,textAlign:"left"}}>{busy?"Loading…":"View record run"}</span><Icon.ChevronRight size={16} color={C.blue}/></button>
+    {run&&<CourseRunScreen run={run} stages={stages} onClose={()=>setRun(null)}/>}
+  </>);
+}
 function CourseFeedCard({item,course,stages,onOpen}){
   const cs=course.stageIds.map(id=>stages.find(s=>s.id===id)).filter(Boolean);
   const map=useMemo(()=>recapMapPaths(cs.map((s,i)=>({n:i+1,line:s.line_coords&&s.line_coords.length>1?s.line_coords:[s.start,s.finish]}))),[course.id,cs.length]);
@@ -7136,7 +7239,7 @@ function CourseBuilderSheet({stages,course,onClose,onSave}){
 }
 
 // ── Race Map Overlay ──────────────────────────────────────────────────────────
-function RaceMapOverlay({courseStages,onClose}){
+function RaceMapOverlay({courseStages,onClose,doneCount=0}){
   const mapContainer=useRef(null);
   const map=useRef(null);
   const userMarkerRef=useRef(null);
@@ -7182,7 +7285,7 @@ function RaceMapOverlay({courseStages,onClose}){
           const el=document.createElement('div');
           el.style.cssText='width:26px;height:26px;border-radius:50%;background:#2563EB;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;font-family:Inter,sans-serif;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3);';
           el.textContent=String(i+1);
-          map.current.setPaintProperty(id,'line-color',courseDiffColor(stage));new mapboxgl.Marker({element:coursePinEl(i+1,!!stage.time),anchor:'bottom'}).setLngLat([stage.start.lng,stage.start.lat]).addTo(map.current);
+          map.current.setPaintProperty(id,'line-color',courseDiffColor(stage));new mapboxgl.Marker({element:coursePinEl(i+1,i<doneCount),anchor:'bottom'}).setLngLat([stage.start.lng,stage.start.lat]).addTo(map.current);
         });
       });
     });
@@ -7338,7 +7441,7 @@ function RaceComplete({base,course,splits,courseStages,totalStages,onSave,user,l
         {splits.map((s,i)=><RaceRow key={i} i={i} name={s.name} time={s.time} out={stageOutcome(base,s.stageId,s.time)}/>)}
       </div>
       <H2hSaveStrip live={liveChallenges} count={addedRuns}/>
-      <RaceNextBtn onClick={onSave}>Save Results</RaceNextBtn>
+      <RaceNextBtn onClick={onSave}>Done</RaceNextBtn>
     </div>
   );
 }
@@ -7380,7 +7483,8 @@ function RaceScreen({course,stages,user,onFinish,onActivity,liveChallenges}){
   const [countdown,setCountdown]=useState(3);
   const [timerMs,setTimerMs]=useState(0);
   const timerMsRef=useRef(0);
-  const [splits,setSplits]=useState(savedProgress?savedProgress.splits:[]); // current run splits
+    const [splits,setSplits]=useState(savedProgress?savedProgress.splits:[]); // current run splits
+  const courseSavedRef=useRef(!!(savedProgress&&savedProgress.courseSaved)); // course result already saved and posted
   const [bestPerStage,setBestPerStage]=useState(savedProgress?savedProgress.bestPerStage:{}); // mashup: best time per stage id
   const [runCount,setRunCount]=useState(savedProgress?savedProgress.runCount:0); // how many full runs completed
   const [gateStatus,setGateStatus]=useState("waiting");
@@ -7403,7 +7507,7 @@ function RaceScreen({course,stages,user,onFinish,onActivity,liveChallenges}){
 
   useEffect(()=>{
     if(phase==="modeIntro")return;
-    try{localStorage.setItem(progressKey,JSON.stringify({stageIndex,splits,bestPerStage,runCount,savedAt:Date.now()}));}catch(e){}
+    try{localStorage.setItem(progressKey,JSON.stringify({stageIndex,splits,bestPerStage,runCount,courseSaved:courseSavedRef.current,savedAt:Date.now()}));}catch(e){}
   },[stageIndex,splits,bestPerStage,runCount,phase]);
 
   const quitRace=()=>{try{localStorage.removeItem(progressKey);}catch(e){}onFinish();};
@@ -7501,13 +7605,14 @@ if(saveTime&&!isPractice){
   const line=currentStage.line_coords||currentStage.lineCoords||null;
   const tracker=makeGateTracker(gate,FINISH_GATE_RADIUS,lineDirAt(line,gate));
   let prev=null,near=null,done=false,id=null;
+  const gs={fixes:0,rough:0,junk:0,closest:null,lastTs:null}; // GPS health for this run, logged at the end
   const gpsOk=makeGpsFilter();
   prevGpsRef.current=null;
   traceRef.current=[{t:0,lat:currentStage.start.lat,lng:currentStage.start.lng}];
   const finish=(ts,how,extra)=>{
     if(done)return;done=true;
     if(id!==null)navigator.geolocation.clearWatch(id);
-    if(how!=="fit")logEvent(user?.id,"finish_"+how,`Finish timed by ${how}`,currentStage?.id,extra||null);
+    logEvent(user?.id,"finish_"+how,`Finish timed by ${how}`,currentStage?.id,{...(extra||{}),fixes:gs.fixes,rough:gs.rough,junk:gs.junk});
     
     
     const endTs=Math.max(ts,startTimeRef.current+1000);
@@ -7519,21 +7624,38 @@ if(saveTime&&!isPractice){
   id=navigator.geolocation.watchPosition(pos=>{
     if(done)return;
     const loc={lat:pos.coords.latitude,lng:pos.coords.longitude,ts:pos.timestamp,acc:pos.coords.accuracy};
-    if(!gpsOk(loc))return; // skip repeated, junk or impossible fixes
+    gs.lastTs=loc.ts;
+    const dG=haversine(loc,gate);if(gs.closest===null||dG<gs.closest)gs.closest=dG;
+    if(typeof loc.acc==="number"&&loc.acc>GPS_MAX_ACC_M){
+      gs.rough++;
+      // rough fix: only used for the finish safety net, and only when good GPS has dropped out for 3 s+
+      if(loc.acc<=GPS_ROUGH_ACC_M&&loc.ts-startTimeRef.current>=FINISH_MIN_MS&&(!prev||loc.ts-prev.ts>3000)){
+        const rem=stageRemainingM(line,loc);
+        if(dG<=FINISH_NEAR_M&&(rem===null||rem<=FINISH_END_M)&&!near)near={d:dG,ts:loc.ts};
+        if(near&&dG>=near.d+FINISH_LEAVE_M)finish(near.ts,"safety_net_rough",{closest_m:Math.round(near.d),acc:Math.round(loc.acc)});
+      }
+      return;
+    }
+    if(!gpsOk(loc)){gs.junk++;return;} // skip repeated or impossible fixes
+    gs.fixes++;
     if(loc.ts>startTimeRef.current)traceRef.current.push({t:loc.ts-startTimeRef.current,lat:loc.lat,lng:loc.lng});
     const hit=tracker(loc);
     if(hit){finish(hit.ts,hit.how);return;}
     // safety net: never got inside the finish gate, but came close at the end of the stage, then rode away
     const c=segClosest(prev,loc,gate);
+    const mvN=!!prev&&loc.ts>prev.ts&&haversine(loc,prev)/((loc.ts-prev.ts)/1000)>=GATE_MOVING_MS; // standing around after the finish must not move the finish time later
     if(c.d<=FINISH_NEAR_M&&c.ts-startTimeRef.current>=FINISH_MIN_MS){
       const rem=stageRemainingM(line,loc);
-      if((rem===null||rem<=FINISH_END_M)&&(!near||c.d<near.d))near=c;
+      if((rem===null||rem<=FINISH_END_M)&&(!near||(mvN&&c.d<near.d)))near=c;
     }
     
     prev=loc;prevGpsRef.current=loc;
     if(near&&haversine(loc,gate)>=near.d+FINISH_LEAVE_M)finish(near.ts,"safety_net",{closest_m:Math.round(near.d)});
   },err=>{console.log(err);logEvent(user?.id,"gps_error_racing",err.message||String(err),currentStage?.id,{code:err.code});},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
-  return()=>{done=true;if(id!==null)navigator.geolocation.clearWatch(id);};
+  return()=>{
+    if(!done)logEvent(user?.id,"race_quit_gps","Run ended before the finish",currentStage?.id,{fixes:gs.fixes,rough:gs.rough,junk:gs.junk,closest_m:gs.closest===null?null:Math.round(gs.closest),last_fix_s_ago:gs.lastTs?Math.round((Date.now()-gs.lastTs)/1000):null,run_s:Math.round((Date.now()-startTimeRef.current)/1000),screen:document.visibilityState});
+    done=true;if(id!==null)navigator.geolocation.clearWatch(id);
+  };
 },[phase,stageIndex]);
            
 
@@ -7588,6 +7710,24 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
     return()=>{off=true;};
   },[]);
 
+    // Course race: save the result (with every split) and post it the moment the last stage is done. No button needed.
+  const saveCourseRun=async()=>{
+    if(isPractice||isMashup||totalStages<2||!user||courseSavedRef.current)return;
+    courseSavedRef.current=true;
+    const total=splits.reduce((a,s)=>a+s.time,0);
+    const base=raceBase.current;
+    const sp=splits.map(s=>({stage_id:s.stageId,name:s.name,time_ms:s.time,prev_best_ms:base.stageBest[s.stageId]??null}));
+    const{data:rec}=await supabase.from('course_results').select('total_time_ms').eq('course_id',course.id).order('total_time_ms',{ascending:true}).limit(1);
+    const record=!rec||!rec.length||total<rec[0].total_time_ms;
+    const prevBest=base.courseBest===undefined?null:base.courseBest;
+    let res=await supabase.from('course_results').insert({course_id:course.id,user_id:user.id,total_time_ms:total,mode:course.mode,splits:sp}).select('id').single();
+    if(res.error&&String(res.error.message||"").includes("splits"))res=await supabase.from('course_results').insert({course_id:course.id,user_id:user.id,total_time_ms:total,mode:course.mode}).select('id').single();
+    if(res.error){courseSavedRef.current=false;alert("Couldn't save course result: "+res.error.message);return;}
+    try{const p=JSON.parse(localStorage.getItem(progressKey));if(p){p.courseSaved=true;localStorage.setItem(progressKey,JSON.stringify(p));}}catch(e){}
+    logEvent(user.id,'course_finish',`finished ${course.name} · ${formatTime(total)}`,null,{course_id:course.id,course_name:course.name,result_id:res.data?.id||null,total_time_ms:total,stage_count:totalStages,splits:sp,record,pb_delta_ms:prevBest===null?null:total-prevBest,mode:course.mode,finished_at:new Date().toISOString()}).then(()=>onActivity&&onActivity());
+  };
+  useEffect(()=>{if(splits.length>=totalStages&&totalStages>1)saveCourseRun();},[splits.length]);
+
   // ── Mode intro screen ──
   if(phase==="modeIntro"){
     const modeInfo={
@@ -7632,7 +7772,7 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
             Back
           </button>
         </div>
-        {showRaceMap&&<RaceMapOverlay courseStages={courseStages} onClose={()=>setShowRaceMap(false)}/>}
+        {showRaceMap&&<RaceMapOverlay courseStages={courseStages} doneCount={splits.length} onClose={()=>setShowRaceMap(false)}/>}
       </div>
     );
   }
@@ -7698,7 +7838,7 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
           </div>
         </div>
         <div style={{padding:"16px 20px",background:headerBg,display:"flex",gap:6}}>
-          {courseStages.map((_,i)=><div key={i} style={{flex:1,height:4,borderRadius:2,background:i<stageIndex?C.orange:i===stageIndex?"white":"rgba(255,255,255,0.2)"}}/>)}
+          {courseStages.map((_,i)=><div key={i} style={{flex:1,height:4,borderRadius:2,background:i<stageIndex?"#16A34A":i===stageIndex?"white":"rgba(255,255,255,0.2)"}}/>)}
         </div>
         <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"32px 24px",textAlign:"center"}}>
 {!armed?(
@@ -7740,13 +7880,13 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
         {splits.length>0&&!isMashup&&(
           <div style={{padding:"0 20px 8px"}}>
             <div style={{fontSize:12,color:C.muted,fontWeight:600,marginBottom:6}}>SPLITS SO FAR</div>
-            {splits.map((s,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`}}><div style={{fontSize:12,color:C.muted}}>{i+1}. {s.name}</div><div style={{fontSize:12,fontWeight:700,color:C.orange}}>{formatTime(s.time)}</div></div>)}
+            {splits.map((s,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`}}><div style={{fontSize:12,color:C.muted}}>{i+1}. {s.name}</div><div style={{fontSize:12,fontWeight:700,color:C.text}}>{formatTime(s.time)}</div></div>)}
           </div>
         )}
                 <div style={{padding:"16px 20px 40px"}}>
         
         </div>
-        {showRaceMap&&<RaceMapOverlay courseStages={courseStages} onClose={()=>setShowRaceMap(false)}/>}
+        {showRaceMap&&<RaceMapOverlay courseStages={courseStages} doneCount={splits.length} onClose={()=>setShowRaceMap(false)}/>}
       </div>
     );
   }
@@ -7784,7 +7924,7 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
             <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.4)",letterSpacing:1,marginBottom:4}}>STAGE {stageIndex+1} OF {totalStages}</div>
             <div style={{fontSize:18,fontWeight:700,color:"white"}}>{currentStage.name}</div>
           </div>
-          <div style={{display:"flex",gap:6}}>{courseStages.map((_,i)=><div key={i} style={{width:8,height:8,borderRadius:"50%",background:i<stageIndex?C.orange:i===stageIndex?"white":"rgba(255,255,255,0.2)"}}/>)}</div>
+          <div style={{display:"flex",gap:6}}>{courseStages.map((_,i)=><div key={i} style={{width:8,height:8,borderRadius:"50%",background:i<stageIndex?"#16A34A":i===stageIndex?"white":"rgba(255,255,255,0.2)"}}/>)}</div>
         </div>
         <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
           {isPractice&&<div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginBottom:8,fontWeight:600}}>NOT TIMED — JUST RIDE</div>}
@@ -7870,7 +8010,7 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
   // ── Done ──
   if(phase==="done"){
     const finalTotal=isPractice?null:isMashup?mashupTotal:splits.reduce((a,s)=>a+s.time,0);
-    const saveRaceResults=async()=>{if(totalStages>1){const{error}=await supabase.from('course_results').insert({course_id:course.id,user_id:user.id,total_time_ms:finalTotal,mode:course.mode});if(error){alert("Couldn't save course result: "+error.message);}else{logEvent(user.id,'course_finish',`finished ${course.name} · ${formatTime(finalTotal)}`,null,{course_id:course.id,total_time_ms:finalTotal,stage_count:totalStages}).then(()=>onActivity&&onActivity());}}try{localStorage.removeItem(progressKey);}catch(e){}onFinish();};
+    const saveRaceResults=async()=>{if(!isMashup&&!isPractice){if(!courseSavedRef.current)await saveCourseRun();try{localStorage.removeItem(progressKey);}catch(e){}onFinish();return;}if(totalStages>1){const{error}=await supabase.from('course_results').insert({course_id:course.id,user_id:user.id,total_time_ms:finalTotal,mode:course.mode});if(error){alert("Couldn't save course result: "+error.message);}else{logEvent(user.id,'course_finish',`finished ${course.name} · ${formatTime(finalTotal)}`,null,{course_id:course.id,total_time_ms:finalTotal,stage_count:totalStages}).then(()=>onActivity&&onActivity());}}try{localStorage.removeItem(progressKey);}catch(e){}onFinish();};
     if(!isPractice&&!isMashup)return <RaceComplete base={raceBase.current} course={course} splits={splits} courseStages={courseStages} totalStages={totalStages} onSave={saveRaceResults} user={user} liveChallenges={liveChallenges} addedRuns={addedRuns}/>;
     const headerBg=isPractice?"#15803D":isMashup?C.blue:C.orange;
     return(
@@ -8344,10 +8484,10 @@ function recapMapUrl(paths,w=480,h=270){
   if(!v)return null;
   return `https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/static/${v.lng.toFixed(5)},${v.lat.toFixed(5)},${v.zoom.toFixed(2)}/${w}x${h}@2x?access_token=${import.meta.env.VITE_MAPBOX_TOKEN}`;
 }
-function RecapMapOverlay({recap,w=480,h=270,noNum=false}){
+function RecapMapOverlay({recap,w=480,h=270,noNum=false,pinColor=null}){
   const v=recapMapView(recap.map,w,h);
   if(!v)return null;
-  const BLUE=C.blue;
+  const BLUE=pinColor||C.blue;
   return(
     <svg viewBox={`0 0 ${w} ${h}`} style={{position:"absolute",left:0,top:0,width:"100%",height:"100%"}}>
       {v.routes.map(r=>{const d=recapSmoothPath(r.pts);return(<g key={r.n}>
@@ -9313,7 +9453,7 @@ if(showBikeSetup)return(
             </div>
           )}
           <H2hLiveStrip user={user} list={h2hList} onOpen={id=>{setH2hStart(id);setH2hFromFeed(true);setShowH2h(true);}}/>
-          {feed.length===0?<div style={{textAlign:"center",padding:"48px 20px",color:C.muted,fontSize:13}}>No activity yet — set a record, finish a course, or add a stage to get things started.</div>:feed.map(item=><div key={item.id} className="feedItem">{(item.event_type==='course_created'&&feedCourse(item))?<CourseFeedCard item={item} course={feedCourse(item)} stages={stages} onOpen={openCourse}/>:<FeedCard item={item} stage={stages.find(s=>String(s.id)===String(item.stage_id))} onViewStage={goToStage} units={settings.units} onOpenH2h={id=>{setH2hStart(id);setH2hFromFeed(true);setShowH2h(true);}} h2hIds={h2hList.map(c=>c.id)}/>}</div>)}
+          {feed.length===0?<div style={{textAlign:"center",padding:"48px 20px",color:C.muted,fontSize:13}}>No activity yet — set a record, finish a course, or add a stage to get things started.</div>:feed.map(item=><div key={item.id} className="feedItem">{(item.event_type==='course_finish'&&item.context&&Array.isArray(item.context.splits))?<CourseFinishFeedCard item={item} stages={stages} courses={courses} onOpenCourse={openCourse}/>:(item.event_type==='course_created'&&feedCourse(item))?<CourseFeedCard item={item} course={feedCourse(item)} stages={stages} onOpen={openCourse}/>:<FeedCard item={item} stage={stages.find(s=>String(s.id)===String(item.stage_id))} onViewStage={goToStage} units={settings.units} onOpenH2h={id=>{setH2hStart(id);setH2hFromFeed(true);setShowH2h(true);}} h2hIds={h2hList.map(c=>c.id)}/>}</div>)}
         </div>
       )}
 
@@ -9506,8 +9646,8 @@ onRename={(id,newName)=>{setStages(prev=>prev.map(s=>s.id===id?{...s,name:newNam
                     <div style={{fontSize:14,fontWeight:700,color:"#92400E"}}>{formatTime(c.totalTime)}</div>
                     {isOpen?<Icon.ChevronUp size={14} color={C.mutedL}/>:<Icon.ChevronDown size={14} color={C.mutedL}/>}
                   </button>
-                  {isOpen&&<div style={{padding:"8px 12px 12px",background:C.surface}}>
-                    {trackNames.length===0?<div style={{fontSize:12,color:C.muted}}>No stages found</div>:trackNames.map((name,i)=>(
+                  {isOpen&&<div style={{padding:"8px 12px 12px",background:C.surface,display:"flex",flexDirection:"column"}}>
+                    <RecordRunButton course={c} stages={stages}/>{trackNames.length===0?<div style={{fontSize:12,color:C.muted}}>No stages found</div>:trackNames.map((name,i)=>(
                       <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0"}}>
                         <Icon.Lightning size={13} color={C.blue}/>
                         <div style={{fontSize:13,color:C.text}}>{i+1}. {name}</div>
