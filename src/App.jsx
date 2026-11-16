@@ -6,7 +6,7 @@ const supabase=createClient(import.meta.env.VITE_SUPABASE_URL,import.meta.env.VI
 const DEFAULT_CENTER={lat:53.4919264,lng:-0.3294266};
 
 const FAT_GATE_RADIUS=10;
-const FINISH_GATE_RADIUS=20;
+const FINISH_GATE_RADIUS=30;
 const START_NEAR_M=40;
 const START_ARM_MIN_M=20;
 const FEED_TYPES=['stage_record','personal_best','course_finish','stage_created','course_created','day_recap','h2h_result'];
@@ -17,14 +17,15 @@ function segmentCrossesGate(prevPos,currPos,gate,radius){if(!prevPos)return fals
 function gateCrossT(prevPos,currPos,gate){const a=metersOffset(gate,prevPos);const b=metersOffset(gate,currPos);const dx=b.x-a.x,dy=b.y-a.y;const lenSq=dx*dx+dy*dy;let t=lenSq===0?0:-(a.x*dx+a.y*dy)/lenSq;return Math.max(0,Math.min(1,t));}
 const GATE_FIT_M=35;        // use GPS fixes within 35 m either side of the gate
 const GATE_AFTER_FIXES=1;   // decide at the first fix past the gate
-const FINISH_NEAR_M=40;     // safety net: came within 40 m of the finish pin...
+const FINISH_NEAR_M=60;     // safety net: came within 60 m of the finish pin...
 const FINISH_LEAVE_M=25;    // ...then got 25 m further away than the closest point...
-const FINISH_END_M=60;      // ...while in the last 60 m of the stage line...
+const FINISH_END_M=90;      // ...while in the last 90 m of the stage line...
 const FINISH_MIN_MS=10000;  // ...and at least 10 s after the start
 const GATE_MOVING_MS=2;     // ignore fixes slower than 2 m/s (standing waiting at the start)
 const START_FIT_M=20;       // shorter window at the start, where you're still speeding up
 const START_GATE_RADIUS=20; // start gate detection radius (timing no longer depends on it)
 const GPS_MAX_ACC_M=50;    // ignore fixes the phone says are worse than 50 m (guesses from wifi/phone masts)
+const GPS_ROUGH_ACC_M=80;  // rough fixes (50-80 m) still count for the finish safety net when good GPS has dropped out
 const GPS_MAX_SPEED_MS=30; // ignore jumps faster than 30 m/s (67 mph)...
 const GPS_MAX_REJECTS=3;   // ...unless it keeps happening, then trust the new position
 function segClosest(prevPos,currPos,gate){
@@ -7501,13 +7502,14 @@ if(saveTime&&!isPractice){
   const line=currentStage.line_coords||currentStage.lineCoords||null;
   const tracker=makeGateTracker(gate,FINISH_GATE_RADIUS,lineDirAt(line,gate));
   let prev=null,near=null,done=false,id=null;
+  const gs={fixes:0,rough:0,junk:0,closest:null,lastTs:null}; // GPS health for this run, logged at the end
   const gpsOk=makeGpsFilter();
   prevGpsRef.current=null;
   traceRef.current=[{t:0,lat:currentStage.start.lat,lng:currentStage.start.lng}];
   const finish=(ts,how,extra)=>{
     if(done)return;done=true;
     if(id!==null)navigator.geolocation.clearWatch(id);
-    if(how!=="fit")logEvent(user?.id,"finish_"+how,`Finish timed by ${how}`,currentStage?.id,extra||null);
+    logEvent(user?.id,"finish_"+how,`Finish timed by ${how}`,currentStage?.id,{...(extra||{}),fixes:gs.fixes,rough:gs.rough,junk:gs.junk});
     
     
     const endTs=Math.max(ts,startTimeRef.current+1000);
@@ -7519,7 +7521,20 @@ if(saveTime&&!isPractice){
   id=navigator.geolocation.watchPosition(pos=>{
     if(done)return;
     const loc={lat:pos.coords.latitude,lng:pos.coords.longitude,ts:pos.timestamp,acc:pos.coords.accuracy};
-    if(!gpsOk(loc))return; // skip repeated, junk or impossible fixes
+    gs.lastTs=loc.ts;
+    const dG=haversine(loc,gate);if(gs.closest===null||dG<gs.closest)gs.closest=dG;
+    if(typeof loc.acc==="number"&&loc.acc>GPS_MAX_ACC_M){
+      gs.rough++;
+      // rough fix: only used for the finish safety net, and only when good GPS has dropped out for 3 s+
+      if(loc.acc<=GPS_ROUGH_ACC_M&&loc.ts-startTimeRef.current>=FINISH_MIN_MS&&(!prev||loc.ts-prev.ts>3000)){
+        const rem=stageRemainingM(line,loc);
+        if(dG<=FINISH_NEAR_M&&(rem===null||rem<=FINISH_END_M)&&(!near||dG<near.d))near={d:dG,ts:loc.ts};
+        if(near&&dG>=near.d+FINISH_LEAVE_M)finish(near.ts,"safety_net_rough",{closest_m:Math.round(near.d),acc:Math.round(loc.acc)});
+      }
+      return;
+    }
+    if(!gpsOk(loc)){gs.junk++;return;} // skip repeated or impossible fixes
+    gs.fixes++;
     if(loc.ts>startTimeRef.current)traceRef.current.push({t:loc.ts-startTimeRef.current,lat:loc.lat,lng:loc.lng});
     const hit=tracker(loc);
     if(hit){finish(hit.ts,hit.how);return;}
@@ -7533,7 +7548,10 @@ if(saveTime&&!isPractice){
     prev=loc;prevGpsRef.current=loc;
     if(near&&haversine(loc,gate)>=near.d+FINISH_LEAVE_M)finish(near.ts,"safety_net",{closest_m:Math.round(near.d)});
   },err=>{console.log(err);logEvent(user?.id,"gps_error_racing",err.message||String(err),currentStage?.id,{code:err.code});},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
-  return()=>{done=true;if(id!==null)navigator.geolocation.clearWatch(id);};
+  return()=>{
+    if(!done)logEvent(user?.id,"race_quit_gps","Run ended before the finish",currentStage?.id,{fixes:gs.fixes,rough:gs.rough,junk:gs.junk,closest_m:gs.closest===null?null:Math.round(gs.closest),last_fix_s_ago:gs.lastTs?Math.round((Date.now()-gs.lastTs)/1000):null,run_s:Math.round((Date.now()-startTimeRef.current)/1000),screen:document.visibilityState});
+    done=true;if(id!==null)navigator.geolocation.clearWatch(id);
+  };
 },[phase,stageIndex]);
            
 
