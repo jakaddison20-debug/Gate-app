@@ -78,7 +78,8 @@ function makeGateTracker(gate,radius,dir,fitM=GATE_FIT_M,strict=false){
     }
     const q0=buf[buf.length-2],dt0=(loc.ts-q0.ts)/1000;
     if(dt0>0&&haversine(loc,q0)/dt0>=GATE_MOVING_MS)sinceDet++;
-    if(!closest||c.d<closest.d)closest=c;
+    const mv0=dt0>0&&haversine(loc,q0)/dt0>=GATE_MOVING_MS; // only fixes where you're still moving can set the finish moment
+    if(!closest||(mv0&&(!closest.mv||c.d<closest.d))){closest=c;closest.mv=mv0;}
     const u=dir||unitVec(buf[0],loc)||{x:0,y:1};
     const along=p=>{const o=metersOffset(gate,p);return o.x*u.x+o.y*u.y;};
     const pre=[],post=[];
@@ -7630,7 +7631,7 @@ if(saveTime&&!isPractice){
       // rough fix: only used for the finish safety net, and only when good GPS has dropped out for 3 s+
       if(loc.acc<=GPS_ROUGH_ACC_M&&loc.ts-startTimeRef.current>=FINISH_MIN_MS&&(!prev||loc.ts-prev.ts>3000)){
         const rem=stageRemainingM(line,loc);
-        if(dG<=FINISH_NEAR_M&&(rem===null||rem<=FINISH_END_M)&&(!near||dG<near.d))near={d:dG,ts:loc.ts};
+        if(dG<=FINISH_NEAR_M&&(rem===null||rem<=FINISH_END_M)&&!near)near={d:dG,ts:loc.ts};
         if(near&&dG>=near.d+FINISH_LEAVE_M)finish(near.ts,"safety_net_rough",{closest_m:Math.round(near.d),acc:Math.round(loc.acc)});
       }
       return;
@@ -7642,9 +7643,10 @@ if(saveTime&&!isPractice){
     if(hit){finish(hit.ts,hit.how);return;}
     // safety net: never got inside the finish gate, but came close at the end of the stage, then rode away
     const c=segClosest(prev,loc,gate);
+    const mvN=!!prev&&loc.ts>prev.ts&&haversine(loc,prev)/((loc.ts-prev.ts)/1000)>=GATE_MOVING_MS; // standing around after the finish must not move the finish time later
     if(c.d<=FINISH_NEAR_M&&c.ts-startTimeRef.current>=FINISH_MIN_MS){
       const rem=stageRemainingM(line,loc);
-      if((rem===null||rem<=FINISH_END_M)&&(!near||c.d<near.d))near=c;
+      if((rem===null||rem<=FINISH_END_M)&&(!near||(mvN&&c.d<near.d)))near=c;
     }
     
     prev=loc;prevGpsRef.current=loc;
