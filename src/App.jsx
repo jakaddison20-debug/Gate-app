@@ -25,6 +25,8 @@ const GATE_MOVING_MS=2;     // ignore fixes slower than 2 m/s (standing waiting 
 const START_FIT_M=20;       // shorter window at the start, where you're still speeding up
 const START_GATE_RADIUS=20; // start gate detection radius (timing no longer depends on it)
 const GPS_MAX_ACC_M=50;    // ignore fixes the phone says are worse than 50 m (guesses from wifi/phone masts)
+const FINISH_STOP_M=15;     // stopped within 15 m of the finish pin at the end of the stage...
+const FINISH_STOP_MS=3000;  // ...for 3 s = you've finished (phones often send no GPS at all while you stand still)
 const GPS_ROUGH_ACC_M=80;  // rough fixes (50-80 m) still count for the finish safety net when good GPS has dropped out
 const GPS_MAX_SPEED_MS=30; // ignore jumps faster than 30 m/s (67 mph)...
 const GPS_MAX_REJECTS=3;   // ...unless it keeps happening, then trust the new position
@@ -6674,7 +6676,16 @@ function ProfileView({stages,settings,courseResults,weeklyActivity,pastWeeks,cou
  } 
  return coords[coords.length-1];
  }
- function trimLineFromEnd(coords,targetDist){
+ // New stage: cut the end of the recording back to where you were last riding, not where you stopped,
+// stood around and unlocked your phone (that GPS mess made the finish pin land where everyone stops).
+function cleanStageEnd(pts,loc){
+  const p=pts.filter(x=>!(typeof x.acc==="number"&&x.acc>30));
+  let last=-1;
+  for(let i=p.length-1;i>0;i--){if(!p[i].ts||!p[i-1].ts)continue;const dt=(p[i].ts-p[i-1].ts)/1000;if(dt>0&&haversine(p[i],p[i-1])/dt>=2.5){last=i;break;}}
+  const out=last>0?p.slice(0,last+1):[...pts,loc];
+  return out.map(x=>({lat:x.lat,lng:x.lng}));
+}
+function trimLineFromEnd(coords,targetDist){
   if(!coords||coords.length<2)return coords||[];
   return trimLineFromStart([...coords].reverse(),targetDist).reverse();
 }
@@ -6704,7 +6715,7 @@ function trimLineFromStart(coords,targetDist){
   const [recording,setRecording]=useState(false);
   const [lineCoords,setLineCoords]=useState([]);
   const trackRef=useRef(null);
-  const simulatePlace=()=>{if(!navigator.geolocation){alert("GPS not available");return;}navigator.geolocation.getCurrentPosition(pos=>{const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};if(!start){setStart(loc);setLineCoords([loc]);setRecording(true);trackRef.current=navigator.geolocation.watchPosition(p=>setLineCoords(prev=>[...prev,{lat:p.coords.latitude,lng:p.coords.longitude}]),err=>console.log(err),{enableHighAccuracy:true,maximumAge:0});}else if(!finish){const rawLine=[...lineCoords,loc];let rawTotal=0;for(let i=0;i<rawLine.length-1;i++)rawTotal+=haversine(rawLine[i],rawLine[i+1]);const endTrim=rawTotal>60?trimLineFromEnd(rawLine,10):null;setFinish(endTrim&&endTrim.length?endTrim[endTrim.length-1]:loc);setRecording(false);navigator.geolocation.clearWatch(trackRef.current);const fullLine=endTrim&&endTrim.length?endTrim:[...lineCoords,loc];let total=0;for(let i=0;i<fullLine.length-1;i++)total+=haversine(fullLine[i],fullLine[i+1]);if(total>25){const trimmed=trimLineFromStart(fullLine,25);if(trimmed&&trimmed.length>0){setStart(trimmed[0]);setLineCoords(trimmed);}else{setLineCoords(fullLine);}}else{setLineCoords(fullLine);}}},err=>alert("Could not get location — make sure GPS is on"),{enableHighAccuracy:true,timeout:10000});};
+  const simulatePlace=()=>{if(!navigator.geolocation){alert("GPS not available");return;}navigator.geolocation.getCurrentPosition(pos=>{const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};if(!start){setStart(loc);setLineCoords([loc]);setRecording(true);trackRef.current=navigator.geolocation.watchPosition(p=>setLineCoords(prev=>[...prev,{lat:p.coords.latitude,lng:p.coords.longitude,ts:p.timestamp,acc:p.coords.accuracy}]),err=>console.log(err),{enableHighAccuracy:true,maximumAge:0});}else if(!finish){const rawLine=cleanStageEnd(lineCoords,loc);let rawTotal=0;for(let i=0;i<rawLine.length-1;i++)rawTotal+=haversine(rawLine[i],rawLine[i+1]);const endTrim=rawTotal>60?trimLineFromEnd(rawLine,15):null;setFinish(endTrim&&endTrim.length?endTrim[endTrim.length-1]:loc);setRecording(false);navigator.geolocation.clearWatch(trackRef.current);const fullLine=endTrim&&endTrim.length?endTrim:[...lineCoords,loc];let total=0;for(let i=0;i<fullLine.length-1;i++)total+=haversine(fullLine[i],fullLine[i+1]);if(total>25){const trimmed=trimLineFromStart(fullLine,25);if(trimmed&&trimmed.length>0){setStart(trimmed[0]);setLineCoords(trimmed);}else{setLineCoords(fullLine);}}else{setLineCoords(fullLine);}}},err=>alert("Could not get location — make sure GPS is on"),{enableHighAccuracy:true,timeout:10000});};
 
     const canSave=name.trim()&&start&&finish;
   const dist=start&&finish?haversine(start,finish):null;
@@ -6764,7 +6775,7 @@ function NewStageSheet({onClose,onSave}){
   const [recording,setRecording]=useState(false);
   const [lineCoords,setLineCoords]=useState([]);
   const trackRef=useRef(null);
-  const simulatePlace=()=>{if(!navigator.geolocation){alert("GPS not available");return;}navigator.geolocation.getCurrentPosition(pos=>{const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};if(!start){setStart(loc);setLineCoords([loc]);setRecording(true);trackRef.current=navigator.geolocation.watchPosition(p=>setLineCoords(prev=>[...prev,{lat:p.coords.latitude,lng:p.coords.longitude}]),err=>console.log(err),{enableHighAccuracy:true,maximumAge:0});}else if(!finish){const rawLine=[...lineCoords,loc];let rawTotal=0;for(let i=0;i<rawLine.length-1;i++)rawTotal+=haversine(rawLine[i],rawLine[i+1]);const endTrim=rawTotal>60?trimLineFromEnd(rawLine,10):null;setFinish(endTrim&&endTrim.length?endTrim[endTrim.length-1]:loc);setRecording(false);navigator.geolocation.clearWatch(trackRef.current);const fullLine=endTrim&&endTrim.length?endTrim:[...lineCoords,loc];let total=0;for(let i=0;i<fullLine.length-1;i++)total+=haversine(fullLine[i],fullLine[i+1]);if(total>25){const trimmed=trimLineFromStart(fullLine,25);if(trimmed&&trimmed.length>0){setStart(trimmed[0]);setLineCoords(trimmed);}else{setLineCoords(fullLine);}}else{setLineCoords(fullLine);}}},err=>alert("Could not get location — make sure GPS is on"),{enableHighAccuracy:true,timeout:10000});};
+  const simulatePlace=()=>{if(!navigator.geolocation){alert("GPS not available");return;}navigator.geolocation.getCurrentPosition(pos=>{const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};if(!start){setStart(loc);setLineCoords([loc]);setRecording(true);trackRef.current=navigator.geolocation.watchPosition(p=>setLineCoords(prev=>[...prev,{lat:p.coords.latitude,lng:p.coords.longitude,ts:p.timestamp,acc:p.coords.accuracy}]),err=>console.log(err),{enableHighAccuracy:true,maximumAge:0});}else if(!finish){const rawLine=cleanStageEnd(lineCoords,loc);let rawTotal=0;for(let i=0;i<rawLine.length-1;i++)rawTotal+=haversine(rawLine[i],rawLine[i+1]);const endTrim=rawTotal>60?trimLineFromEnd(rawLine,15):null;setFinish(endTrim&&endTrim.length?endTrim[endTrim.length-1]:loc);setRecording(false);navigator.geolocation.clearWatch(trackRef.current);const fullLine=endTrim&&endTrim.length?endTrim:[...lineCoords,loc];let total=0;for(let i=0;i<fullLine.length-1;i++)total+=haversine(fullLine[i],fullLine[i+1]);if(total>25){const trimmed=trimLineFromStart(fullLine,25);if(trimmed&&trimmed.length>0){setStart(trimmed[0]);setLineCoords(trimmed);}else{setLineCoords(fullLine);}}else{setLineCoords(fullLine);}}},err=>alert("Could not get location — make sure GPS is on"),{enableHighAccuracy:true,timeout:10000});};
   const redoGates=()=>{if(trackRef.current!==null&&navigator.geolocation)navigator.geolocation.clearWatch(trackRef.current);trackRef.current=null;setStart(null);setFinish(null);setLineCoords([]);setRecording(false);};
   const [gateLocked,setGateLocked]=useState(false);
   useEffect(()=>{if(start&&!finish)setGateLocked(true);},[start]);
@@ -7605,12 +7616,14 @@ if(saveTime&&!isPractice){
   const line=currentStage.line_coords||currentStage.lineCoords||null;
   const tracker=makeGateTracker(gate,FINISH_GATE_RADIUS,lineDirAt(line,gate));
   let prev=null,near=null,done=false,id=null;
-  const gs={fixes:0,rough:0,junk:0,closest:null,lastTs:null}; // GPS health for this run, logged at the end
+  const gs={fixes:0,rough:0,junk:0,closest:null,lastTs:null};
+  let lastMoveTs=Date.now(),nearMv=null; // last time you were moving, and your closest moving point to the finish
+  const stopTimer=setInterval(()=>{if(done||!nearMv)return;if(Date.now()-lastMoveTs>=FINISH_STOP_MS)finish(nearMv.ts,"stopped_at_finish",{closest_m:Math.round(nearMv.d)});},1000); // GPS health for this run, logged at the end
   const gpsOk=makeGpsFilter();
   prevGpsRef.current=null;
   traceRef.current=[{t:0,lat:currentStage.start.lat,lng:currentStage.start.lng}];
   const finish=(ts,how,extra)=>{
-    if(done)return;done=true;
+    if(done)return;done=true;clearInterval(stopTimer);
     if(id!==null)navigator.geolocation.clearWatch(id);
     logEvent(user?.id,"finish_"+how,`Finish timed by ${how}`,currentStage?.id,{...(extra||{}),fixes:gs.fixes,rough:gs.rough,junk:gs.junk});
     
@@ -7650,11 +7663,12 @@ if(saveTime&&!isPractice){
     }
     
     prev=loc;prevGpsRef.current=loc;
+    if(mvN){lastMoveTs=loc.ts;if(c.d<=FINISH_STOP_M&&c.ts-startTimeRef.current>=FINISH_MIN_MS){const remS=stageRemainingM(line,loc);if((remS===null||remS<=FINISH_END_M)&&(!nearMv||c.d<nearMv.d))nearMv={d:c.d,ts:c.ts};}}
     if(near&&haversine(loc,gate)>=near.d+FINISH_LEAVE_M)finish(near.ts,"safety_net",{closest_m:Math.round(near.d)});
   },err=>{console.log(err);logEvent(user?.id,"gps_error_racing",err.message||String(err),currentStage?.id,{code:err.code});},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
   return()=>{
     if(!done)logEvent(user?.id,"race_quit_gps","Run ended before the finish",currentStage?.id,{fixes:gs.fixes,rough:gs.rough,junk:gs.junk,closest_m:gs.closest===null?null:Math.round(gs.closest),last_fix_s_ago:gs.lastTs?Math.round((Date.now()-gs.lastTs)/1000):null,run_s:Math.round((Date.now()-startTimeRef.current)/1000),screen:document.visibilityState});
-    done=true;if(id!==null)navigator.geolocation.clearWatch(id);
+    clearInterval(stopTimer);done=true;if(id!==null)navigator.geolocation.clearWatch(id);
   };
 },[phase,stageIndex]);
            
