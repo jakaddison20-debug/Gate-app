@@ -1067,7 +1067,50 @@ function useWetDays(user){
 }
 const medianOf=a=>{const v=[...a].sort((x,y)=>x-y),m=Math.floor(v.length/2);return v.length%2?v[m]:(v[m-1]+v[m])/2;};
 // Uses your last 5 runs in the same conditions (wet or dry) as your latest run, min 3. Typical run = the median, and one run more than 10% slower than the rest is left out.
+// Consistency v2: the average of your last 5 runs, and how far each run lands from it (as a % of that average).
+// 0% → 100, 1.5% → 90, 3% → 75, 5% → 55, 8%+ → 0. A run over 10% slower than the middle run is left out as a mistake.
+// Last 3 kept runs each 0.3 s+ faster = 100 "Getting faster". Needs 5 runs in the same conditions; stages under 30 s aren't scored.
+const CONS_RUNS=5,CONS_MIN_MS=30000;
+function consistencyPctScore(p){const P=[[0,100],[1.5,90],[3,75],[5,55],[8,0]];if(p>=8)return 0;for(let i=1;i<P.length;i++){if(p<=P[i][0]){const a=P[i-1],b=P[i];return a[1]+(b[1]-a[1])*(p-a[0])/(b[0]-a[0]);}}return 0;}
+const fmtRun=ms=>{const s=Math.round(ms/100)/10,m=Math.floor(s/60),r=s-m*60;return m?`${m}:${r<10?"0":""}${r.toFixed(1)}`:r.toFixed(1);};
 function consistencyFromRuns(runs,wet){
+  if(!runs||runs.length===0)return null;
+  const sorted=[...runs].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+  if(medianOf(sorted.map(r=>r.time_ms))<CONS_MIN_MS)return{tooShort:true};
+  const isWet=r=>!!(wet&&wet.has(wetKey(r.created_at)));
+  const latestWet=isWet(sorted[sorted.length-1]);
+  let isWetBasis=latestWet,same=sorted.filter(r=>isWet(r)===latestWet);
+  const other=sorted.filter(r=>isWet(r)!==latestWet);
+  if(same.length<CONS_RUNS&&other.length>=CONS_RUNS){isWetBasis=!latestWet;same=other;}
+  if(same.length<CONS_RUNS)return{notYet:true,have:Math.max(same.length,other.length)};
+  const last=same.slice(-CONS_RUNS).map(r=>r.time_ms);
+  const med=medianOf(last);
+  const out=last.map(t=>t>med*1.1);
+  const kept=last.filter((t,i)=>!out[i]);
+  const mean=kept.reduce((a,b)=>a+b,0)/kept.length;
+  const avgDevMs=kept.reduce((a,t)=>a+Math.abs(t-mean),0)/kept.length;
+  const pct=avgDevMs/mean*100;
+  const m=kept.length;
+  const improving=m>=3&&kept[m-3]-kept[m-2]>=300&&kept[m-2]-kept[m-1]>=300;
+  const score=improving?100:Math.round(consistencyPctScore(pct));
+  return{score,label:improving?"Getting faster":consistencyLabel(score),improving,avgDevMs,pct,mean,best:Math.min(...kept),worst:Math.max(...kept),runs:last.map((t,i)=>({t,out:out[i]})),runsUsed:m,totalRuns:runs.length,dropped:last.length-m,wet:isWetBasis,avgGapMs:avgDevMs,avg:mean};
+}
+// Your last 5 runs as chips: how far each was from your average
+function ConsistencyRunChips({res}){
+  return(
+    <>
+      <div style={{fontSize:12,color:C.muted,margin:"0 0 8px",lineHeight:1.4}}>Your last {res.runs.length} {res.wet?"wet ":""}runs against your average of {fmtRun(res.mean)}, oldest to newest{res.dropped?". A run over 10% slower than usual is left out as a mistake.":"."}</div>
+      <div style={{display:"flex",gap:6}}>
+        {res.runs.map((x,i)=>{
+          if(x.out)return(<div key={i} style={{flex:1,minWidth:0,background:"#fff",border:`1px dashed ${C.border}`,borderRadius:10,padding:"8px 0 7px",textAlign:"center"}}><div style={{fontSize:12,fontWeight:600,color:"#9A9A9A"}}>Left out</div><div style={{fontSize:10.5,color:"#9A9A9A",marginTop:2}}>{fmtRun(x.t)}</div></div>);
+          const isBest=x.t===res.best,d=(x.t-res.mean)/1000;
+          return(<div key={i} style={{flex:1,minWidth:0,background:isBest?"#fff":C.surface,border:`1px solid ${isBest?C.blue:C.border}`,borderRadius:10,padding:"8px 0 7px",textAlign:"center"}}><div style={{fontSize:13,fontWeight:700,color:isBest?C.blue:C.text}}>{d>=0?"+":"−"}{Math.abs(d).toFixed(1)}s</div><div style={{fontSize:10.5,color:C.muted,marginTop:2}}>{fmtRun(x.t)}{isBest?" · best":""}</div></div>);
+        })}
+      </div>
+    </>
+  );
+}
+function consistencyFromRunsV1(runs,wet){
   if(!runs||runs.length<3)return null;
   const sorted=[...runs].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
   const isWet=r=>!!(wet&&wet.has(wetKey(r.created_at)));
@@ -1088,8 +1131,8 @@ function consistencyFromRuns(runs,wet){
   return{score,label:consistencyLabel(score),avgGapMs,best,avg:typical,worst,runsUsed:last.length,totalRuns:runs.length,dropped,wet:isWetBasis};
 }
 const fmtSecs=ms=>(ms/1000).toFixed(1)+"s";
-function ConsistencyRing({score,size=54,stroke=5,fontSize=18,label}){
-  const r=(size-stroke)/2,c=2*Math.PI*r,color=consistencyColor(score);
+function ConsistencyRing({score,size=54,stroke=5,fontSize=18,label,color:ringColor}){
+  const r=(size-stroke)/2,c=2*Math.PI*r,color=ringColor||consistencyColor(score);
   return(
     <div style={{position:"relative",width:size,height:size,flexShrink:0}}>
       <svg width={size} height={size} style={{transform:"rotate(-90deg)"}}>
@@ -1104,6 +1147,32 @@ function ConsistencyRing({score,size=54,stroke=5,fontSize=18,label}){
   );
 }
 function StageConsistencyCard({runs,wet,onToggleWet}){
+  const [open,setOpen]=useState(false);
+  if(!runs||runs.length===0)return null;
+  const res=consistencyFromRuns(runs,wet);
+  if(!res||res.tooShort||res.notYet){const left=CONS_RUNS-((res&&res.have)||0);return(
+    <div style={{margin:"16px 16px 0",background:C.surface,borderRadius:14,padding:"14px 16px",border:`1px solid ${C.border}`,fontSize:13,color:C.muted}}>{res&&res.tooShort?"Consistency is only scored on stages over 30 seconds":`Ride this stage ${left} more time${left===1?"":"s"} to get your consistency score`}</div>
+  );}
+  return(
+    <div style={{margin:"16px 16px 0",background:C.surface,borderRadius:14,border:`1px solid ${C.border}`,overflow:"hidden"}}>
+      <button className="tap" onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:14,padding:"14px 16px",background:"none",border:"none",textAlign:"left"}}>
+        <ConsistencyRing score={res.score} color={C.blue}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:15,fontWeight:700,color:C.text}}>Consistency</div>
+          <div style={{fontSize:12,color:C.muted,marginTop:2}}><span style={{color:C.text,fontWeight:600}}>{res.label}</span> · {res.improving?"each run faster":`${fmtSecs(res.avgDevMs)} from your average`}</div>
+        </div>
+        <div style={{transform:open?"rotate(180deg)":"none",transition:"transform 0.15s",display:"flex"}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.mutedL} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+      </button>
+      {open&&(
+        <div style={{padding:"0 16px 14px"}}>
+          <ConsistencyRunChips res={res}/>
+          {onToggleWet&&(()=>{const days=[];[...runs].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).forEach(r=>{const k=wetKey(r.created_at);if(!days.includes(k))days.push(k);});return(<div style={{marginTop:12}}><div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:6}}>Mark wet days</div><div style={{display:"flex",flexWrap:"wrap",gap:6}}>{days.slice(0,6).map(k=>{const on=wet&&wet.has(k);const[yy,mm,dd]=k.split("-").map(Number);return <button key={k} className="tap" onClick={()=>onToggleWet(k)} style={{padding:"6px 10px",borderRadius:10,border:`1px solid ${on?C.blue:C.border}`,background:on?"#EFF6FF":"#fff",fontSize:12,fontWeight:600,color:on?C.blue:C.muted}}>{new Date(yy,mm-1,dd).toLocaleDateString("en-GB",{day:"numeric",month:"short"})}{on?" · Wet":""}</button>;})}</div></div>);})()}
+        </div>
+      )}
+    </div>
+  );
+}
+function StageConsistencyCardV1({runs,wet,onToggleWet}){
   const [open,setOpen]=useState(false);
   if(!runs||runs.length===0)return null;
   const res=consistencyFromRuns(runs,wet);
@@ -6098,6 +6167,81 @@ function FatigueScreen({grouped,descents}){
   );
 }
 
+function ConsistencyView({data}){
+  const [sortBest,setSortBest]=useState(true);
+  const [showAll,setShowAll]=useState(false);
+  const [openId,setOpenId]=useState(null);
+  const [how,setHow]=useState(false);
+  if(data===null)return <div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>;
+  const rows=[...data.rows].sort((a,b)=>sortBest?b.score-a.score:a.score-b.score);
+  const shown=showAll?rows:rows.slice(0,5);
+  const unscored=[...(data.unscored||[])].sort((a,b)=>b.have-a.have);
+  const avgSec=rows.length?rows.reduce((a,r)=>a+r.avgDevMs,0)/rows.length/1000:0;
+  const chev=(deg,col)=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,transform:`rotate(${deg}deg)`,transition:"transform 0.2s"}}><path d="M6 9l6 6 6-6"/></svg>;
+  const box={margin:"0 16px",border:`1px solid ${C.border}`,borderRadius:16,overflow:"hidden"};
+  const head=(t,right,pt)=><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:`${pt||24}px 16px 6px`}}><span style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase"}}>{t}</span>{right}</div>;
+  const dcol=d=>(DIFFICULTIES.find(x=>x.val===d)||DIFFICULTIES[0]).color;
+  return(
+    <div style={{paddingBottom:40}}>
+      {data.overall===null?(
+        <div style={{textAlign:"center",padding:"48px 24px 16px",color:C.muted,fontSize:13,lineHeight:1.5}}>No score yet. Ride a stage that's over 30 seconds 5 times and your consistency will show up here.</div>
+      ):(
+        <div style={{padding:"26px 24px 20px",textAlign:"center"}}>
+          <div style={{display:"flex",justifyContent:"center"}}><ConsistencyRing score={data.overall} size={140} stroke={8} fontSize={44} label="OUT OF 100" color={C.blue}/></div>
+          <div style={{fontSize:24,fontWeight:800,color:C.text,marginTop:14}}>{consistencyLabel(data.overall)}</div>
+          <div style={{fontSize:14,color:C.muted,lineHeight:1.45,margin:"8px auto 0",maxWidth:290}}>Your runs usually land about {avgSec.toFixed(1)}s either side of your average time.</div>
+        </div>
+      )}
+      {rows.length>0&&<>
+        {head("Your stages",<button className="tap" onClick={()=>setSortBest(v=>!v)} style={{background:"none",border:"none",padding:0,fontSize:12,fontWeight:600,color:C.blue}}>Sort: {sortBest?"Best":"Worst"} first ▾</button>)}
+        <div style={box}>
+          {shown.map((r,i)=>{const open=openId===r.id;return(
+            <div key={r.id} style={{borderBottom:i<shown.length-1?`1px solid ${C.border}`:"none",background:"#fff"}}>
+              <button className="tap" onClick={()=>setOpenId(open?null:r.id)} style={{width:"100%",background:"none",border:"none",padding:"13px 14px",display:"flex",alignItems:"center",gap:11,textAlign:"left",color:C.text}}>
+                <DifficultyDiamond color={dcol(r.difficulty)} size={14}/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:14.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</div>
+                  <div style={{fontSize:12,color:C.muted,marginTop:2}}>{r.totalRuns} runs · {r.improving?"each one faster":`${fmtSecs(r.avgDevMs)} from your average`}</div>
+                </div>
+                <div style={{textAlign:"right"}}><div style={{fontSize:19,fontWeight:800,lineHeight:1}}>{r.score}</div><div style={{fontSize:11,fontWeight:600,color:C.muted,marginTop:3}}>{r.label}</div></div>
+                {chev(open?180:0,C.mutedL)}
+              </button>
+              {open&&<div style={{padding:"0 14px 14px"}}><ConsistencyRunChips res={r}/></div>}
+            </div>
+          );})}
+        </div>
+        {rows.length>5&&<button className="tap" onClick={()=>setShowAll(v=>!v)} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,width:"calc(100% - 32px)",margin:"10px 16px 0",background:"#fff",border:"1.5px solid #E2E2DE",borderRadius:14,padding:11,fontSize:14,fontWeight:700,color:C.blue}}>{showAll?"Show less":`Show ${rows.length-5} more stage${rows.length-5===1?"":"s"}`}{chev(showAll?180:0,C.blue)}</button>}
+      </>}
+      {unscored.length>0&&<>
+        {head("Not scored yet",null,20)}
+        <div style={box}>
+          {unscored.map((s,i)=>(
+            <div key={s.id} style={{borderBottom:i<unscored.length-1?`1px solid ${C.border}`:"none",background:"#fff",padding:"13px 14px",display:"flex",alignItems:"center",gap:11}}>
+              <DifficultyDiamond color={dcol(s.difficulty)} size={14}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:14.5,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}</div>
+                <div style={{fontSize:12,color:C.muted,marginTop:2}}>{s.have} of {CONS_RUNS} runs</div>
+              </div>
+              <div style={{fontSize:12,fontWeight:600,color:C.muted}}>{CONS_RUNS-s.have} more run{CONS_RUNS-s.have===1?"":"s"}</div>
+            </div>
+          ))}
+        </div>
+      </>}
+      <button className="tap" onClick={()=>setHow(v=>!v)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",width:"calc(100% - 32px)",margin:"14px 16px 0",background:"#fff",border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",fontSize:14,fontWeight:700,color:C.text,textAlign:"left"}}>How it works{chev(how?180:0,C.muted)}</button>
+      {how&&(
+        <div style={{margin:"8px 16px 0",background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px"}}>
+          <div style={{fontSize:13,color:"#4A4A4A",lineHeight:1.5,marginBottom:12}}>On each stage we take the average time of your last 5 runs and see how far each run lands from it. The closer your runs bunch together, the higher your score. If your last 3 runs each get clearly faster, that stage scores 100. A run that's over 10% slower than your usual is left out as a mistake. A stage needs 5 runs, and to be over 30 seconds, to be scored.</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+            {[["90+","Locked in"],["75+","Solid"],["55+","Variable"],["<55","Scattered"]].map(([n,l])=>(
+              <div key={l} style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 2px",textAlign:"center",fontSize:10.5,color:C.muted,fontWeight:500}}><div style={{fontSize:14,fontWeight:800,color:C.text,marginBottom:2}}>{n}</div>{l}</div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stagesRiddenCount,coursesCompleteCount,courseCRList}){
   const [view,setView]=useState('hub');
   const [expandedCRCourse,setExpandedCRCourse]=useState(null);
@@ -6121,7 +6265,7 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
   const descents=useStageDescents(runsByStage,stages);
   const dryByStage=useMemo(()=>{if(!runsByStage)return null;const o={};Object.keys(runsByStage).forEach(id=>{o[id]=runsByStage[id].filter(r=>!wetDays.has(wetKey(r.created_at)));});return o;},[runsByStage,wetDays]);
   const fatModel=useMemo(()=>fatigueModel(dryByStage,descents,'day'),[dryByStage,descents]);
-  const consistency=useMemo(()=>{
+  const consistency=useMemo(()=>{const unscored=[];
     if(!myRuns)return null;
     const byStage={};
     myRuns.forEach(t=>{(byStage[t.stage_id]=byStage[t.stage_id]||[]).push(t);});
@@ -6129,12 +6273,12 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
     Object.keys(byStage).forEach(id=>{
       const stage=stages.find(s=>String(s.id)===String(id));
       const res=consistencyFromRuns(byStage[id],wetDays);
-      if(!stage||!res)return;
+      if(!stage||!res||res.tooShort)return;if(res.notYet){unscored.push({id:stage.id,name:stage.name,difficulty:stage.difficulty||'blue',have:res.have});return;}
       rows.push({id:stage.id,name:stage.name,difficulty:stage.difficulty||'blue',...res});
     });
-    if(rows.length===0)return{rows,overall:null};
+    if(rows.length===0)return{rows,unscored,overall:null};
     const overall=Math.round(rows.reduce((s,r)=>s+r.score,0)/rows.length);
-    return{rows,overall};
+    return{rows,unscored,overall};
   },[myRuns,stages,wetDays]);
   const myStages=useMemo(()=>stages.filter(s=>s.created_by===user.id),[stages,user.id]);
   const myCourses=useMemo(()=>courses.filter(c=>c.created_by===user.id),[courses,user.id]);
@@ -6235,7 +6379,8 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
             </div>
           </div>
         )}
-        {view==='consistency'&&(
+        {view==='consistency'&&<ConsistencyView data={consistency}/>}
+        {false&&(
           <div style={{paddingBottom:40}}>
             {consistency===null?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>:consistency.overall===null?(
               <div style={{textAlign:"center",padding:"48px 24px",color:C.muted,fontSize:13,lineHeight:1.5}}>No score yet. Ride a stage at least 3 times and your consistency will show up here.</div>
