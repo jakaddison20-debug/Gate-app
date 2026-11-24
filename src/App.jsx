@@ -17,7 +17,7 @@ function segmentCrossesGate(prevPos,currPos,gate,radius){if(!prevPos)return fals
 function gateCrossT(prevPos,currPos,gate){const a=metersOffset(gate,prevPos);const b=metersOffset(gate,currPos);const dx=b.x-a.x,dy=b.y-a.y;const lenSq=dx*dx+dy*dy;let t=lenSq===0?0:-(a.x*dx+a.y*dy)/lenSq;return Math.max(0,Math.min(1,t));}
 const GATE_FIT_M=35;        // use GPS fixes within 35 m either side of the gate
 const GATE_AFTER_FIXES=1;   // decide at the first fix past the gate
-const FINISH_NEAR_M=60;     // safety net: came within 60 m of the finish pin...
+const FINISH_NEAR_M=40;     // safety net: came within 60 m of the finish pin...
 const FINISH_LEAVE_M=25;    // ...then got 25 m further away than the closest point...
 const FINISH_END_M=90;      // ...while in the last 90 m of the stage line...
 const FINISH_MIN_MS=10000;  // ...and at least 10 s after the start
@@ -1194,7 +1194,7 @@ function traceProfile(points){
   const speeds=times.map((_,k)=>{
     const a=Math.max(0,k-span),b=Math.min(N,k+span);
     const dt=times[b]-times[a];
-    return dt>0?((b-a)/N*total)/(dt/1000):0;
+    return dt>0?Math.min(20,((b-a)/N*total)/(dt/1000)):0; // never show more than 45 mph
   });
   return{total,times,speeds};
 }
@@ -2006,7 +2006,7 @@ function topMphFromTrace(points){
     const d=cum[j]-cum[i],dt=(points[j][0]-points[i][0])/1000;
     if(d>=46&&dt>=6){const v=d/dt*MPS_TO_MPH;if(v>top)top=v;}
   }
-  return top>0&&top<60?top:null;
+  return top>0&&top<45?top:null; // anything faster is a GPS glitch, not a rider
 }
 
 // Speed wedge on the stage sheet
@@ -7630,7 +7630,7 @@ if(saveTime&&!isPractice){
     
     const endTs=Math.max(ts,startTimeRef.current+1000);
     const gt=endTs-startTimeRef.current;
-    traceRef.current=traceRef.current.filter(p=>p.t<gt);
+    traceRef.current=traceRef.current.filter(p=>p.t===0||p.t<gt-1500); // drop GPS points in the last 1.5 s so the finish point can't make a fake speed spike
     traceRef.current.push({t:gt,lat:gate.lat,lng:gate.lng});
     stopStage(true,endTs);
   };
@@ -7663,7 +7663,7 @@ if(saveTime&&!isPractice){
     }
     
     prev=loc;prevGpsRef.current=loc;
-    if(mvN){lastMoveTs=loc.ts;if(c.d<=FINISH_STOP_M&&c.ts-startTimeRef.current>=FINISH_MIN_MS){const remS=stageRemainingM(line,loc);if((remS===null||remS<=FINISH_END_M)&&(!nearMv||c.d<nearMv.d))nearMv={d:c.d,ts:c.ts};}}
+    if(mvN){lastMoveTs=loc.ts;if(c.d<=FINISH_STOP_M&&c.ts-startTimeRef.current>=FINISH_MIN_MS){const remS=stageRemainingM(line,loc);if((remS===null||remS<=FINISH_END_M)&&(!nearMv||(!nearMv.left&&c.d<nearMv.d)))nearMv={d:c.d,ts:c.ts};}if(nearMv&&!nearMv.left&&haversine(loc,gate)>nearMv.d+10)nearMv.left=true;} // first pass only: riding back towards the pin later can't move your time
     if(near&&haversine(loc,gate)>=near.d+FINISH_LEAVE_M)finish(near.ts,"safety_net",{closest_m:Math.round(near.d)});
   },err=>{console.log(err);logEvent(user?.id,"gps_error_racing",err.message||String(err),currentStage?.id,{code:err.code});},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
   return()=>{
