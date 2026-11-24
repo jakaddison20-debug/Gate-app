@@ -17,7 +17,7 @@ function segmentCrossesGate(prevPos,currPos,gate,radius){if(!prevPos)return fals
 function gateCrossT(prevPos,currPos,gate){const a=metersOffset(gate,prevPos);const b=metersOffset(gate,currPos);const dx=b.x-a.x,dy=b.y-a.y;const lenSq=dx*dx+dy*dy;let t=lenSq===0?0:-(a.x*dx+a.y*dy)/lenSq;return Math.max(0,Math.min(1,t));}
 const GATE_FIT_M=35;        // use GPS fixes within 35 m either side of the gate
 const GATE_AFTER_FIXES=1;   // decide at the first fix past the gate
-const FINISH_NEAR_M=60;     // safety net: came within 60 m of the finish pin...
+const FINISH_NEAR_M=40;     // safety net: came within 60 m of the finish pin...
 const FINISH_LEAVE_M=25;    // ...then got 25 m further away than the closest point...
 const FINISH_END_M=90;      // ...while in the last 90 m of the stage line...
 const FINISH_MIN_MS=10000;  // ...and at least 10 s after the start
@@ -1194,7 +1194,7 @@ function traceProfile(points){
   const speeds=times.map((_,k)=>{
     const a=Math.max(0,k-span),b=Math.min(N,k+span);
     const dt=times[b]-times[a];
-    return dt>0?((b-a)/N*total)/(dt/1000):0;
+    return dt>0?Math.min(20,((b-a)/N*total)/(dt/1000)):0; // never show more than 45 mph
   });
   return{total,times,speeds};
 }
@@ -1411,7 +1411,9 @@ function StageTimeDeltaCard({stage,lb,all,myAttempts,user,units,heightUnit}){
         const{data}=await supabase.from('run_traces').select('time_ms,points').eq('user_id',myId).eq('stage_id',String(stage.id)).maybeSingle();
         if(data&&times.includes(data.time_ms)&&!map[data.time_ms])map[data.time_ms]=data.points;
       }catch(e){}
-      if(!off)setOwnTr({key:ownKey,map});
+      let fb=null;   // your fastest run that has speed data (used when your best is older than speed data)
+      try{const{data}=await supabase.from('run_trace_history').select('time_ms,points').eq('user_id',myId).eq('stage_id',String(stage.id)).order('time_ms',{ascending:true}).limit(1);if(data&&data[0])fb=data[0];}catch(e){}
+      if(!off)setOwnTr({key:ownKey,map,fb});
     })();
     return()=>{off=true;};
   },[open,myId,stage.id,ownKey]);
@@ -1422,7 +1424,9 @@ function StageTimeDeltaCard({stage,lb,all,myAttempts,user,units,heightUnit}){
     (async()=>{
       let row=null;
       try{const{data}=await supabase.from('run_traces').select('time_ms,points').eq('user_id',targetId).eq('stage_id',String(stage.id)).maybeSingle();row=data;}catch(e){}
-      if(!off)setRiderTr({id:targetId,time_ms:row?row.time_ms:null,points:row?row.points:null});
+      let fb=false;   // their best is older than speed data: use their fastest run that has it
+      if(!row||!row.points||(target&&Math.abs(row.time_ms-target.time)>1)){try{const{data}=await supabase.from('run_trace_history').select('time_ms,points').eq('user_id',targetId).eq('stage_id',String(stage.id)).order('time_ms',{ascending:true}).limit(1);if(data&&data[0]){row=data[0];fb=true;}}catch(e){}}
+      if(!off)setRiderTr({id:targetId,time_ms:row?row.time_ms:null,points:row?row.points:null,fb});
     })();
     return()=>{off=true;};
   },[open,mode,targetId,stage.id]);
@@ -1452,11 +1456,12 @@ function StageTimeDeltaCard({stage,lb,all,myAttempts,user,units,heightUnit}){
 
   const ownReady=!!(ownTr&&ownTr.key===ownKey);
   const riderReady=mode!=="lb"||!target||!!(riderTr&&riderTr.id===targetId);
-  const mineProf=ownReady&&ownTr.map[youTime]?traceProfile(ownTr.map[youTime]):null;
+  const mineSrc=ownReady?(ownTr.map[youTime]?{t:youTime,p:ownTr.map[youTime]}:(mode==="lb"&&ownTr.fb?{t:ownTr.fb.time_ms,p:ownTr.fb.points,fb:true}:null)):null;
+  const mineProf=mineSrc?traceProfile(mineSrc.p):null;
   let theirProf=null;
   if(ownReady&&riderReady){
     if(mode==="me"&&selRun&&ownTr.map[selRun.time_ms])theirProf=traceProfile(ownTr.map[selRun.time_ms]);
-    if(mode==="lb"&&target&&riderTr.points&&riderTr.time_ms!==null&&Math.abs(riderTr.time_ms-target.time)<=1)theirProf=traceProfile(riderTr.points);
+    if(mode==="lb"&&target&&riderTr.points&&riderTr.time_ms!==null&&(riderTr.fb||Math.abs(riderTr.time_ms-target.time)<=1))theirProf=traceProfile(riderTr.points);
   }
   const note=t=><div style={{fontSize:12,color:C.muted,marginTop:14,padding:"10px 12px",background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,lineHeight:1.5}}>{t}</div>;
   let chart;
@@ -1464,7 +1469,7 @@ function StageTimeDeltaCard({stage,lb,all,myAttempts,user,units,heightUnit}){
   else if(!mineProf)chart=note(mode==="me"?"No speed data was saved for this run. Runs you record from now on will have it.":"No speed data saved for your best run yet. Beat it to record one.");
   else chart=<>
     <RunStackCharts mine={mineProf} theirs={theirProf} name={shortName} units={units} heightUnit={heightUnit} terrain={terrain||null}/>
-    {otherTime!==null&&!theirProf&&note(mode==="me"?"No speed data was saved for that run, so only yours is shown.":`No speed data for ${target.name}'s best run yet, so only yours is shown.`)}
+    {mineSrc&&mineSrc.fb&&note(`Your best time here is from before speed data was saved, so the chart uses your ${formatTime(mineSrc.t)} run.`)}{mode==="lb"&&theirProf&&riderTr&&riderTr.fb&&note(`${target.name}'s best time is from before speed data was saved, so the chart uses their ${formatTime(riderTr.time_ms)} run.`)}{otherTime!==null&&!theirProf&&note(mode==="me"?"No speed data was saved for that run, so only yours is shown.":`No speed data for ${target.name}'s best run yet, so only yours is shown.`)}
   </>;
 
   const others=runs.slice().reverse().filter(a=>a!==latest&&a!==pbRun);
@@ -2006,7 +2011,7 @@ function topMphFromTrace(points){
     const d=cum[j]-cum[i],dt=(points[j][0]-points[i][0])/1000;
     if(d>=46&&dt>=6){const v=d/dt*MPS_TO_MPH;if(v>top)top=v;}
   }
-  return top>0&&top<60?top:null;
+  return top>0&&top<45?top:null; // anything faster is a GPS glitch, not a rider
 }
 
 // Speed wedge on the stage sheet
@@ -7630,7 +7635,7 @@ if(saveTime&&!isPractice){
     
     const endTs=Math.max(ts,startTimeRef.current+1000);
     const gt=endTs-startTimeRef.current;
-    traceRef.current=traceRef.current.filter(p=>p.t<gt);
+    traceRef.current=traceRef.current.filter(p=>p.t===0||p.t<gt-1500); // drop GPS points in the last 1.5 s so the finish point can't make a fake speed spike
     traceRef.current.push({t:gt,lat:gate.lat,lng:gate.lng});
     stopStage(true,endTs);
   };
@@ -7663,7 +7668,7 @@ if(saveTime&&!isPractice){
     }
     
     prev=loc;prevGpsRef.current=loc;
-    if(mvN){lastMoveTs=loc.ts;if(c.d<=FINISH_STOP_M&&c.ts-startTimeRef.current>=FINISH_MIN_MS){const remS=stageRemainingM(line,loc);if((remS===null||remS<=FINISH_END_M)&&(!nearMv||c.d<nearMv.d))nearMv={d:c.d,ts:c.ts};}}
+    if(mvN){lastMoveTs=loc.ts;if(c.d<=FINISH_STOP_M&&c.ts-startTimeRef.current>=FINISH_MIN_MS){const remS=stageRemainingM(line,loc);if((remS===null||remS<=FINISH_END_M)&&(!nearMv||(!nearMv.left&&c.d<nearMv.d)))nearMv={d:c.d,ts:c.ts};}if(nearMv&&!nearMv.left&&haversine(loc,gate)>nearMv.d+10)nearMv.left=true;} // first pass only: riding back towards the pin later can't move your time
     if(near&&haversine(loc,gate)>=near.d+FINISH_LEAVE_M)finish(near.ts,"safety_net",{closest_m:Math.round(near.d)});
   },err=>{console.log(err);logEvent(user?.id,"gps_error_racing",err.message||String(err),currentStage?.id,{code:err.code});},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
   return()=>{
