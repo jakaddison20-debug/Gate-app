@@ -1411,7 +1411,9 @@ function StageTimeDeltaCard({stage,lb,all,myAttempts,user,units,heightUnit}){
         const{data}=await supabase.from('run_traces').select('time_ms,points').eq('user_id',myId).eq('stage_id',String(stage.id)).maybeSingle();
         if(data&&times.includes(data.time_ms)&&!map[data.time_ms])map[data.time_ms]=data.points;
       }catch(e){}
-      if(!off)setOwnTr({key:ownKey,map});
+      let fb=null;   // your fastest run that has speed data (used when your best is older than speed data)
+      try{const{data}=await supabase.from('run_trace_history').select('time_ms,points').eq('user_id',myId).eq('stage_id',String(stage.id)).order('time_ms',{ascending:true}).limit(1);if(data&&data[0])fb=data[0];}catch(e){}
+      if(!off)setOwnTr({key:ownKey,map,fb});
     })();
     return()=>{off=true;};
   },[open,myId,stage.id,ownKey]);
@@ -1422,7 +1424,9 @@ function StageTimeDeltaCard({stage,lb,all,myAttempts,user,units,heightUnit}){
     (async()=>{
       let row=null;
       try{const{data}=await supabase.from('run_traces').select('time_ms,points').eq('user_id',targetId).eq('stage_id',String(stage.id)).maybeSingle();row=data;}catch(e){}
-      if(!off)setRiderTr({id:targetId,time_ms:row?row.time_ms:null,points:row?row.points:null});
+      let fb=false;   // their best is older than speed data: use their fastest run that has it
+      if(!row||!row.points||(target&&Math.abs(row.time_ms-target.time)>1)){try{const{data}=await supabase.from('run_trace_history').select('time_ms,points').eq('user_id',targetId).eq('stage_id',String(stage.id)).order('time_ms',{ascending:true}).limit(1);if(data&&data[0]){row=data[0];fb=true;}}catch(e){}}
+      if(!off)setRiderTr({id:targetId,time_ms:row?row.time_ms:null,points:row?row.points:null,fb});
     })();
     return()=>{off=true;};
   },[open,mode,targetId,stage.id]);
@@ -1452,11 +1456,12 @@ function StageTimeDeltaCard({stage,lb,all,myAttempts,user,units,heightUnit}){
 
   const ownReady=!!(ownTr&&ownTr.key===ownKey);
   const riderReady=mode!=="lb"||!target||!!(riderTr&&riderTr.id===targetId);
-  const mineProf=ownReady&&ownTr.map[youTime]?traceProfile(ownTr.map[youTime]):null;
+  const mineSrc=ownReady?(ownTr.map[youTime]?{t:youTime,p:ownTr.map[youTime]}:(mode==="lb"&&ownTr.fb?{t:ownTr.fb.time_ms,p:ownTr.fb.points,fb:true}:null)):null;
+  const mineProf=mineSrc?traceProfile(mineSrc.p):null;
   let theirProf=null;
   if(ownReady&&riderReady){
     if(mode==="me"&&selRun&&ownTr.map[selRun.time_ms])theirProf=traceProfile(ownTr.map[selRun.time_ms]);
-    if(mode==="lb"&&target&&riderTr.points&&riderTr.time_ms!==null&&Math.abs(riderTr.time_ms-target.time)<=1)theirProf=traceProfile(riderTr.points);
+    if(mode==="lb"&&target&&riderTr.points&&riderTr.time_ms!==null&&(riderTr.fb||Math.abs(riderTr.time_ms-target.time)<=1))theirProf=traceProfile(riderTr.points);
   }
   const note=t=><div style={{fontSize:12,color:C.muted,marginTop:14,padding:"10px 12px",background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,lineHeight:1.5}}>{t}</div>;
   let chart;
@@ -1464,7 +1469,7 @@ function StageTimeDeltaCard({stage,lb,all,myAttempts,user,units,heightUnit}){
   else if(!mineProf)chart=note(mode==="me"?"No speed data was saved for this run. Runs you record from now on will have it.":"No speed data saved for your best run yet. Beat it to record one.");
   else chart=<>
     <RunStackCharts mine={mineProf} theirs={theirProf} name={shortName} units={units} heightUnit={heightUnit} terrain={terrain||null}/>
-    {otherTime!==null&&!theirProf&&note(mode==="me"?"No speed data was saved for that run, so only yours is shown.":`No speed data for ${target.name}'s best run yet, so only yours is shown.`)}
+    {mineSrc&&mineSrc.fb&&note(`Your best time here is from before speed data was saved, so the chart uses your ${formatTime(mineSrc.t)} run.`)}{mode==="lb"&&theirProf&&riderTr&&riderTr.fb&&note(`${target.name}'s best time is from before speed data was saved, so the chart uses their ${formatTime(riderTr.time_ms)} run.`)}{otherTime!==null&&!theirProf&&note(mode==="me"?"No speed data was saved for that run, so only yours is shown.":`No speed data for ${target.name}'s best run yet, so only yours is shown.`)}
   </>;
 
   const others=runs.slice().reverse().filter(a=>a!==latest&&a!==pbRun);
