@@ -127,16 +127,19 @@ function formatDist(m){return m>=1000?`${(m/1000).toFixed(1)}km`:`${Math.round(m
 function timeAgo(iso){const s=(Date.now()-new Date(iso).getTime())/1000;if(s<60)return'just now';if(s<3600)return`${Math.floor(s/60)}m ago`;if(s<86400)return`${Math.floor(s/3600)}h ago`;if(s<604800)return`${Math.floor(s/86400)}d ago`;return new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short'});}
 function playBeep(freq=880,duration=150){try{const ctx=new(window.AudioContext||window.webkitAudioContext)();const osc=ctx.createOscillator();const gain=ctx.createGain();osc.connect(gain);gain.connect(ctx.destination);osc.frequency.value=freq;osc.type='sine';gain.gain.setValueAtTime(0.3,ctx.currentTime);gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+duration/1000);osc.start();osc.stop(ctx.currentTime+duration/1000);}catch(e){console.log(e);}}
 function logEvent(userId,type,message,stageId=null,context=null){if(!userId)return Promise.resolve();return supabase.from('app_events').insert({user_id:userId,event_type:type,message,stage_id:stageId?String(stageId):null,context}).then(()=>{}).catch(err=>console.log('logEvent failed:',err?.message||err));}
-async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,bike_id,trace,challenge_ids}){
+async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,bike_id,trace,challenge_ids,client_id}){
   const overallRes=await supabase.from('stage_times').select('time_ms').eq('stage_id',stage_id).order('time_ms',{ascending:true}).limit(1);
   const ownRes=await supabase.from('stage_times').select('time_ms').eq('stage_id',stage_id).eq('user_id',user_id).order('time_ms',{ascending:true}).limit(1);
+  if(overallRes.error)throw overallRes.error;if(ownRes.error)throw ownRes.error; // bad signal: try again later rather than guess records
   const prevBest=overallRes.data&&overallRes.data[0]?overallRes.data[0].time_ms:null;
   const ownPrevBest=ownRes.data&&ownRes.data[0]?ownRes.data[0].time_ms:null;
-  const payload={stage_id,user_id,time_ms};
+  const payload={stage_id,user_id,time_ms};if(client_id)payload.client_id=client_id;
   if(created_at)payload.created_at=created_at;
   if(bike_id)payload.bike_id=bike_id;
   if(challenge_ids&&challenge_ids.length)payload.challenge_ids=challenge_ids;
-  const{error}=await supabase.from('stage_times').insert(payload);
+  let{error}=await supabase.from('stage_times').insert(payload);
+  if(error&&error.code==='23505'&&client_id)return{dup:true}; // this run already went up on an earlier try
+  if(error&&client_id&&/client_id/.test(error.message||"")){delete payload.client_id;({error}=await supabase.from('stage_times').insert(payload));} // SQL not run yet
   if(error)throw error;
   // Keep the GPS path of your best run on this stage (powers the speed/gap charts). Never fails the save.
   if(trace&&trace.length>=3&&(ownPrevBest===null||time_ms<ownPrevBest)){
@@ -152,7 +155,11 @@ async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,bik
       if(histErr){console.log('trace history save failed',histErr.message);logEvent(user_id,'trace_error',histErr.message,String(stage_id),{code:histErr.code});}
     }catch(e){console.log('trace history save failed',e);}
   }
-  if(prevBest===null||time_ms<prevBest){
+  const out={record:prevBest===null||time_ms<prevBest,pb:ownPrevBest!==null&&time_ms<ownPrevBest};
+  if(out.record)logEvent(user_id,'stage_record',`set a new record on ${stage_name} · ${formatTime(time_ms)}`,stage_id,{time_ms});
+  else if(out.pb)logEvent(user_id,'personal_best',`set a new personal best on ${stage_name} · ${formatTime(time_ms)}`,stage_id,{time_ms});
+  return out;
+  if(false){
     logEvent(user_id,'stage_record',`set a new record on ${stage_name} · ${formatTime(time_ms)}`,stage_id,{time_ms});
   } else if(ownPrevBest!==null&&time_ms<ownPrevBest){
     logEvent(user_id,'personal_best',`set a new personal best on ${stage_name} · ${formatTime(time_ms)}`,stage_id,{time_ms});
@@ -161,7 +168,66 @@ async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,bik
 function getOfflineTimesQueue(){try{return JSON.parse(localStorage.getItem('gate_offline_times')||'[]');}catch(e){return [];}}
 function saveOfflineTimesQueue(q){try{localStorage.setItem('gate_offline_times',JSON.stringify(q));}catch(e){}}
 function queueOfflineTime(entry){const q=getOfflineTimesQueue();q.push(entry);saveOfflineTimesQueue(q);}
-async function syncOfflineTimes(){
+function newClientId(){try{if(crypto&&crypto.randomUUID)return crypto.randomUUID();}catch(e){}return Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,12);}
+const withTimeout=(p,ms)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),ms))]);
+async function saveCourseResult(e){
+  const recQ=await supabase.from('course_results').select('total_time_ms').eq('course_id',e.course_id).order('total_time_ms',{ascending:true}).limit(1);
+  if(recQ.error)throw recQ.error;
+  const rec=recQ.data;
+  const record=!rec||!rec.length||e.total_time_ms<rec[0].total_time_ms;
+  const base={course_id:e.course_id,user_id:e.user_id,total_time_ms:e.total_time_ms,mode:e.mode};
+  let res=await supabase.from('course_results').insert({...base,splits:e.splits,client_id:e.client_id}).select('id').single();
+  if(res.error&&res.error.code==='23505')return{dup:true}; // already went up on an earlier try
+  if(res.error&&/client_id/.test(res.error.message||""))res=await supabase.from('course_results').insert({...base,splits:e.splits}).select('id').single();
+  if(res.error&&String(res.error.message||"").includes("splits"))res=await supabase.from('course_results').insert(base).select('id').single();
+  if(res.error)throw res.error;
+  const prevBest=e.prev_best_ms;
+  logEvent(e.user_id,'course_finish',`finished ${e.course_name} · ${formatTime(e.total_time_ms)}`,null,{course_id:e.course_id,course_name:e.course_name,result_id:res.data?.id||null,total_time_ms:e.total_time_ms,stage_count:e.stage_count,splits:e.splits,record,pb_delta_ms:prevBest==null?null:e.total_time_ms-prevBest,mode:e.mode,finished_at:e.created_at});
+  return{record,pb:prevBest!=null&&e.total_time_ms<prevBest};
+}
+// Runs are saved on the phone first, then uploaded one at a time. Only one upload pass runs at once.
+let syncBusy=null;
+function syncOfflineTimes(){
+  if(syncBusy)return syncBusy;
+  syncBusy=(async()=>{
+    let q0=getOfflineTimesQueue();
+    if(q0.some(x=>!x.client_id)){q0=q0.map(x=>x.client_id?x:{...x,client_id:newClientId()});saveOfflineTimesQueue(q0);}
+    const tried=new Set(),up=[];
+    for(;;){
+      if(navigator.onLine===false)break;
+      const q=getOfflineTimesQueue();
+      const x=q.find(r=>!tried.has(r.client_id));
+      if(!x)break;
+      tried.add(x.client_id);
+      try{
+        const r=await withTimeout(x.kind==='course'?saveCourseResult(x):saveStageTime(x),25000);
+        saveOfflineTimesQueue(getOfflineTimesQueue().filter(r2=>r2.client_id!==x.client_id));
+        const{trace,...lite}=x;up.push({...lite,record:!!(r&&r.record),pb:!!(r&&r.pb)});
+      }catch(err){console.log('upload failed, will retry later',err?.message||err);}
+    }
+    if(up.length){try{window.dispatchEvent(new CustomEvent('rivl-synced',{detail:{runs:up}}));}catch(e){}}
+    return{synced:up.length,remaining:getOfflineTimesQueue().length};
+  })().finally(()=>{syncBusy=null;});
+  return syncBusy;
+}
+// "Saved on your phone" box on the finish screens, shown only while this run is still waiting to upload
+function SavedOnPhoneBox({cid,style}){
+  const [show,setShow]=useState(false);
+  useEffect(()=>{
+    if(!cid)return;
+    const t0=Date.now();
+    const tick=()=>{const waiting=getOfflineTimesQueue().some(x=>x.client_id===cid);setShow(waiting&&(navigator.onLine===false||Date.now()-t0>4000));};
+    tick();const iv=setInterval(tick,1500);return()=>clearInterval(iv);
+  },[cid]);
+  if(!show)return null;
+  return(
+    <div style={{display:"flex",alignItems:"center",gap:10,background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 14px",fontSize:13,lineHeight:1.4,color:"#4A4A4A",...(style||{})}}>
+      <div style={{width:34,height:34,borderRadius:10,background:"#fff",border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg></div>
+      <div><div style={{fontSize:13.5,fontWeight:700,color:C.text}}>Saved on your phone</div>It'll upload by itself when you've got signal.</div>
+    </div>
+  );
+}
+async function syncOfflineTimesV1(){
   const q=getOfflineTimesQueue();
   if(q.length===0)return{synced:0,remaining:0};
   const remaining=[];
@@ -328,6 +394,62 @@ function Toggle({value,onChange}){
   );
 }
 function OfflineBanner(){
+  const [q,setQ]=useState(()=>getOfflineTimesQueue());
+  const [done,setDone]=useState(null); // runs that just uploaded
+  useEffect(()=>{
+    let lastTry=0,hide=null;
+    const check=()=>{const cur=getOfflineTimesQueue();setQ(cur);if(cur.length&&navigator.onLine!==false&&Date.now()-lastTry>30000){lastTry=Date.now();syncOfflineTimes();}};
+    const onSynced=ev=>{setQ(getOfflineTimesQueue());const runs=(ev.detail&&ev.detail.runs)||[];if(runs.length){setDone(runs);clearTimeout(hide);hide=setTimeout(()=>setDone(null),8000);}};
+    check();
+    const iv=setInterval(check,5000);
+    window.addEventListener('online',check);document.addEventListener('visibilitychange',check);window.addEventListener('rivl-synced',onSynced);
+    return()=>{clearInterval(iv);clearTimeout(hide);window.removeEventListener('online',check);document.removeEventListener('visibilitychange',check);window.removeEventListener('rivl-synced',onSynced);};
+  },[]);
+  const nameOf=x=>x.kind==='course'?x.course_name:x.stage_name;
+  const when=x=>{const d=new Date(x.created_at||Date.now());const t=d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});return new Date().toDateString()===d.toDateString()?`Today ${t}`:`${d.toLocaleDateString('en-GB',{day:'numeric',month:'short'})} ${t}`;};
+  const list=(rows,up)=>(
+    <div style={{margin:"10px 16px 0",border:`1px solid ${C.border}`,borderRadius:16,overflow:"hidden",background:"#fff"}}>
+      {rows.slice(0,5).map((x,i)=>(
+        <div key={x.client_id||i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,padding:"12px 14px",borderBottom:i<Math.min(rows.length,5)-1?`1px solid ${C.border}`:"none"}}>
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:13.5,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nameOf(x)}</div>
+            <div style={{fontSize:12,color:C.muted,marginTop:2}}>{when(x)} · {formatTime(x.kind==='course'?x.total_time_ms:x.time_ms)}{up&&x.record?" · new record":up&&x.pb?" · new PB":""}</div>
+          </div>
+          <span style={{fontSize:11.5,fontWeight:600,borderRadius:999,padding:"4px 9px",whiteSpace:"nowrap",color:up?"#15803D":C.muted,background:up?"#F0FDF4":"#F5F5F5"}}>{up?"Uploaded":"Waiting"}</span>
+        </div>
+      ))}
+      {rows.length>5&&<div style={{padding:"10px 14px",fontSize:12,color:C.muted,borderTop:`1px solid ${C.border}`}}>and {rows.length-5} more</div>}
+    </div>
+  );
+  if(q.length){
+    const n=q.length;
+    return(
+      <div>
+        <div style={{margin:"10px 16px 0",border:`1px solid ${C.border}`,borderRadius:16,padding:14,display:"flex",gap:12,alignItems:"center",background:"#fff"}}>
+          <div style={{width:36,height:36,borderRadius:"50%",background:"#EFF6FF",color:C.blue,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:15,flexShrink:0}}>{n}</div>
+          <div><div style={{fontSize:14.5,fontWeight:700,color:C.text}}>{n} run{n===1?"":"s"} saved on your phone</div><div style={{fontSize:12.5,color:C.muted,marginTop:2,lineHeight:1.35}}>{n===1?"It'll upload by itself":"They'll upload by themselves"} when you've got signal. Don't delete the app.</div></div>
+        </div>
+        {list(q,false)}
+      </div>
+    );
+  }
+  if(!done)return null;
+  const n=done.length,star=done.find(x=>x.record)||done.find(x=>x.pb);
+  return(
+    <div>
+      <div style={{position:"fixed",left:12,right:12,top:"calc(env(safe-area-inset-top, 0px) + 8px)",zIndex:260,background:C.text,color:"#fff",borderRadius:16,padding:"12px 14px",display:"flex",gap:12,alignItems:"center",boxShadow:"0 8px 28px rgba(0,0,0,0.25)"}}>
+        <div style={{width:34,height:34,borderRadius:10,background:"rgba(255,255,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
+        <div style={{minWidth:0}}><div style={{fontSize:14,fontWeight:700}}>{n} run{n===1?"":"s"} uploaded</div>{star&&<div style={{fontSize:12.5,color:"rgba(255,255,255,0.7)"}}>Including a new {star.record?"record":"PB"} on {nameOf(star)}</div>}</div>
+      </div>
+      <div style={{margin:"10px 16px 0",border:"1px solid #BBF7D0",borderRadius:16,padding:14,display:"flex",gap:12,alignItems:"center",background:"#F0FDF4"}}>
+        <div style={{width:36,height:36,borderRadius:"50%",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#15803D" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
+        <div><div style={{fontSize:14.5,fontWeight:700,color:C.text}}>All runs uploaded</div><div style={{fontSize:12.5,color:C.muted,marginTop:2}}>{n===1?"Your run is":`Your ${n} runs are`} on the leaderboards.</div></div>
+      </div>
+      {list(done,true)}
+    </div>
+  );
+}
+function OfflineBannerV1(){
   const [count,setCount]=useState(0);
   const [syncing,setSyncing]=useState(false);
   useEffect(()=>{
@@ -7576,6 +7698,7 @@ function RaceStageComplete({base,splits,courseStages,stageIndex,totalStages,isLa
         <RaceDeltaPill delta={out.delta} vs={out.prev===null?"First run on this stage":`vs your best ${formatTime(out.prev)}`}/>
       </div>
       <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
+        <SavedOnPhoneBox cid={last.cid} style={{marginBottom:16}}/>
         <div style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:12}}>Splits so far</div>
         {splits.map((s,i)=><RaceRow key={i} i={i} name={s.name} time={s.time} out={stageOutcome(base,s.stageId,s.time)}/>)}
         {nextName&&<div style={{textAlign:"center",padding:"10px 0 0",fontSize:13,color:C.muted}}>Next: <span style={{fontWeight:600,color:C.text}}>{nextName}</span></div>}
@@ -7586,7 +7709,7 @@ function RaceStageComplete({base,splits,courseStages,stageIndex,totalStages,isLa
 }
 
 // Race complete (Race mode)
-function RaceComplete({base,course,splits,courseStages,totalStages,onSave,user,liveChallenges,addedRuns}){
+function RaceComplete({base,course,splits,courseStages,totalStages,onSave,user,liveChallenges,addedRuns,savedCid}){
   const total=splits.reduce((a,s)=>a+s.time,0);
   const prevTotal=totalStages>1?(base.courseBest===undefined?null:base.courseBest):(base.stageBest[splits[0].stageId]??null);
   const delta=prevTotal===null?null:total-prevTotal;
@@ -7612,6 +7735,7 @@ function RaceComplete({base,course,splits,courseStages,totalStages,onSave,user,l
         <div style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:12}}>Stage Breakdown</div>
         {splits.map((s,i)=><RaceRow key={i} i={i} name={s.name} time={s.time} out={stageOutcome(base,s.stageId,s.time)}/>)}
       </div>
+      <SavedOnPhoneBox cid={savedCid||(totalStages===1&&splits[0]?splits[0].cid:null)} style={{margin:"0 20px 12px"}}/>
       <H2hSaveStrip live={liveChallenges} count={addedRuns}/>
       <RaceNextBtn onClick={onSave}>Done</RaceNextBtn>
     </div>
@@ -7657,6 +7781,7 @@ function RaceScreen({course,stages,user,onFinish,onActivity,liveChallenges}){
   const timerMsRef=useRef(0);
     const [splits,setSplits]=useState(savedProgress?savedProgress.splits:[]); // current run splits
   const courseSavedRef=useRef(!!(savedProgress&&savedProgress.courseSaved)); // course result already saved and posted
+  const [courseCid,setCourseCid]=useState(null); // id of this course result while it waits to upload
   const [bestPerStage,setBestPerStage]=useState(savedProgress?savedProgress.bestPerStage:{}); // mashup: best time per stage id
   const [runCount,setRunCount]=useState(savedProgress?savedProgress.runCount:0); // how many full runs completed
   const [gateStatus,setGateStatus]=useState("waiting");
@@ -7755,7 +7880,7 @@ const startCountdown=(crossTs=null)=>{playBeep(880,150);setGateStatus("waiting")
 playBeep(440,250);
 clearInterval(timerRef.current);clearTimeout(finishTimeoutRef.current);finishTimeoutRef.current=null;
 const finalTime=Math.round(crossTs?Math.max(0,crossTs-startTimeRef.current):timerMsRef.current);  
-const newSplit={stageId:currentStage.id,name:currentStage.name,time:finalTime};
+const cid=newClientId();const newSplit={stageId:currentStage.id,name:currentStage.name,time:finalTime,cid};
 setSplits(prev=>[...prev,newSplit]);
 // Mashup: update best per stage
 if(isMashup){
@@ -7769,7 +7894,9 @@ if(saveTime&&!isPractice){
   const entry={stage_id:currentStage.id,stage_name:currentStage.name,user_id:user.id,time_ms:finalTime,created_at:new Date(crossTs||Date.now()).toISOString(),bike_id:ACTIVE_BIKE_ID,trace:compactTrace(traceRef.current),challenge_ids:addedRef.current.length?addedRef.current.slice():undefined};
   if(addedRef.current.length)setAddedRuns(n=>n+1);
   addedRef.current=[];setAddedIds([]);
-  saveStageTime(entry).then(()=>onActivity&&onActivity()).catch(err=>{console.log('save failed, storing offline',err);queueOfflineTime(entry);onActivity&&onActivity();});
+  entry.client_id=cid;
+  queueOfflineTime(entry); // saved on the phone first, so it can't be lost
+  syncOfflineTimes().then(()=>onActivity&&onActivity());
 }
 };
 
@@ -7909,6 +8036,18 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
 
     // Course race: save the result (with every split) and post it the moment the last stage is done. No button needed.
   const saveCourseRun=async()=>{
+    if(isPractice||isMashup||totalStages<2||!user||courseSavedRef.current)return;
+    courseSavedRef.current=true;
+    const total=splits.reduce((a,s)=>a+s.time,0);
+    const base=raceBase.current;
+    const sp=splits.map(s=>({stage_id:s.stageId,name:s.name,time_ms:s.time,prev_best_ms:base.stageBest[s.stageId]??null}));
+    const cid=newClientId();setCourseCid(cid);
+    queueOfflineTime({kind:'course',client_id:cid,course_id:course.id,course_name:course.name,user_id:user.id,total_time_ms:total,mode:course.mode,splits:sp,stage_count:totalStages,prev_best_ms:base.courseBest===undefined?null:base.courseBest,created_at:new Date().toISOString()});
+    try{const p=JSON.parse(localStorage.getItem(progressKey));if(p){p.courseSaved=true;localStorage.setItem(progressKey,JSON.stringify(p));}}catch(e){}
+    await syncOfflineTimes();
+    onActivity&&onActivity();
+  };
+  const saveCourseRunV1=async()=>{
     if(isPractice||isMashup||totalStages<2||!user||courseSavedRef.current)return;
     courseSavedRef.current=true;
     const total=splits.reduce((a,s)=>a+s.time,0);
@@ -8221,7 +8360,7 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
   if(phase==="done"){
     const finalTotal=isPractice?null:isMashup?mashupTotal:splits.reduce((a,s)=>a+s.time,0);
     const saveRaceResults=async()=>{if(!isMashup&&!isPractice){if(!courseSavedRef.current)await saveCourseRun();try{localStorage.removeItem(progressKey);}catch(e){}onFinish();return;}if(totalStages>1){const{error}=await supabase.from('course_results').insert({course_id:course.id,user_id:user.id,total_time_ms:finalTotal,mode:course.mode});if(error){alert("Couldn't save course result: "+error.message);}else{logEvent(user.id,'course_finish',`finished ${course.name} · ${formatTime(finalTotal)}`,null,{course_id:course.id,total_time_ms:finalTotal,stage_count:totalStages}).then(()=>onActivity&&onActivity());}}try{localStorage.removeItem(progressKey);}catch(e){}onFinish();};
-    if(!isPractice&&!isMashup)return <RaceComplete base={raceBase.current} course={course} splits={splits} courseStages={courseStages} totalStages={totalStages} onSave={saveRaceResults} user={user} liveChallenges={liveChallenges} addedRuns={addedRuns}/>;
+    if(!isPractice&&!isMashup)return <RaceComplete base={raceBase.current} course={course} splits={splits} courseStages={courseStages} totalStages={totalStages} onSave={saveRaceResults} user={user} liveChallenges={liveChallenges} addedRuns={addedRuns} savedCid={courseCid}/>;
     const headerBg=isPractice?"#15803D":isMashup?C.blue:C.orange;
     return(
       <div style={{position:"fixed",inset:0,background:"#fff",zIndex:100,display:"flex",flexDirection:"column"}}>
