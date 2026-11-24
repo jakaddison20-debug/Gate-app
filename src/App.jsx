@@ -21,6 +21,8 @@ const FINISH_NEAR_M=40;     // safety net: came within 60 m of the finish pin...
 const FINISH_LEAVE_M=25;    // ...then got 25 m further away than the closest point...
 const FINISH_END_M=90;      // ...while in the last 90 m of the stage line...
 const FINISH_MIN_MS=10000;  // ...and at least 10 s after the start
+const HAND_NEAR_M=60;       // "Finish here" button: you got within 60 m of the finish pin while riding...
+const HAND_CP_R=35;         // ...and passed 9 of the 10 checkpoints along the stage line, in order
 const GATE_MOVING_MS=2;     // ignore fixes slower than 2 m/s (standing waiting at the start)
 const START_FIT_M=20;       // shorter window at the start, where you're still speeding up
 const START_GATE_RADIUS=20; // start gate detection radius (timing no longer depends on it)
@@ -47,6 +49,15 @@ function lineDirAt(line,gate){
   return unitVec(line[a],line[b]);
 }
 // metres of stage line left after the point nearest pos (null if no line)
+// 10 checkpoints along the stage line (5%, 15% ... 95%), used by the "Finish here" button
+function stageCheckpoints(line){
+  if(!line||line.length<2)return null;
+  const cum=[0];for(let i=1;i<line.length;i++)cum.push(cum[i-1]+haversine(line[i-1],line[i]));
+  const L=cum[cum.length-1];if(L<50)return null;
+  const cps=[];let j=0;
+  for(let n=0;n<10;n++){const want=L*(0.05+n*0.1);while(j<line.length-2&&cum[j+1]<want)j++;const f=Math.min(1,Math.max(0,(want-cum[j])/Math.max(0.01,cum[j+1]-cum[j])));cps.push({lat:line[j].lat+(line[j+1].lat-line[j].lat)*f,lng:line[j].lng+(line[j+1].lng-line[j].lng)*f});}
+  return cps;
+}
 function stageRemainingM(line,pos){
   if(!line||line.length<2)return null;
   let k=0,bd=Infinity;line.forEach((p,i)=>{const d=haversine(p,pos);if(d<bd){bd=d;k=i;}});
@@ -7513,6 +7524,9 @@ function RaceScreen({course,stages,user,onFinish,onActivity,liveChallenges}){
   const toggleChallenge=id=>{const n=addedRef.current.includes(id)?addedRef.current.filter(x=>x!==id):[...addedRef.current,id];addedRef.current=n;setAddedIds(n);};
   
   const prevGpsRef=useRef(null);
+  const handRef=useRef(null); // "Finish here": saves the run, only set when it's allowed
+  const [hand,setHand]=useState(null); // {ok,msg,ms} for the Finish here button
+  const [handAsk,setHandAsk]=useState(null); // time shown in the "Save this run?" sheet
   const traceRef=useRef([]);
     const [introDist,setIntroDist]=useState(null);
   const [showRaceMap,setShowRaceMap]=useState(false);
@@ -7623,12 +7637,27 @@ if(saveTime&&!isPractice){
   let prev=null,near=null,done=false,id=null;
   const gs={fixes:0,rough:0,junk:0,closest:null,lastTs:null};
   let lastMoveTs=Date.now(),nearMv=null; // last time you were moving, and your closest moving point to the finish
-  const stopTimer=setInterval(()=>{if(done||!nearMv)return;if(Date.now()-lastMoveTs>=FINISH_STOP_MS)finish(nearMv.ts,"stopped_at_finish",{closest_m:Math.round(nearMv.d)});},1000); // GPS health for this run, logged at the end
+  const cps=stageCheckpoints(line);let cpNext=0,cpHit=0,hNear=null; // Finish here: checkpoints passed in order + closest moving point within 60 m
+  const handState=()=>{
+    if(done)return;
+    const lf=prevGpsRef.current;
+    const remNow=lf?(stageRemainingM(line,lf)??haversine(lf,gate)):null;
+    const followed=cps?cpHit>=9:(!!hNear&&hNear.d<=FINISH_GATE_RADIUS);
+    const ok=!!hNear&&followed&&(hNear.left||Date.now()-lastMoveTs>=FINISH_STOP_MS);
+    let ms=null,msg;
+    if(ok){const extraM=Math.min(HAND_NEAR_M,hNear.rem),v=Math.min(12,Math.max(2,hNear.v||0));ms=Math.ceil((hNear.ts+extraM/v*1000-startTimeRef.current)/10)*10;msg="Looks like you've stopped at the finish. Tap below to save your time.";}
+    else if(!hNear)msg=`Finish here unlocks near the end of the stage${remNow!=null?` · ${formatDist(Math.max(10,Math.round(remNow/10)*10))} to go`:""}`;
+    else if(!followed)msg="GPS missed part of this stage, so Finish here can't be used on this run.";
+    else msg="Stop at the finish to use Finish here.";
+    setHand(h=>(h&&h.ok===ok&&h.msg===msg&&h.ms===ms)?h:{ok,msg,ms});
+    handRef.current=ok?()=>finish(startTimeRef.current+ms,"hand",{closest_m:Math.round(hNear.d),extra_m:Math.round(Math.min(HAND_NEAR_M,hNear.rem)),cps:cpHit}):null;
+  };
+  const stopTimer=setInterval(()=>{if(done)return;handState();if(!nearMv)return;if(Date.now()-lastMoveTs>=FINISH_STOP_MS)finish(nearMv.ts,"stopped_at_finish",{closest_m:Math.round(nearMv.d)});},1000);
   const gpsOk=makeGpsFilter();
   prevGpsRef.current=null;
   traceRef.current=[{t:0,lat:currentStage.start.lat,lng:currentStage.start.lng}];
   const finish=(ts,how,extra)=>{
-    if(done)return;done=true;clearInterval(stopTimer);
+    if(done)return;done=true;clearInterval(stopTimer);handRef.current=null;setHand(null);setHandAsk(null);
     if(id!==null)navigator.geolocation.clearWatch(id);
     logEvent(user?.id,"finish_"+how,`Finish timed by ${how}`,currentStage?.id,{...(extra||{}),fixes:gs.fixes,rough:gs.rough,junk:gs.junk});
     
@@ -7662,6 +7691,9 @@ if(saveTime&&!isPractice){
     // safety net: never got inside the finish gate, but came close at the end of the stage, then rode away
     const c=segClosest(prev,loc,gate);
     const mvN=!!prev&&loc.ts>prev.ts&&haversine(loc,prev)/((loc.ts-prev.ts)/1000)>=GATE_MOVING_MS; // standing around after the finish must not move the finish time later
+    if(cps){for(let j=cpNext;j<Math.min(cps.length,cpNext+3);j++){if(haversine(loc,cps[j])<=HAND_CP_R){cpHit++;cpNext=j+1;j=cpNext-1;}}} // checkpoints in order (can miss one)
+    if(mvN&&c.d<=HAND_NEAR_M&&c.ts-startTimeRef.current>=FINISH_MIN_MS&&(!hNear||(!hNear.left&&c.d<hNear.d))){const r=stageRemainingM(line,loc);if(r===null||r<=FINISH_END_M)hNear={d:c.d,ts:c.ts,rem:r===null?c.d:r,v:haversine(loc,prev)/((loc.ts-prev.ts)/1000)};}
+    if(hNear&&!hNear.left&&haversine(loc,gate)>hNear.d+15)hNear.left=true; // first pass only
     if(c.d<=FINISH_NEAR_M&&c.ts-startTimeRef.current>=FINISH_MIN_MS){
       const rem=stageRemainingM(line,loc);
       if((rem===null||rem<=FINISH_END_M)&&(!near||(mvN&&c.d<near.d)))near=c;
@@ -7670,10 +7702,11 @@ if(saveTime&&!isPractice){
     prev=loc;prevGpsRef.current=loc;
     if(mvN){lastMoveTs=loc.ts;if(c.d<=FINISH_STOP_M&&c.ts-startTimeRef.current>=FINISH_MIN_MS){const remS=stageRemainingM(line,loc);if((remS===null||remS<=FINISH_END_M)&&(!nearMv||(!nearMv.left&&c.d<nearMv.d)))nearMv={d:c.d,ts:c.ts};}if(nearMv&&!nearMv.left&&haversine(loc,gate)>nearMv.d+10)nearMv.left=true;} // first pass only: riding back towards the pin later can't move your time
     if(near&&haversine(loc,gate)>=near.d+FINISH_LEAVE_M)finish(near.ts,"safety_net",{closest_m:Math.round(near.d)});
+    handState();
   },err=>{console.log(err);logEvent(user?.id,"gps_error_racing",err.message||String(err),currentStage?.id,{code:err.code});},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
   return()=>{
     if(!done)logEvent(user?.id,"race_quit_gps","Run ended before the finish",currentStage?.id,{fixes:gs.fixes,rough:gs.rough,junk:gs.junk,closest_m:gs.closest===null?null:Math.round(gs.closest),last_fix_s_ago:gs.lastTs?Math.round((Date.now()-gs.lastTs)/1000):null,run_s:Math.round((Date.now()-startTimeRef.current)/1000),screen:document.visibilityState});
-    clearInterval(stopTimer);done=true;if(id!==null)navigator.geolocation.clearWatch(id);
+    clearInterval(stopTimer);done=true;if(id!==null)navigator.geolocation.clearWatch(id);handRef.current=null;setHand(null);setHandAsk(null);
   };
 },[phase,stageIndex]);
            
@@ -7967,9 +8000,22 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
         <div style={{padding:"0 20px 44px"}}>
           {isPractice
             ?<button className="tap" onClick={()=>stopStage(false)} style={{width:"100%",background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:14,padding:18,color:"#fff",fontSize:16,fontWeight:700}}>✓  Finish Gate — Next Stage</button>
-            :<><div style={{textAlign:"center",fontSize:13,color:"rgba(255,255,255,0.4)",paddingBottom:12}}>Timer stops automatically at the finish gate</div>
+            :<>{touchLocked||!hand?<div style={{textAlign:"center",fontSize:13,color:"rgba(255,255,255,0.4)",paddingBottom:12}}>Timer stops automatically at the finish gate</div>:<>
+              <div style={{background:hand.ok?"rgba(22,163,74,0.14)":"rgba(255,255,255,0.06)",border:`1px solid ${hand.ok?"rgba(22,163,74,0.35)":"rgba(255,255,255,0.12)"}`,borderRadius:14,padding:"12px 14px",fontSize:13,lineHeight:1.4,color:hand.ok?"#D1FAE5":"rgba(255,255,255,0.7)",marginBottom:12}}>{hand.msg}</div>
+              <button className="tap" disabled={!hand.ok} onClick={()=>{if(hand.ok&&hand.ms)setHandAsk(hand.ms);}} style={{width:"100%",border:"none",borderRadius:16,padding:17,fontSize:16,fontWeight:800,background:hand.ok?"#16A34A":"rgba(255,255,255,0.08)",color:hand.ok?"#fff":"rgba(255,255,255,0.4)",display:"flex",alignItems:"center",justifyContent:"center",gap:9,marginBottom:12}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 21V4M5 4h12l-2 4 2 4H5"/></svg>Finish here</button>
+            </>}
             {!touchLocked&&<HoldCancelBtn onCancel={cancelRun}/>}</>}
         {touchLocked&&!isPractice&&<TouchLock title="Screen locked" sub="Taps and swipes are ignored, so rain can't change anything." foot="Unlocks by itself when your run finishes" onUnlock={()=>setTouchLocked(false)}/>}
+        {handAsk!==null&&!isPractice&&<div onClick={()=>setHandAsk(null)} style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"flex-end"}}>
+          <div onClick={e=>e.stopPropagation()} style={{width:"100%",background:"#fff",color:"#1A1A1A",borderRadius:"24px 24px 0 0",padding:"14px 20px calc(28px + env(safe-area-inset-bottom))",textAlign:"center"}}>
+            <div style={{width:36,height:5,borderRadius:3,background:"#DADAD6",margin:"0 auto 16px"}}/>
+            <div style={{fontSize:19,fontWeight:800}}>Save this run?</div>
+            <div style={{fontSize:46,fontWeight:800,margin:"12px 0 2px",fontVariantNumeric:"tabular-nums",letterSpacing:-1}}>{formatTime(handAsk)}</div>
+            <div style={{fontSize:13,color:"#6B6B6B",lineHeight:1.45,maxWidth:290,margin:"0 auto"}}>Timed from when you rode past the finish, not from when you tapped.</div>
+            <button className="tap" onClick={()=>{const f=handRef.current;setHandAsk(null);if(f)f();}} style={{marginTop:18,width:"100%",border:"none",borderRadius:14,padding:15,fontSize:15,fontWeight:800,background:"#16A34A",color:"#fff"}}>Save time</button>
+            <button className="tap" onClick={()=>setHandAsk(null)} style={{marginTop:10,width:"100%",border:"1.5px solid #E2E2DE",background:"#fff",borderRadius:14,padding:13,fontSize:14,fontWeight:700,color:"#1A1A1A"}}>Not yet</button>
+          </div>
+        </div>}
         </div>
       </div>
     );
