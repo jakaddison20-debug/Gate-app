@@ -21,6 +21,8 @@ const FINISH_NEAR_M=40;     // safety net: came within 60 m of the finish pin...
 const FINISH_LEAVE_M=25;    // ...then got 25 m further away than the closest point...
 const FINISH_END_M=90;      // ...while in the last 90 m of the stage line...
 const FINISH_MIN_MS=10000;  // ...and at least 10 s after the start
+const HAND_NEAR_M=60;       // "Finish here" button: you got within 60 m of the finish pin while riding...
+const HAND_CP_R=35;         // ...and passed 9 of the 10 checkpoints along the stage line, in order
 const GATE_MOVING_MS=2;     // ignore fixes slower than 2 m/s (standing waiting at the start)
 const START_FIT_M=20;       // shorter window at the start, where you're still speeding up
 const START_GATE_RADIUS=20; // start gate detection radius (timing no longer depends on it)
@@ -47,6 +49,15 @@ function lineDirAt(line,gate){
   return unitVec(line[a],line[b]);
 }
 // metres of stage line left after the point nearest pos (null if no line)
+// 10 checkpoints along the stage line (5%, 15% ... 95%), used by the "Finish here" button
+function stageCheckpoints(line){
+  if(!line||line.length<2)return null;
+  const cum=[0];for(let i=1;i<line.length;i++)cum.push(cum[i-1]+haversine(line[i-1],line[i]));
+  const L=cum[cum.length-1];if(L<50)return null;
+  const cps=[];let j=0;
+  for(let n=0;n<10;n++){const want=L*(0.05+n*0.1);while(j<line.length-2&&cum[j+1]<want)j++;const f=Math.min(1,Math.max(0,(want-cum[j])/Math.max(0.01,cum[j+1]-cum[j])));cps.push({lat:line[j].lat+(line[j+1].lat-line[j].lat)*f,lng:line[j].lng+(line[j+1].lng-line[j].lng)*f});}
+  return cps;
+}
 function stageRemainingM(line,pos){
   if(!line||line.length<2)return null;
   let k=0,bd=Infinity;line.forEach((p,i)=>{const d=haversine(p,pos);if(d<bd){bd=d;k=i;}});
@@ -116,16 +127,19 @@ function formatDist(m){return m>=1000?`${(m/1000).toFixed(1)}km`:`${Math.round(m
 function timeAgo(iso){const s=(Date.now()-new Date(iso).getTime())/1000;if(s<60)return'just now';if(s<3600)return`${Math.floor(s/60)}m ago`;if(s<86400)return`${Math.floor(s/3600)}h ago`;if(s<604800)return`${Math.floor(s/86400)}d ago`;return new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short'});}
 function playBeep(freq=880,duration=150){try{const ctx=new(window.AudioContext||window.webkitAudioContext)();const osc=ctx.createOscillator();const gain=ctx.createGain();osc.connect(gain);gain.connect(ctx.destination);osc.frequency.value=freq;osc.type='sine';gain.gain.setValueAtTime(0.3,ctx.currentTime);gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+duration/1000);osc.start();osc.stop(ctx.currentTime+duration/1000);}catch(e){console.log(e);}}
 function logEvent(userId,type,message,stageId=null,context=null){if(!userId)return Promise.resolve();return supabase.from('app_events').insert({user_id:userId,event_type:type,message,stage_id:stageId?String(stageId):null,context}).then(()=>{}).catch(err=>console.log('logEvent failed:',err?.message||err));}
-async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,bike_id,trace,challenge_ids}){
+async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,bike_id,trace,challenge_ids,client_id}){
   const overallRes=await supabase.from('stage_times').select('time_ms').eq('stage_id',stage_id).order('time_ms',{ascending:true}).limit(1);
   const ownRes=await supabase.from('stage_times').select('time_ms').eq('stage_id',stage_id).eq('user_id',user_id).order('time_ms',{ascending:true}).limit(1);
+  if(overallRes.error)throw overallRes.error;if(ownRes.error)throw ownRes.error; // bad signal: try again later rather than guess records
   const prevBest=overallRes.data&&overallRes.data[0]?overallRes.data[0].time_ms:null;
   const ownPrevBest=ownRes.data&&ownRes.data[0]?ownRes.data[0].time_ms:null;
-  const payload={stage_id,user_id,time_ms};
+  const payload={stage_id,user_id,time_ms};if(client_id)payload.client_id=client_id;
   if(created_at)payload.created_at=created_at;
   if(bike_id)payload.bike_id=bike_id;
   if(challenge_ids&&challenge_ids.length)payload.challenge_ids=challenge_ids;
-  const{error}=await supabase.from('stage_times').insert(payload);
+  let{error}=await supabase.from('stage_times').insert(payload);
+  if(error&&error.code==='23505'&&client_id)return{dup:true}; // this run already went up on an earlier try
+  if(error&&client_id&&/client_id/.test(error.message||"")){delete payload.client_id;({error}=await supabase.from('stage_times').insert(payload));} // SQL not run yet
   if(error)throw error;
   // Keep the GPS path of your best run on this stage (powers the speed/gap charts). Never fails the save.
   if(trace&&trace.length>=3&&(ownPrevBest===null||time_ms<ownPrevBest)){
@@ -141,7 +155,11 @@ async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,bik
       if(histErr){console.log('trace history save failed',histErr.message);logEvent(user_id,'trace_error',histErr.message,String(stage_id),{code:histErr.code});}
     }catch(e){console.log('trace history save failed',e);}
   }
-  if(prevBest===null||time_ms<prevBest){
+  const out={record:prevBest===null||time_ms<prevBest,pb:ownPrevBest!==null&&time_ms<ownPrevBest};
+  if(out.record)logEvent(user_id,'stage_record',`set a new record on ${stage_name} · ${formatTime(time_ms)}`,stage_id,{time_ms});
+  else if(out.pb)logEvent(user_id,'personal_best',`set a new personal best on ${stage_name} · ${formatTime(time_ms)}`,stage_id,{time_ms});
+  return out;
+  if(false){
     logEvent(user_id,'stage_record',`set a new record on ${stage_name} · ${formatTime(time_ms)}`,stage_id,{time_ms});
   } else if(ownPrevBest!==null&&time_ms<ownPrevBest){
     logEvent(user_id,'personal_best',`set a new personal best on ${stage_name} · ${formatTime(time_ms)}`,stage_id,{time_ms});
@@ -150,7 +168,66 @@ async function saveStageTime({stage_id,stage_name,user_id,time_ms,created_at,bik
 function getOfflineTimesQueue(){try{return JSON.parse(localStorage.getItem('gate_offline_times')||'[]');}catch(e){return [];}}
 function saveOfflineTimesQueue(q){try{localStorage.setItem('gate_offline_times',JSON.stringify(q));}catch(e){}}
 function queueOfflineTime(entry){const q=getOfflineTimesQueue();q.push(entry);saveOfflineTimesQueue(q);}
-async function syncOfflineTimes(){
+function newClientId(){try{if(crypto&&crypto.randomUUID)return crypto.randomUUID();}catch(e){}return Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,12);}
+const withTimeout=(p,ms)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),ms))]);
+async function saveCourseResult(e){
+  const recQ=await supabase.from('course_results').select('total_time_ms').eq('course_id',e.course_id).order('total_time_ms',{ascending:true}).limit(1);
+  if(recQ.error)throw recQ.error;
+  const rec=recQ.data;
+  const record=!rec||!rec.length||e.total_time_ms<rec[0].total_time_ms;
+  const base={course_id:e.course_id,user_id:e.user_id,total_time_ms:e.total_time_ms,mode:e.mode};
+  let res=await supabase.from('course_results').insert({...base,splits:e.splits,client_id:e.client_id}).select('id').single();
+  if(res.error&&res.error.code==='23505')return{dup:true}; // already went up on an earlier try
+  if(res.error&&/client_id/.test(res.error.message||""))res=await supabase.from('course_results').insert({...base,splits:e.splits}).select('id').single();
+  if(res.error&&String(res.error.message||"").includes("splits"))res=await supabase.from('course_results').insert(base).select('id').single();
+  if(res.error)throw res.error;
+  const prevBest=e.prev_best_ms;
+  logEvent(e.user_id,'course_finish',`finished ${e.course_name} · ${formatTime(e.total_time_ms)}`,null,{course_id:e.course_id,course_name:e.course_name,result_id:res.data?.id||null,total_time_ms:e.total_time_ms,stage_count:e.stage_count,splits:e.splits,record,pb_delta_ms:prevBest==null?null:e.total_time_ms-prevBest,mode:e.mode,finished_at:e.created_at});
+  return{record,pb:prevBest!=null&&e.total_time_ms<prevBest};
+}
+// Runs are saved on the phone first, then uploaded one at a time. Only one upload pass runs at once.
+let syncBusy=null;
+function syncOfflineTimes(){
+  if(syncBusy)return syncBusy;
+  syncBusy=(async()=>{
+    let q0=getOfflineTimesQueue();
+    if(q0.some(x=>!x.client_id)){q0=q0.map(x=>x.client_id?x:{...x,client_id:newClientId()});saveOfflineTimesQueue(q0);}
+    const tried=new Set(),up=[];
+    for(;;){
+      if(navigator.onLine===false)break;
+      const q=getOfflineTimesQueue();
+      const x=q.find(r=>!tried.has(r.client_id));
+      if(!x)break;
+      tried.add(x.client_id);
+      try{
+        const r=await withTimeout(x.kind==='course'?saveCourseResult(x):saveStageTime(x),25000);
+        saveOfflineTimesQueue(getOfflineTimesQueue().filter(r2=>r2.client_id!==x.client_id));
+        const{trace,...lite}=x;up.push({...lite,record:!!(r&&r.record),pb:!!(r&&r.pb)});
+      }catch(err){console.log('upload failed, will retry later',err?.message||err);}
+    }
+    if(up.length){try{window.dispatchEvent(new CustomEvent('rivl-synced',{detail:{runs:up}}));}catch(e){}}
+    return{synced:up.length,remaining:getOfflineTimesQueue().length};
+  })().finally(()=>{syncBusy=null;});
+  return syncBusy;
+}
+// "Saved on your phone" box on the finish screens, shown only while this run is still waiting to upload
+function SavedOnPhoneBox({cid,style}){
+  const [show,setShow]=useState(false);
+  useEffect(()=>{
+    if(!cid)return;
+    const t0=Date.now();
+    const tick=()=>{const waiting=getOfflineTimesQueue().some(x=>x.client_id===cid);setShow(waiting&&(navigator.onLine===false||Date.now()-t0>4000));};
+    tick();const iv=setInterval(tick,1500);return()=>clearInterval(iv);
+  },[cid]);
+  if(!show)return null;
+  return(
+    <div style={{display:"flex",alignItems:"center",gap:10,background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 14px",fontSize:13,lineHeight:1.4,color:"#4A4A4A",...(style||{})}}>
+      <div style={{width:34,height:34,borderRadius:10,background:"#fff",border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg></div>
+      <div><div style={{fontSize:13.5,fontWeight:700,color:C.text}}>Saved on your phone</div>It'll upload by itself when you've got signal.</div>
+    </div>
+  );
+}
+async function syncOfflineTimesV1(){
   const q=getOfflineTimesQueue();
   if(q.length===0)return{synced:0,remaining:0};
   const remaining=[];
@@ -302,6 +379,7 @@ const STYLES=`
   .tap{transition:opacity 0.12s;} .tap:active{opacity:0.65;}
   .newPill{display:flex!important;align-items:center!important;gap:7px!important;background:rgba(250,250,248,0.95)!important;border:1.5px solid #E2E2DE!important;border-radius:14px!important;padding:7px 14px!important;color:#1A1A1A!important;font-size:14px!important;font-weight:700!important;box-shadow:0 2px 8px rgba(0,0,0,0.06)!important;}
   button{cursor:pointer;border:none;font-family:'Inter',sans-serif;} .segrow:last-child .segdiv{display:none;} .segrow>svg:last-child{opacity:.75;}
+  *{-webkit-tap-highlight-color:transparent;} button:focus{outline:none;}
   input,textarea{font-family:'Inter',sans-serif;}
   .feedItem>div{border-bottom:none!important;padding:7px 16px!important}
   input::placeholder,textarea::placeholder{color:#C4C4C4;}
@@ -317,6 +395,62 @@ function Toggle({value,onChange}){
   );
 }
 function OfflineBanner(){
+  const [q,setQ]=useState(()=>getOfflineTimesQueue());
+  const [done,setDone]=useState(null); // runs that just uploaded
+  useEffect(()=>{
+    let lastTry=0,hide=null;
+    const check=()=>{const cur=getOfflineTimesQueue();setQ(cur);if(cur.length&&navigator.onLine!==false&&Date.now()-lastTry>30000){lastTry=Date.now();syncOfflineTimes();}};
+    const onSynced=ev=>{setQ(getOfflineTimesQueue());const runs=(ev.detail&&ev.detail.runs)||[];if(runs.length){setDone(runs);clearTimeout(hide);hide=setTimeout(()=>setDone(null),8000);}};
+    check();
+    const iv=setInterval(check,5000);
+    window.addEventListener('online',check);document.addEventListener('visibilitychange',check);window.addEventListener('rivl-synced',onSynced);
+    return()=>{clearInterval(iv);clearTimeout(hide);window.removeEventListener('online',check);document.removeEventListener('visibilitychange',check);window.removeEventListener('rivl-synced',onSynced);};
+  },[]);
+  const nameOf=x=>x.kind==='course'?x.course_name:x.stage_name;
+  const when=x=>{const d=new Date(x.created_at||Date.now());const t=d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});return new Date().toDateString()===d.toDateString()?`Today ${t}`:`${d.toLocaleDateString('en-GB',{day:'numeric',month:'short'})} ${t}`;};
+  const list=(rows,up)=>(
+    <div style={{margin:"10px 16px 0",border:`1px solid ${C.border}`,borderRadius:16,overflow:"hidden",background:"#fff"}}>
+      {rows.slice(0,5).map((x,i)=>(
+        <div key={x.client_id||i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,padding:"12px 14px",borderBottom:i<Math.min(rows.length,5)-1?`1px solid ${C.border}`:"none"}}>
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:13.5,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nameOf(x)}</div>
+            <div style={{fontSize:12,color:C.muted,marginTop:2}}>{when(x)} · {formatTime(x.kind==='course'?x.total_time_ms:x.time_ms)}{up&&x.record?" · new record":up&&x.pb?" · new PB":""}</div>
+          </div>
+          <span style={{fontSize:11.5,fontWeight:600,borderRadius:999,padding:"4px 9px",whiteSpace:"nowrap",color:up?"#15803D":C.muted,background:up?"#F0FDF4":"#F5F5F5"}}>{up?"Uploaded":"Waiting"}</span>
+        </div>
+      ))}
+      {rows.length>5&&<div style={{padding:"10px 14px",fontSize:12,color:C.muted,borderTop:`1px solid ${C.border}`}}>and {rows.length-5} more</div>}
+    </div>
+  );
+  if(q.length){
+    const n=q.length;
+    return(
+      <div>
+        <div style={{margin:"10px 16px 0",border:`1px solid ${C.border}`,borderRadius:16,padding:14,display:"flex",gap:12,alignItems:"center",background:"#fff"}}>
+          <div style={{width:36,height:36,borderRadius:"50%",background:"#EFF6FF",color:C.blue,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:15,flexShrink:0}}>{n}</div>
+          <div><div style={{fontSize:14.5,fontWeight:700,color:C.text}}>{n} run{n===1?"":"s"} saved on your phone</div><div style={{fontSize:12.5,color:C.muted,marginTop:2,lineHeight:1.35}}>{n===1?"It'll upload by itself":"They'll upload by themselves"} when you've got signal. Don't delete the app.</div></div>
+        </div>
+        {list(q,false)}
+      </div>
+    );
+  }
+  if(!done)return null;
+  const n=done.length,star=done.find(x=>x.record)||done.find(x=>x.pb);
+  return(
+    <div>
+      <div style={{position:"fixed",left:12,right:12,top:"calc(env(safe-area-inset-top, 0px) + 8px)",zIndex:260,background:C.text,color:"#fff",borderRadius:16,padding:"12px 14px",display:"flex",gap:12,alignItems:"center",boxShadow:"0 8px 28px rgba(0,0,0,0.25)"}}>
+        <div style={{width:34,height:34,borderRadius:10,background:"rgba(255,255,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
+        <div style={{minWidth:0}}><div style={{fontSize:14,fontWeight:700}}>{n} run{n===1?"":"s"} uploaded</div>{star&&<div style={{fontSize:12.5,color:"rgba(255,255,255,0.7)"}}>Including a new {star.record?"record":"PB"} on {nameOf(star)}</div>}</div>
+      </div>
+      <div style={{margin:"10px 16px 0",border:"1px solid #BBF7D0",borderRadius:16,padding:14,display:"flex",gap:12,alignItems:"center",background:"#F0FDF4"}}>
+        <div style={{width:36,height:36,borderRadius:"50%",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#15803D" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
+        <div><div style={{fontSize:14.5,fontWeight:700,color:C.text}}>All runs uploaded</div><div style={{fontSize:12.5,color:C.muted,marginTop:2}}>{n===1?"Your run is":`Your ${n} runs are`} on the leaderboards.</div></div>
+      </div>
+      {list(done,true)}
+    </div>
+  );
+}
+function OfflineBannerV1(){
   const [count,setCount]=useState(0);
   const [syncing,setSyncing]=useState(false);
   useEffect(()=>{
@@ -1056,7 +1190,50 @@ function useWetDays(user){
 }
 const medianOf=a=>{const v=[...a].sort((x,y)=>x-y),m=Math.floor(v.length/2);return v.length%2?v[m]:(v[m-1]+v[m])/2;};
 // Uses your last 5 runs in the same conditions (wet or dry) as your latest run, min 3. Typical run = the median, and one run more than 10% slower than the rest is left out.
+// Consistency v2: the average of your last 5 runs, and how far each run lands from it (as a % of that average).
+// 0% → 100, 1.5% → 90, 3% → 75, 5% → 55, 8%+ → 0. A run over 10% slower than the middle run is left out as a mistake.
+// Last 3 kept runs each 0.3 s+ faster = 100 "Getting faster". Needs 5 runs in the same conditions; stages under 30 s aren't scored.
+const CONS_RUNS=5,CONS_MIN_MS=30000;
+function consistencyPctScore(p){const P=[[0,100],[1.5,90],[3,75],[5,55],[8,0]];if(p>=8)return 0;for(let i=1;i<P.length;i++){if(p<=P[i][0]){const a=P[i-1],b=P[i];return a[1]+(b[1]-a[1])*(p-a[0])/(b[0]-a[0]);}}return 0;}
+const fmtRun=ms=>{const s=Math.round(ms/100)/10,m=Math.floor(s/60),r=s-m*60;return m?`${m}:${r<10?"0":""}${r.toFixed(1)}`:r.toFixed(1);};
 function consistencyFromRuns(runs,wet){
+  if(!runs||runs.length===0)return null;
+  const sorted=[...runs].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+  if(medianOf(sorted.map(r=>r.time_ms))<CONS_MIN_MS)return{tooShort:true};
+  const isWet=r=>!!(wet&&wet.has(wetKey(r.created_at)));
+  const latestWet=isWet(sorted[sorted.length-1]);
+  let isWetBasis=latestWet,same=sorted.filter(r=>isWet(r)===latestWet);
+  const other=sorted.filter(r=>isWet(r)!==latestWet);
+  if(same.length<CONS_RUNS&&other.length>=CONS_RUNS){isWetBasis=!latestWet;same=other;}
+  if(same.length<CONS_RUNS)return{notYet:true,have:Math.max(same.length,other.length)};
+  const last=same.slice(-CONS_RUNS).map(r=>r.time_ms);
+  const med=medianOf(last);
+  const out=last.map(t=>t>med*1.1);
+  const kept=last.filter((t,i)=>!out[i]);
+  const mean=kept.reduce((a,b)=>a+b,0)/kept.length;
+  const avgDevMs=kept.reduce((a,t)=>a+Math.abs(t-mean),0)/kept.length;
+  const pct=avgDevMs/mean*100;
+  const m=kept.length;
+  const improving=m>=3&&kept[m-3]-kept[m-2]>=300&&kept[m-2]-kept[m-1]>=300;
+  const score=improving?100:Math.round(consistencyPctScore(pct));
+  return{score,label:improving?"Getting faster":consistencyLabel(score),improving,avgDevMs,pct,mean,best:Math.min(...kept),worst:Math.max(...kept),runs:last.map((t,i)=>({t,out:out[i]})),runsUsed:m,totalRuns:runs.length,dropped:last.length-m,wet:isWetBasis,avgGapMs:avgDevMs,avg:mean};
+}
+// Your last 5 runs as chips: how far each was from your average
+function ConsistencyRunChips({res}){
+  return(
+    <>
+      <div style={{fontSize:12,color:C.muted,margin:"0 0 8px",lineHeight:1.4}}>Your last {res.runs.length} {res.wet?"wet ":""}runs against your average of {fmtRun(res.mean)}, oldest to newest{res.dropped?". A run over 10% slower than usual is left out as a mistake.":"."}</div>
+      <div style={{display:"flex",gap:6}}>
+        {res.runs.map((x,i)=>{
+          if(x.out)return(<div key={i} style={{flex:1,minWidth:0,background:"#fff",border:`1px dashed ${C.border}`,borderRadius:10,padding:"8px 0 7px",textAlign:"center"}}><div style={{fontSize:12,fontWeight:600,color:"#9A9A9A"}}>Left out</div><div style={{fontSize:10.5,color:"#9A9A9A",marginTop:2}}>{fmtRun(x.t)}</div></div>);
+          const isBest=x.t===res.best,d=(x.t-res.mean)/1000;
+          return(<div key={i} style={{flex:1,minWidth:0,background:isBest?"#fff":C.surface,border:`1px solid ${isBest?C.blue:C.border}`,borderRadius:10,padding:"8px 0 7px",textAlign:"center"}}><div style={{fontSize:13,fontWeight:700,color:isBest?C.blue:C.text}}>{d>=0?"+":"−"}{Math.abs(d).toFixed(1)}s</div><div style={{fontSize:10.5,color:C.muted,marginTop:2}}>{fmtRun(x.t)}{isBest?" · best":""}</div></div>);
+        })}
+      </div>
+    </>
+  );
+}
+function consistencyFromRunsV1(runs,wet){
   if(!runs||runs.length<3)return null;
   const sorted=[...runs].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
   const isWet=r=>!!(wet&&wet.has(wetKey(r.created_at)));
@@ -1077,8 +1254,8 @@ function consistencyFromRuns(runs,wet){
   return{score,label:consistencyLabel(score),avgGapMs,best,avg:typical,worst,runsUsed:last.length,totalRuns:runs.length,dropped,wet:isWetBasis};
 }
 const fmtSecs=ms=>(ms/1000).toFixed(1)+"s";
-function ConsistencyRing({score,size=54,stroke=5,fontSize=18,label}){
-  const r=(size-stroke)/2,c=2*Math.PI*r,color=consistencyColor(score);
+function ConsistencyRing({score,size=54,stroke=5,fontSize=18,label,color:ringColor}){
+  const r=(size-stroke)/2,c=2*Math.PI*r,color=ringColor||consistencyColor(score);
   return(
     <div style={{position:"relative",width:size,height:size,flexShrink:0}}>
       <svg width={size} height={size} style={{transform:"rotate(-90deg)"}}>
@@ -1093,6 +1270,32 @@ function ConsistencyRing({score,size=54,stroke=5,fontSize=18,label}){
   );
 }
 function StageConsistencyCard({runs,wet,onToggleWet}){
+  const [open,setOpen]=useState(false);
+  if(!runs||runs.length===0)return null;
+  const res=consistencyFromRuns(runs,wet);
+  if(!res||res.tooShort||res.notYet){const left=CONS_RUNS-((res&&res.have)||0);return(
+    <div style={{margin:"16px 16px 0",background:C.surface,borderRadius:14,padding:"14px 16px",border:`1px solid ${C.border}`,fontSize:13,color:C.muted}}>{res&&res.tooShort?"Consistency is only scored on stages over 30 seconds":`Ride this stage ${left} more time${left===1?"":"s"} to get your consistency score`}</div>
+  );}
+  return(
+    <div style={{margin:"16px 16px 0",background:C.surface,borderRadius:14,border:`1px solid ${C.border}`,overflow:"hidden"}}>
+      <button className="tap" onClick={()=>setOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:14,padding:"14px 16px",background:"none",border:"none",textAlign:"left"}}>
+        <ConsistencyRing score={res.score} color={C.blue}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:15,fontWeight:700,color:C.text}}>Consistency</div>
+          <div style={{fontSize:12,color:C.muted,marginTop:2}}><span style={{color:C.text,fontWeight:600}}>{res.label}</span> · {res.improving?"each run faster":`${fmtSecs(res.avgDevMs)} from your average`}</div>
+        </div>
+        <div style={{transform:open?"rotate(180deg)":"none",transition:"transform 0.15s",display:"flex"}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.mutedL} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+      </button>
+      {open&&(
+        <div style={{padding:"0 16px 14px"}}>
+          <ConsistencyRunChips res={res}/>
+          {onToggleWet&&(()=>{const days=[];[...runs].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).forEach(r=>{const k=wetKey(r.created_at);if(!days.includes(k))days.push(k);});return(<div style={{marginTop:12}}><div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:6}}>Mark wet days</div><div style={{display:"flex",flexWrap:"wrap",gap:6}}>{days.slice(0,6).map(k=>{const on=wet&&wet.has(k);const[yy,mm,dd]=k.split("-").map(Number);return <button key={k} className="tap" onClick={()=>onToggleWet(k)} style={{padding:"6px 10px",borderRadius:10,border:`1px solid ${on?C.blue:C.border}`,background:on?"#EFF6FF":"#fff",fontSize:12,fontWeight:600,color:on?C.blue:C.muted}}>{new Date(yy,mm-1,dd).toLocaleDateString("en-GB",{day:"numeric",month:"short"})}{on?" · Wet":""}</button>;})}</div></div>);})()}
+        </div>
+      )}
+    </div>
+  );
+}
+function StageConsistencyCardV1({runs,wet,onToggleWet}){
   const [open,setOpen]=useState(false);
   if(!runs||runs.length===0)return null;
   const res=consistencyFromRuns(runs,wet);
@@ -5064,6 +5267,195 @@ function ChallengeIcon({type,count,bg,size=44}){
   );
 }
 
+// ── Rivals: everyone you've gone head to head with, built from your finished head to heads
+const RIVAL_CACHE="rivl_h2h_sums_v1"; // finished head to heads never change, so their results are kept on the phone
+function readRivalCache(uid){try{const all=JSON.parse(localStorage.getItem(RIVAL_CACHE)||"{}");return all[uid]||{};}catch(e){return {};}}
+function writeRivalCache(uid,m){try{const all=JSON.parse(localStorage.getItem(RIVAL_CACHE)||"{}");all[uid]=m;localStorage.setItem(RIVAL_CACHE,JSON.stringify(all));}catch(e){}}
+function compactSum(s){return{meWins:s.meWins,themWins:s.themWins,gap:s.gap,both:s.both,winner:s.winner,stages:s.stages.filter(x=>x.ready).map(x=>({id:x.stageId,name:x.name,me:x.me.time_ms,them:x.them.time_ms}))};}
+function buildRivals(list,sums,meId){
+  const by={};
+  (list||[]).filter(c=>c.status==="finished"&&sums[c.id]).forEach(c=>{
+    const oid=c.challenger_id===meId?c.opponent_id:c.challenger_id;
+    const r=by[oid]||(by[oid]={id:oid,w:0,l:0,d:0,battles:[]});
+    const s=sums[c.id];
+    if(s.winner==="me")r.w++;else if(s.winner==="them")r.l++;else r.d++;
+    r.battles.push({c,s,at:new Date(c.finished_at||c.ends_at).getTime()});
+  });
+  return Object.values(by).map(r=>{
+    r.battles.sort((a,b)=>b.at-a.at);
+    r.last=r.battles[0].at;r.first=r.battles[r.battles.length-1].at;
+    r.name=r.battles[0].c.other_name||"Rider";r.avatar=r.battles[0].c.other_avatar||null;
+    return r;
+  }).sort((a,b)=>(b.battles.length-a.battles.length)||(b.last-a.last));
+}
+const rivalFirst=n=>(n||"Rider").split(" ")[0];
+// Rivl Pro is free for everyone until launch. At launch set this to false and Pro comes from the rider's subscription.
+const PRO_FOR_EVERYONE=true;
+function rivalDeep(r){
+  let sw=0,sl=0,close=null,big=null;const st={};
+  r.battles.forEach(({s})=>{
+    sw+=s.meWins;sl+=s.themWins;
+    (s.stages||[]).forEach(x=>{
+      const g=Math.abs(x.me-x.them);
+      if(x.me!==x.them&&(!close||g<close.ms))close={ms:g,name:x.name};
+      if(x.me<x.them&&(!big||x.them-x.me>big.ms))big={ms:x.them-x.me,name:x.name};
+      const o=st[x.id]||(st[x.id]={id:x.id,name:x.name,w:0,l:0,me:Infinity,them:Infinity,n:0});
+      o.n++;if(x.me<x.them)o.w++;else if(x.them<x.me)o.l++;
+      o.me=Math.min(o.me,x.me);o.them=Math.min(o.them,x.them);
+    });
+  });
+  // streak counts back from the most recent battle
+  const who=r.battles[0]?r.battles[0].s.winner:null;let streak=0;
+  if(who&&who!=="draw")for(const b of r.battles){if(b.s.winner===who)streak++;else break;}
+  return{sw,sl,close,big,streak,who,stages:Object.values(st).sort((a,b)=>b.n-a.n||a.name.localeCompare(b.name))};
+}
+function RivalPro({r,onOpenBattle,isPro}){
+  const [diff,setDiff]=useState({});
+  const [asked,setAsked]=useState(false);
+  const d=useMemo(()=>rivalDeep(r),[r]);
+  useEffect(()=>{
+    const ids=d.stages.map(s=>s.id).filter(Boolean);if(!ids.length)return;
+    supabase.from('stages').select('id,difficulty').in('id',ids).then(({data})=>{if(data){const m={};data.forEach(x=>{m[x.id]=x.difficulty;});setDiff(m);}});
+  },[d]);
+  const first=rivalFirst(r.name);
+  const sec=ms=>`${(ms/1000).toFixed(1)}s`;
+  const lab=t=><div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>{t}</div>;
+  const tile=(t,b,sub)=>(
+    <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"11px 12px",minWidth:0}}>
+      <div style={{fontSize:10,fontWeight:600,color:C.muted,letterSpacing:0.6,textTransform:"uppercase"}}>{t}</div>
+      <div style={{fontSize:15,fontWeight:700,color:C.text,marginTop:4}}>{b}</div>
+      <div style={{fontSize:11.5,color:C.muted,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sub}</div>
+    </div>
+  );
+  const crown=<svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M3 18h18l-1.5-9-4.5 4-3-7-3 7-4.5-4z"/></svg>;
+  const streakSub=d.streak>1?`${d.who==="me"?"You've":`${first}'s`} won the last ${d.streak}`:d.who==="draw"?"Last one was a draw":d.who==="me"?"You won the last one":`${first} won the last one`;
+  const deep=(
+    <div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:18}}>
+        {tile("Stages won",`${d.sw} – ${d.sl}`,"Across every battle")}
+        {tile("Streak",d.streak>1?`${d.streak} in a row`:"—",streakSub)}
+        {tile("Closest",d.close?sec(d.close.ms):"—",d.close?d.close.name:"No stage battles yet")}
+        {tile("Biggest win",d.big?sec(d.big.ms):"—",d.big?d.big.name:"Not yet")}
+      </div>
+      {d.stages.length>0&&<>
+        {lab("Your battle stages")}
+        <div style={{border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden",marginBottom:18}}>
+          {d.stages.map((s,i)=>(
+            <div key={s.id||i} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderBottom:i<d.stages.length-1?`1px solid ${C.border}`:"none"}}>
+              <TallDiamond color={(DIFFICULTIES.find(x=>x.val===diff[s.id])||{color:"#C4C4C4"}).color} size={13}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:14,fontWeight:600,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.name}</div>
+                <div style={{fontSize:12,color:C.muted}}>You won {s.w} · {first} won {s.l}</div>
+              </div>
+              <div style={{textAlign:"right"}}><H2hPill d={s.me-s.them}/><div style={{fontSize:10.5,color:"#9A9A9A",marginTop:3}}>best vs best</div></div>
+            </div>
+          ))}
+        </div>
+      </>}
+      {lab("History")}
+      {r.battles.map(({c,s})=>{
+        const won=s.winner==="me",lost=s.winner==="them";
+        return(
+          <button key={c.id} className="tap" onClick={()=>onOpenBattle(c.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:"#fff",border:`1px solid ${C.border}`,borderRadius:12,marginBottom:8,textAlign:"left"}}>
+            <div style={{width:26,height:26,borderRadius:"50%",background:won?"#E2B13C":"#AEB4BE",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{crown}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:14,fontWeight:600,color:C.text}}>{won?"You won":lost?`${first} won`:"Draw"} {s.meWins}–{s.themWins}</div>
+              <div style={{fontSize:12,color:C.muted,marginTop:2}}>{new Date(c.finished_at||c.ends_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</div>
+            </div>
+            <Icon.ChevronRight size={16} color={C.mutedL}/>
+          </button>
+        );
+      })}
+    </div>
+  );
+  if(PRO_FOR_EVERYONE||isPro)return deep;
+  return(
+    <div style={{position:"relative"}}>
+      <div style={{filter:"blur(5px)",opacity:0.55,pointerEvents:"none",userSelect:"none"}}>{deep}</div>
+      <div style={{position:"absolute",left:8,right:8,top:40,background:"#fff",border:`1px solid ${C.border}`,borderRadius:16,padding:16,textAlign:"center",boxShadow:"0 10px 30px rgba(0,0,0,0.12)"}}>
+        <span style={{display:"inline-flex",background:C.blue,color:"#fff",fontSize:10.5,fontWeight:800,letterSpacing:"0.06em",borderRadius:6,padding:"3px 7px"}}>PRO</span>
+        <div style={{fontSize:16,fontWeight:700,color:C.text,marginTop:10}}>See the whole rivalry</div>
+        <div style={{fontSize:13,color:C.muted,lineHeight:1.45,marginTop:6}}>Stages won, streaks, your closest battles, best vs best on every stage and every head to head you've had with {first}.</div>
+        <button className="tap" onClick={()=>setAsked(true)} style={{marginTop:14,width:"100%",background:"rgba(250,250,248,0.95)",border:"1.5px solid #E2E2DE",borderRadius:14,padding:11,fontSize:14,fontWeight:700,color:C.text}}>{asked?"Rivl Pro is coming soon":"Try Pro free for a month"}</button>
+      </div>
+    </div>
+  );
+}
+function RivalHeader({title,sub,onBack}){
+  return(
+    <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+      <button className="tap" onClick={onBack} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:17,fontWeight:700,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{title}</div>
+        {sub&&<div style={{fontSize:12,color:C.muted}}>{sub}</div>}
+      </div>
+    </div>
+  );
+}
+function RivalsList({rivals,onBack,onOpen}){
+  return(
+    <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
+      <RivalHeader title="Rivals" sub="Everyone you've gone head to head with" onBack={onBack}/>
+      <div style={{flex:1,overflowY:"auto",padding:"16px 16px 30px"}}>
+        <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>Most battles</div>
+        {rivals.map(r=>{
+          const n=r.battles.length,col=r.w>r.l?C.green:r.l>r.w?C.red:C.muted;
+          return(
+            <button key={r.id} className="tap" onClick={()=>onOpen(r.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,marginBottom:8,textAlign:"left"}}>
+              <Avatar size={40} url={r.avatar}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:14,fontWeight:600,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.name}</div>
+                <div style={{fontSize:12,color:C.muted,marginTop:2}}>{n} head to head{n===1?"":"s"} · last {timeAgo(new Date(r.last).toISOString())}</div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:17,fontWeight:800,color:C.text,fontVariantNumeric:"tabular-nums"}}>{r.w} – {r.l}</div>
+                <div style={{fontSize:11,fontWeight:600,color:col,marginTop:2}}>{r.w>r.l?"You lead":r.l>r.w?`${rivalFirst(r.name)} leads`:"Level"}</div>
+              </div>
+            </button>
+          );
+        })}
+        <div style={{fontSize:12,color:C.muted,textAlign:"center",marginTop:10,lineHeight:1.5}}>Your record counts head to heads won.<br/>Draws show in each rival's record.</div>
+      </div>
+    </div>
+  );
+}
+function RivalRecord({r,meAvatar,live,onBack,onOpenLive,onChallenge,children}){
+  const [sent,setSent]=useState(false);
+  const [busy,setBusy]=useState(false);
+  const n=r.battles.length;
+  const f=new Date(r.first);
+  const since=f.toLocaleDateString('en-GB',f.getFullYear()===new Date().getFullYear()?{month:'long'}:{month:'long',year:'numeric'});
+  const challenge=async()=>{if(busy)return;setBusy(true);const ok=await onChallenge();setBusy(false);if(ok)setSent(true);};
+  const pill={display:"inline-flex",alignItems:"center",gap:6,background:"rgba(250,250,248,0.95)",border:"1.5px solid #E2E2DE",borderRadius:14,padding:"7px 14px",fontSize:14,fontWeight:700,color:C.text};
+  const bolt=<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>;
+  return(
+    <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
+      <RivalHeader title={`You vs ${r.name}`} sub="Rival record" onBack={onBack}/>
+      <div style={{flex:1,overflowY:"auto",padding:"16px 16px 30px"}}>
+        <div style={{border:`1px solid ${C.border}`,borderRadius:14,padding:"16px 14px 14px",marginBottom:16}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 10px"}}>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,width:70}}><Avatar size={38} url={meAvatar}/><div style={{fontSize:12,fontWeight:700,color:C.text}}>You</div></div>
+            <div style={{display:"flex",alignItems:"center",gap:14}}>
+              <div style={{fontSize:44,fontWeight:800,lineHeight:1,color:C.text}}>{r.w}</div>
+              <div style={{fontSize:24,fontWeight:300,color:"#C4C4C4"}}>–</div>
+              <div style={{fontSize:44,fontWeight:800,lineHeight:1,color:C.text}}>{r.l}</div>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,width:70}}><Avatar size={38} url={r.avatar}/><div style={{fontSize:12,fontWeight:500,color:C.text,maxWidth:70,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{rivalFirst(r.name)}</div></div>
+          </div>
+          <div style={{textAlign:"center",fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.5,textTransform:"uppercase",marginTop:12}}>Head to heads won</div>
+          <div style={{textAlign:"center",fontSize:12.5,color:C.muted,marginTop:4}}>{n} battle{n===1?"":"s"} since {since}{r.d?` · ${r.d} draw${r.d===1?"":"s"}`:""}</div>
+          <div style={{display:"flex",justifyContent:"center",marginTop:12,paddingTop:12,borderTop:`1px solid ${C.border}`}}>
+            {live&&live.status==="active"?<button className="tap" onClick={onOpenLive} style={pill}>{bolt}Head to head on · Open</button>
+            :live||sent?<div style={{...pill,color:C.muted}}>Challenge sent</div>
+            :<button className="tap" onClick={challenge} disabled={busy} style={pill}>{bolt}{busy?"Sending…":"Challenge again"}</button>}
+          </div>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function H2hScreen({user,onBack,onActivity,units,heightUnit,startId}){
   const [list,setList]=useState(null);
   const [view,setView]=useState(startId?{name:"detail",id:startId}:{name:"home"});
@@ -5097,6 +5489,21 @@ function H2hScreen({user,onBack,onActivity,units,heightUnit,startId}){
     onActivity&&onActivity();
   },[onActivity]);
   useEffect(()=>{reload();supabase.from("profiles").select("avatar_url").eq("id",user.id).single().then(({data})=>{if(data)setMeAvatar(data.avatar_url||null);});},[user.id]);
+
+  // rivals: results of every finished head to head (kept on the phone once fetched)
+  const [rsums,setRsums]=useState(()=>readRivalCache(user.id));
+  useEffect(()=>{
+    if(!list)return;
+    const need=list.filter(c=>c.status==="finished"&&!rsums[c.id]).slice(0,40);
+    if(!need.length)return;
+    let off=false;
+    Promise.all(need.map(c=>supabase.rpc("get_challenge_runs",{p_id:c.id}).then(({data,error})=>(!error&&Array.isArray(data))?[c.id,compactSum(h2hSummarise(data,user.id))]:null,()=>null))).then(res=>{
+      if(off)return;
+      setRsums(prev=>{const m={...prev};res.forEach(x=>{if(x)m[x[0]]=x[1];});writeRivalCache(user.id,m);return m;});
+    });
+    return()=>{off=true;};
+  },[list,user.id]);
+  const rivals=useMemo(()=>buildRivals(list,rsums,user.id),[list,rsums,user.id]);
 
   // lead text for active + finished rows
   useEffect(()=>{
@@ -5150,10 +5557,20 @@ function H2hScreen({user,onBack,onActivity,units,heightUnit,startId}){
     return s.winner==="me"&&s.both>0?<div style={{fontSize:13,fontWeight:700,color:C.green}}>You lead {sc}</div>:s.winner==="them"?<div style={{fontSize:13,fontWeight:700,color:C.red}}>{c.other_name} leads {sc}</div>:<div style={{fontSize:13,fontWeight:700,color:C.muted}}>All square</div>;
   };
 
+  // ── rivals list + rival record
+  if(view.name==="rivals")return <RivalsList rivals={rivals} onBack={()=>setView({name:"home"})} onOpen={id=>setView({name:"rival",id})}/>;
+  if(view.name==="rival"){
+    const r=rivals.find(x=>x.id===view.id);
+    if(r){
+      const live=(list||[]).find(c=>(c.status==="active"||c.status==="pending")&&(c.challenger_id===r.id||c.opponent_id===r.id));
+      return <RivalRecord r={r} meAvatar={meAvatar} live={live} onBack={()=>setView({name:"rivals"})} onOpenLive={()=>live&&setView({name:"detail",id:live.id,from:r.id})} onChallenge={async()=>{const{error}=await supabase.rpc("create_challenge",{p_opponent:r.id});if(error){alert(error.message);return false;}reload();return true;}}><RivalPro r={r} onOpenBattle={id=>setView({name:"detail",id,from:r.id})}/></RivalRecord>;
+    }
+  }
+
   // ── detail
   if(view.name==="detail"&&list){
     const c=list.find(x=>x.id===view.id);
-    if(c)return <H2hDetail c={c} user={user} units={units} heightUnit={heightUnit} meAvatar={meAvatar} onBack={()=>setView({name:"home"})} onReload={reload} onActivity={onActivity}/>;
+    if(c)return <H2hDetail c={c} user={user} units={units} heightUnit={heightUnit} meAvatar={meAvatar} onBack={()=>setView(view.from?{name:"rival",id:view.from}:{name:"home"})} onReload={reload} onActivity={onActivity}/>;
   }
 
   // ── pick a mate
@@ -5311,6 +5728,16 @@ function H2hScreen({user,onBack,onActivity,units,heightUnit,startId}){
             </div>
           ):(
             <>
+              {rivals.length>0&&(()=>{const tw=rivals.reduce((a,r)=>a+r.w,0),tl=rivals.reduce((a,r)=>a+r.l,0);return(
+                <button className="tap" onClick={()=>setView({name:"rivals"})} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:14,background:"#fff",border:`1px solid ${C.border}`,borderRadius:16,marginBottom:18,textAlign:"left"}}>
+                  <div style={{display:"flex"}}>{rivals.slice(0,3).map((r,i)=><div key={r.id} style={{marginLeft:i?-10:0,border:"2px solid #fff",borderRadius:"50%",display:"flex"}}><Avatar size={32} url={r.avatar}/></div>)}</div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:14,fontWeight:600,color:C.text}}>Your rivals</div>
+                    <div style={{fontSize:12,color:C.muted,marginTop:2}}>{rivals.length} rider{rivals.length===1?"":"s"} · {tw} won · {tl} lost</div>
+                  </div>
+                  <Icon.ChevronRight size={16} color={C.mutedL}/>
+                </button>
+              );})()}
               {nInv>0&&<>{label("Invites")}
                 {gInv.map(g=>invite(g.id,"group",g.rider_count+g.invited_count,gTitle(g),`${g.rider_count} joined`,()=>respondG(g,true),()=>respondG(g,false),inRide))}
                 {hReq.map(c=>invite(c.id,"h2h",2,`${c.other_name||"Rider"} challenged you`,"24 hours to ride",()=>respond(c,true),()=>respond(c,false),false))}
@@ -6087,6 +6514,81 @@ function FatigueScreen({grouped,descents}){
   );
 }
 
+function ConsistencyView({data}){
+  const [sortBest,setSortBest]=useState(true);
+  const [showAll,setShowAll]=useState(false);
+  const [openId,setOpenId]=useState(null);
+  const [how,setHow]=useState(false);
+  if(data===null)return <div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>;
+  const rows=[...data.rows].sort((a,b)=>sortBest?b.score-a.score:a.score-b.score);
+  const shown=showAll?rows:rows.slice(0,5);
+  const unscored=[...(data.unscored||[])].sort((a,b)=>b.have-a.have);
+  const avgSec=rows.length?rows.reduce((a,r)=>a+r.avgDevMs,0)/rows.length/1000:0;
+  const chev=(deg,col)=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,transform:`rotate(${deg}deg)`,transition:"transform 0.2s"}}><path d="M6 9l6 6 6-6"/></svg>;
+  const box={margin:"0 16px",border:`1px solid ${C.border}`,borderRadius:16,overflow:"hidden"};
+  const head=(t,right,pt)=><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:`${pt||24}px 16px 6px`}}><span style={{fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.8,textTransform:"uppercase"}}>{t}</span>{right}</div>;
+  const dcol=d=>(DIFFICULTIES.find(x=>x.val===d)||DIFFICULTIES[0]).color;
+  return(
+    <div style={{paddingBottom:40}}>
+      {data.overall===null?(
+        <div style={{textAlign:"center",padding:"48px 24px 16px",color:C.muted,fontSize:13,lineHeight:1.5}}>No score yet. Ride a stage that's over 30 seconds 5 times and your consistency will show up here.</div>
+      ):(
+        <div style={{padding:"26px 24px 20px",textAlign:"center"}}>
+          <div style={{display:"flex",justifyContent:"center"}}><ConsistencyRing score={data.overall} size={140} stroke={8} fontSize={44} label="OUT OF 100" color={C.blue}/></div>
+          <div style={{fontSize:24,fontWeight:800,color:C.text,marginTop:14}}>{consistencyLabel(data.overall)}</div>
+          <div style={{fontSize:14,color:C.muted,lineHeight:1.45,margin:"8px auto 0",maxWidth:290}}>Your runs usually land about {avgSec.toFixed(1)}s either side of your average time.</div>
+        </div>
+      )}
+      {rows.length>0&&<>
+        {head("Your stages",<button className="tap" onClick={()=>setSortBest(v=>!v)} style={{background:"none",border:"none",padding:0,fontSize:12,fontWeight:600,color:C.blue}}>Sort: {sortBest?"Best":"Worst"} first ▾</button>)}
+        <div style={box}>
+          {shown.map((r,i)=>{const open=openId===r.id;return(
+            <div key={r.id} style={{borderBottom:i<shown.length-1?`1px solid ${C.border}`:"none",background:"#fff"}}>
+              <button className="tap" onClick={()=>setOpenId(open?null:r.id)} style={{width:"100%",background:"none",border:"none",padding:"13px 14px",display:"flex",alignItems:"center",gap:11,textAlign:"left",color:C.text}}>
+                <DifficultyDiamond color={dcol(r.difficulty)} size={14}/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:14.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</div>
+                  <div style={{fontSize:12,color:C.muted,marginTop:2}}>{r.totalRuns} runs · {r.improving?"each one faster":`${fmtSecs(r.avgDevMs)} from your average`}</div>
+                </div>
+                <div style={{textAlign:"right"}}><div style={{fontSize:19,fontWeight:800,lineHeight:1}}>{r.score}</div><div style={{fontSize:11,fontWeight:600,color:C.muted,marginTop:3}}>{r.label}</div></div>
+                {chev(open?180:0,C.mutedL)}
+              </button>
+              {open&&<div style={{padding:"0 14px 14px"}}><ConsistencyRunChips res={r}/></div>}
+            </div>
+          );})}
+        </div>
+        {rows.length>5&&<button className="tap" onClick={()=>setShowAll(v=>!v)} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,width:"calc(100% - 32px)",margin:"10px 16px 0",background:"#fff",border:"1.5px solid #E2E2DE",borderRadius:14,padding:11,fontSize:14,fontWeight:700,color:C.blue}}>{showAll?"Show less":`Show ${rows.length-5} more stage${rows.length-5===1?"":"s"}`}{chev(showAll?180:0,C.blue)}</button>}
+      </>}
+      {unscored.length>0&&<>
+        {head("Not scored yet",null,20)}
+        <div style={box}>
+          {unscored.map((s,i)=>(
+            <div key={s.id} style={{borderBottom:i<unscored.length-1?`1px solid ${C.border}`:"none",background:"#fff",padding:"13px 14px",display:"flex",alignItems:"center",gap:11}}>
+              <DifficultyDiamond color={dcol(s.difficulty)} size={14}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:14.5,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}</div>
+                <div style={{fontSize:12,color:C.muted,marginTop:2}}>{s.have} of {CONS_RUNS} runs</div>
+              </div>
+              <div style={{fontSize:12,fontWeight:600,color:C.muted}}>{CONS_RUNS-s.have} more run{CONS_RUNS-s.have===1?"":"s"}</div>
+            </div>
+          ))}
+        </div>
+      </>}
+      <button className="tap" onClick={()=>setHow(v=>!v)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",width:"calc(100% - 32px)",margin:"14px 16px 0",background:"#fff",border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",fontSize:14,fontWeight:700,color:C.text,textAlign:"left"}}>How it works{chev(how?180:0,C.muted)}</button>
+      {how&&(
+        <div style={{margin:"8px 16px 0",background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px"}}>
+          <div style={{fontSize:13,color:"#4A4A4A",lineHeight:1.5,marginBottom:12}}>On each stage we take the average time of your last 5 runs and see how far each run lands from it. The closer your runs bunch together, the higher your score. If your last 3 runs each get clearly faster, that stage scores 100. A run that's over 10% slower than your usual is left out as a mistake. A stage needs 5 runs, and to be over 30 seconds, to be scored.</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+            {[["90+","Locked in"],["75+","Solid"],["55+","Variable"],["<55","Scattered"]].map(([n,l])=>(
+              <div key={l} style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 2px",textAlign:"center",fontSize:10.5,color:C.muted,fontWeight:500}}><div style={{fontSize:14,fontWeight:800,color:C.text,marginBottom:2}}>{n}</div>{l}</div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stagesRiddenCount,coursesCompleteCount,courseCRList}){
   const [view,setView]=useState('hub');
   const [expandedCRCourse,setExpandedCRCourse]=useState(null);
@@ -6110,7 +6612,7 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
   const descents=useStageDescents(runsByStage,stages);
   const dryByStage=useMemo(()=>{if(!runsByStage)return null;const o={};Object.keys(runsByStage).forEach(id=>{o[id]=runsByStage[id].filter(r=>!wetDays.has(wetKey(r.created_at)));});return o;},[runsByStage,wetDays]);
   const fatModel=useMemo(()=>fatigueModel(dryByStage,descents,'day'),[dryByStage,descents]);
-  const consistency=useMemo(()=>{
+  const consistency=useMemo(()=>{const unscored=[];
     if(!myRuns)return null;
     const byStage={};
     myRuns.forEach(t=>{(byStage[t.stage_id]=byStage[t.stage_id]||[]).push(t);});
@@ -6118,12 +6620,12 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
     Object.keys(byStage).forEach(id=>{
       const stage=stages.find(s=>String(s.id)===String(id));
       const res=consistencyFromRuns(byStage[id],wetDays);
-      if(!stage||!res)return;
+      if(!stage||!res||res.tooShort)return;if(res.notYet){unscored.push({id:stage.id,name:stage.name,difficulty:stage.difficulty||'blue',have:res.have});return;}
       rows.push({id:stage.id,name:stage.name,difficulty:stage.difficulty||'blue',...res});
     });
-    if(rows.length===0)return{rows,overall:null};
+    if(rows.length===0)return{rows,unscored,overall:null};
     const overall=Math.round(rows.reduce((s,r)=>s+r.score,0)/rows.length);
-    return{rows,overall};
+    return{rows,unscored,overall};
   },[myRuns,stages,wetDays]);
   const myStages=useMemo(()=>stages.filter(s=>s.created_by===user.id),[stages,user.id]);
   const myCourses=useMemo(()=>courses.filter(c=>c.created_by===user.id),[courses,user.id]);
@@ -6224,7 +6726,8 @@ function StatisticsScreen({stages,courses,user,onBack,crCount,courseCRCount,stag
             </div>
           </div>
         )}
-        {view==='consistency'&&(
+        {view==='consistency'&&<ConsistencyView data={consistency}/>}
+        {false&&(
           <div style={{paddingBottom:40}}>
             {consistency===null?<div style={{padding:40,textAlign:"center",color:C.muted,fontSize:13}}>Loading…</div>:consistency.overall===null?(
               <div style={{textAlign:"center",padding:"48px 24px",color:C.muted,fontSize:13,lineHeight:1.5}}>No score yet. Ride a stage at least 3 times and your consistency will show up here.</div>
@@ -7420,6 +7923,7 @@ function RaceStageComplete({base,splits,courseStages,stageIndex,totalStages,isLa
         <RaceDeltaPill delta={out.delta} vs={out.prev===null?"First run on this stage":`vs your best ${formatTime(out.prev)}`}/>
       </div>
       <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
+        <SavedOnPhoneBox cid={last.cid} style={{marginBottom:16}}/>
         <div style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:12}}>Splits so far</div>
         {splits.map((s,i)=><RaceRow key={i} i={i} name={s.name} time={s.time} out={stageOutcome(base,s.stageId,s.time)}/>)}
         {nextName&&<div style={{textAlign:"center",padding:"10px 0 0",fontSize:13,color:C.muted}}>Next: <span style={{fontWeight:600,color:C.text}}>{nextName}</span></div>}
@@ -7430,7 +7934,7 @@ function RaceStageComplete({base,splits,courseStages,stageIndex,totalStages,isLa
 }
 
 // Race complete (Race mode)
-function RaceComplete({base,course,splits,courseStages,totalStages,onSave,user,liveChallenges,addedRuns}){
+function RaceComplete({base,course,splits,courseStages,totalStages,onSave,user,liveChallenges,addedRuns,savedCid}){
   const total=splits.reduce((a,s)=>a+s.time,0);
   const prevTotal=totalStages>1?(base.courseBest===undefined?null:base.courseBest):(base.stageBest[splits[0].stageId]??null);
   const delta=prevTotal===null?null:total-prevTotal;
@@ -7456,6 +7960,7 @@ function RaceComplete({base,course,splits,courseStages,totalStages,onSave,user,l
         <div style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:12}}>Stage Breakdown</div>
         {splits.map((s,i)=><RaceRow key={i} i={i} name={s.name} time={s.time} out={stageOutcome(base,s.stageId,s.time)}/>)}
       </div>
+      <SavedOnPhoneBox cid={savedCid||(totalStages===1&&splits[0]?splits[0].cid:null)} style={{margin:"0 20px 12px"}}/>
       <H2hSaveStrip live={liveChallenges} count={addedRuns}/>
       <RaceNextBtn onClick={onSave}>Done</RaceNextBtn>
     </div>
@@ -7501,6 +8006,7 @@ function RaceScreen({course,stages,user,onFinish,onActivity,liveChallenges}){
   const timerMsRef=useRef(0);
     const [splits,setSplits]=useState(savedProgress?savedProgress.splits:[]); // current run splits
   const courseSavedRef=useRef(!!(savedProgress&&savedProgress.courseSaved)); // course result already saved and posted
+  const [courseCid,setCourseCid]=useState(null); // id of this course result while it waits to upload
   const [bestPerStage,setBestPerStage]=useState(savedProgress?savedProgress.bestPerStage:{}); // mashup: best time per stage id
   const [runCount,setRunCount]=useState(savedProgress?savedProgress.runCount:0); // how many full runs completed
   const [gateStatus,setGateStatus]=useState("waiting");
@@ -7513,6 +8019,9 @@ function RaceScreen({course,stages,user,onFinish,onActivity,liveChallenges}){
   const toggleChallenge=id=>{const n=addedRef.current.includes(id)?addedRef.current.filter(x=>x!==id):[...addedRef.current,id];addedRef.current=n;setAddedIds(n);};
   
   const prevGpsRef=useRef(null);
+  const handRef=useRef(null); // "Finish here": saves the run, only set when it's allowed
+  const [hand,setHand]=useState(null); // {ok,msg,ms} for the Finish here button
+  const [handAsk,setHandAsk]=useState(null); // time shown in the "Save this run?" sheet
   const traceRef=useRef([]);
     const [introDist,setIntroDist]=useState(null);
   const [showRaceMap,setShowRaceMap]=useState(false);
@@ -7596,7 +8105,7 @@ const startCountdown=(crossTs=null)=>{playBeep(880,150);setGateStatus("waiting")
 playBeep(440,250);
 clearInterval(timerRef.current);clearTimeout(finishTimeoutRef.current);finishTimeoutRef.current=null;
 const finalTime=Math.round(crossTs?Math.max(0,crossTs-startTimeRef.current):timerMsRef.current);  
-const newSplit={stageId:currentStage.id,name:currentStage.name,time:finalTime};
+const cid=newClientId();const newSplit={stageId:currentStage.id,name:currentStage.name,time:finalTime,cid};
 setSplits(prev=>[...prev,newSplit]);
 // Mashup: update best per stage
 if(isMashup){
@@ -7610,7 +8119,9 @@ if(saveTime&&!isPractice){
   const entry={stage_id:currentStage.id,stage_name:currentStage.name,user_id:user.id,time_ms:finalTime,created_at:new Date(crossTs||Date.now()).toISOString(),bike_id:ACTIVE_BIKE_ID,trace:compactTrace(traceRef.current),challenge_ids:addedRef.current.length?addedRef.current.slice():undefined};
   if(addedRef.current.length)setAddedRuns(n=>n+1);
   addedRef.current=[];setAddedIds([]);
-  saveStageTime(entry).then(()=>onActivity&&onActivity()).catch(err=>{console.log('save failed, storing offline',err);queueOfflineTime(entry);onActivity&&onActivity();});
+  entry.client_id=cid;
+  queueOfflineTime(entry); // saved on the phone first, so it can't be lost
+  syncOfflineTimes().then(()=>onActivity&&onActivity());
 }
 };
 
@@ -7623,12 +8134,27 @@ if(saveTime&&!isPractice){
   let prev=null,near=null,done=false,id=null;
   const gs={fixes:0,rough:0,junk:0,closest:null,lastTs:null};
   let lastMoveTs=Date.now(),nearMv=null; // last time you were moving, and your closest moving point to the finish
-  const stopTimer=setInterval(()=>{if(done||!nearMv)return;if(Date.now()-lastMoveTs>=FINISH_STOP_MS)finish(nearMv.ts,"stopped_at_finish",{closest_m:Math.round(nearMv.d)});},1000); // GPS health for this run, logged at the end
+  const cps=stageCheckpoints(line);let cpNext=0,cpHit=0,hNear=null; // Finish here: checkpoints passed in order + closest moving point within 60 m
+  const handState=()=>{
+    if(done)return;
+    const lf=prevGpsRef.current;
+    const remNow=lf?(stageRemainingM(line,lf)??haversine(lf,gate)):null;
+    const followed=cps?cpHit>=9:(!!hNear&&hNear.d<=FINISH_GATE_RADIUS);
+    const ok=!!hNear&&followed&&(hNear.left||Date.now()-lastMoveTs>=FINISH_STOP_MS);
+    let ms=null,msg;
+    if(ok){const extraM=Math.min(HAND_NEAR_M,hNear.rem),v=Math.min(12,Math.max(2,hNear.v||0));ms=Math.ceil((hNear.ts+extraM/v*1000-startTimeRef.current)/10)*10;msg="Looks like you've stopped at the finish. Tap below to save your time.";}
+    else if(!hNear)msg=`Finish here unlocks near the end of the stage${remNow!=null?` · ${formatDist(Math.max(10,Math.round(remNow/10)*10))} to go`:""}`;
+    else if(!followed)msg="GPS missed part of this stage, so Finish here can't be used on this run.";
+    else msg="Stop at the finish to use Finish here.";
+    setHand(h=>(h&&h.ok===ok&&h.msg===msg&&h.ms===ms)?h:{ok,msg,ms});
+    handRef.current=ok?()=>finish(startTimeRef.current+ms,"hand",{closest_m:Math.round(hNear.d),extra_m:Math.round(Math.min(HAND_NEAR_M,hNear.rem)),cps:cpHit}):null;
+  };
+  const stopTimer=setInterval(()=>{if(done)return;handState();if(!nearMv)return;if(Date.now()-lastMoveTs>=FINISH_STOP_MS)finish(nearMv.ts,"stopped_at_finish",{closest_m:Math.round(nearMv.d)});},1000);
   const gpsOk=makeGpsFilter();
   prevGpsRef.current=null;
   traceRef.current=[{t:0,lat:currentStage.start.lat,lng:currentStage.start.lng}];
   const finish=(ts,how,extra)=>{
-    if(done)return;done=true;clearInterval(stopTimer);
+    if(done)return;done=true;clearInterval(stopTimer);handRef.current=null;setHand(null);setHandAsk(null);
     if(id!==null)navigator.geolocation.clearWatch(id);
     logEvent(user?.id,"finish_"+how,`Finish timed by ${how}`,currentStage?.id,{...(extra||{}),fixes:gs.fixes,rough:gs.rough,junk:gs.junk});
     
@@ -7662,6 +8188,9 @@ if(saveTime&&!isPractice){
     // safety net: never got inside the finish gate, but came close at the end of the stage, then rode away
     const c=segClosest(prev,loc,gate);
     const mvN=!!prev&&loc.ts>prev.ts&&haversine(loc,prev)/((loc.ts-prev.ts)/1000)>=GATE_MOVING_MS; // standing around after the finish must not move the finish time later
+    if(cps){for(let j=cpNext;j<Math.min(cps.length,cpNext+3);j++){if(haversine(loc,cps[j])<=HAND_CP_R){cpHit++;cpNext=j+1;j=cpNext-1;}}} // checkpoints in order (can miss one)
+    if(mvN&&c.d<=HAND_NEAR_M&&c.ts-startTimeRef.current>=FINISH_MIN_MS&&(!hNear||(!hNear.left&&c.d<hNear.d))){const r=stageRemainingM(line,loc);if(r===null||r<=FINISH_END_M)hNear={d:c.d,ts:c.ts,rem:r===null?c.d:r,v:haversine(loc,prev)/((loc.ts-prev.ts)/1000)};}
+    if(hNear&&!hNear.left&&haversine(loc,gate)>hNear.d+15)hNear.left=true; // first pass only
     if(c.d<=FINISH_NEAR_M&&c.ts-startTimeRef.current>=FINISH_MIN_MS){
       const rem=stageRemainingM(line,loc);
       if((rem===null||rem<=FINISH_END_M)&&(!near||(mvN&&c.d<near.d)))near=c;
@@ -7670,10 +8199,11 @@ if(saveTime&&!isPractice){
     prev=loc;prevGpsRef.current=loc;
     if(mvN){lastMoveTs=loc.ts;if(c.d<=FINISH_STOP_M&&c.ts-startTimeRef.current>=FINISH_MIN_MS){const remS=stageRemainingM(line,loc);if((remS===null||remS<=FINISH_END_M)&&(!nearMv||(!nearMv.left&&c.d<nearMv.d)))nearMv={d:c.d,ts:c.ts};}if(nearMv&&!nearMv.left&&haversine(loc,gate)>nearMv.d+10)nearMv.left=true;} // first pass only: riding back towards the pin later can't move your time
     if(near&&haversine(loc,gate)>=near.d+FINISH_LEAVE_M)finish(near.ts,"safety_net",{closest_m:Math.round(near.d)});
+    handState();
   },err=>{console.log(err);logEvent(user?.id,"gps_error_racing",err.message||String(err),currentStage?.id,{code:err.code});},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
   return()=>{
     if(!done)logEvent(user?.id,"race_quit_gps","Run ended before the finish",currentStage?.id,{fixes:gs.fixes,rough:gs.rough,junk:gs.junk,closest_m:gs.closest===null?null:Math.round(gs.closest),last_fix_s_ago:gs.lastTs?Math.round((Date.now()-gs.lastTs)/1000):null,run_s:Math.round((Date.now()-startTimeRef.current)/1000),screen:document.visibilityState});
-    clearInterval(stopTimer);done=true;if(id!==null)navigator.geolocation.clearWatch(id);
+    clearInterval(stopTimer);done=true;if(id!==null)navigator.geolocation.clearWatch(id);handRef.current=null;setHand(null);setHandAsk(null);
   };
 },[phase,stageIndex]);
            
@@ -7731,6 +8261,18 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
 
     // Course race: save the result (with every split) and post it the moment the last stage is done. No button needed.
   const saveCourseRun=async()=>{
+    if(isPractice||isMashup||totalStages<2||!user||courseSavedRef.current)return;
+    courseSavedRef.current=true;
+    const total=splits.reduce((a,s)=>a+s.time,0);
+    const base=raceBase.current;
+    const sp=splits.map(s=>({stage_id:s.stageId,name:s.name,time_ms:s.time,prev_best_ms:base.stageBest[s.stageId]??null}));
+    const cid=newClientId();setCourseCid(cid);
+    queueOfflineTime({kind:'course',client_id:cid,course_id:course.id,course_name:course.name,user_id:user.id,total_time_ms:total,mode:course.mode,splits:sp,stage_count:totalStages,prev_best_ms:base.courseBest===undefined?null:base.courseBest,created_at:new Date().toISOString()});
+    try{const p=JSON.parse(localStorage.getItem(progressKey));if(p){p.courseSaved=true;localStorage.setItem(progressKey,JSON.stringify(p));}}catch(e){}
+    await syncOfflineTimes();
+    onActivity&&onActivity();
+  };
+  const saveCourseRunV1=async()=>{
     if(isPractice||isMashup||totalStages<2||!user||courseSavedRef.current)return;
     courseSavedRef.current=true;
     const total=splits.reduce((a,s)=>a+s.time,0);
@@ -7967,9 +8509,22 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
         <div style={{padding:"0 20px 44px"}}>
           {isPractice
             ?<button className="tap" onClick={()=>stopStage(false)} style={{width:"100%",background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:14,padding:18,color:"#fff",fontSize:16,fontWeight:700}}>✓  Finish Gate — Next Stage</button>
-            :<><div style={{textAlign:"center",fontSize:13,color:"rgba(255,255,255,0.4)",paddingBottom:12}}>Timer stops automatically at the finish gate</div>
+            :<>{touchLocked||!hand?<div style={{textAlign:"center",fontSize:13,color:"rgba(255,255,255,0.4)",paddingBottom:12}}>Timer stops automatically at the finish gate</div>:<>
+              <div style={{background:hand.ok?"rgba(22,163,74,0.14)":"rgba(255,255,255,0.06)",border:`1px solid ${hand.ok?"rgba(22,163,74,0.35)":"rgba(255,255,255,0.12)"}`,borderRadius:14,padding:"12px 14px",fontSize:13,lineHeight:1.4,color:hand.ok?"#D1FAE5":"rgba(255,255,255,0.7)",marginBottom:12}}>{hand.msg}</div>
+              <button className="tap" disabled={!hand.ok} onClick={()=>{if(hand.ok&&hand.ms)setHandAsk(hand.ms);}} style={{width:"100%",border:"none",borderRadius:16,padding:17,fontSize:16,fontWeight:800,background:hand.ok?"#16A34A":"rgba(255,255,255,0.08)",color:hand.ok?"#fff":"rgba(255,255,255,0.4)",display:"flex",alignItems:"center",justifyContent:"center",gap:9,marginBottom:12}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 21V4M5 4h12l-2 4 2 4H5"/></svg>Finish here</button>
+            </>}
             {!touchLocked&&<HoldCancelBtn onCancel={cancelRun}/>}</>}
         {touchLocked&&!isPractice&&<TouchLock title="Screen locked" sub="Taps and swipes are ignored, so rain can't change anything." foot="Unlocks by itself when your run finishes" onUnlock={()=>setTouchLocked(false)}/>}
+        {handAsk!==null&&!isPractice&&<div onClick={()=>setHandAsk(null)} style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"flex-end"}}>
+          <div onClick={e=>e.stopPropagation()} style={{width:"100%",background:"#fff",color:"#1A1A1A",borderRadius:"24px 24px 0 0",padding:"14px 20px calc(28px + env(safe-area-inset-bottom))",textAlign:"center"}}>
+            <div style={{width:36,height:5,borderRadius:3,background:"#DADAD6",margin:"0 auto 16px"}}/>
+            <div style={{fontSize:19,fontWeight:800}}>Save this run?</div>
+            <div style={{fontSize:46,fontWeight:800,margin:"12px 0 2px",fontVariantNumeric:"tabular-nums",letterSpacing:-1}}>{formatTime(handAsk)}</div>
+            <div style={{fontSize:13,color:"#6B6B6B",lineHeight:1.45,maxWidth:290,margin:"0 auto"}}>Timed from when you rode past the finish, not from when you tapped.</div>
+            <button className="tap" onClick={()=>{const f=handRef.current;setHandAsk(null);if(f)f();}} style={{marginTop:18,width:"100%",border:"none",borderRadius:14,padding:15,fontSize:15,fontWeight:800,background:"#16A34A",color:"#fff"}}>Save time</button>
+            <button className="tap" onClick={()=>setHandAsk(null)} style={{marginTop:10,width:"100%",border:"1.5px solid #E2E2DE",background:"#fff",borderRadius:14,padding:13,fontSize:14,fontWeight:700,color:"#1A1A1A"}}>Not yet</button>
+          </div>
+        </div>}
         </div>
       </div>
     );
@@ -8030,7 +8585,7 @@ setStageIndex(0);setSplits([]);setPhase("transfer");setArmed(false);
   if(phase==="done"){
     const finalTotal=isPractice?null:isMashup?mashupTotal:splits.reduce((a,s)=>a+s.time,0);
     const saveRaceResults=async()=>{if(!isMashup&&!isPractice){if(!courseSavedRef.current)await saveCourseRun();try{localStorage.removeItem(progressKey);}catch(e){}onFinish();return;}if(totalStages>1){const{error}=await supabase.from('course_results').insert({course_id:course.id,user_id:user.id,total_time_ms:finalTotal,mode:course.mode});if(error){alert("Couldn't save course result: "+error.message);}else{logEvent(user.id,'course_finish',`finished ${course.name} · ${formatTime(finalTotal)}`,null,{course_id:course.id,total_time_ms:finalTotal,stage_count:totalStages}).then(()=>onActivity&&onActivity());}}try{localStorage.removeItem(progressKey);}catch(e){}onFinish();};
-    if(!isPractice&&!isMashup)return <RaceComplete base={raceBase.current} course={course} splits={splits} courseStages={courseStages} totalStages={totalStages} onSave={saveRaceResults} user={user} liveChallenges={liveChallenges} addedRuns={addedRuns}/>;
+    if(!isPractice&&!isMashup)return <RaceComplete base={raceBase.current} course={course} splits={splits} courseStages={courseStages} totalStages={totalStages} onSave={saveRaceResults} user={user} liveChallenges={liveChallenges} addedRuns={addedRuns} savedCid={courseCid}/>;
     const headerBg=isPractice?"#15803D":isMashup?C.blue:C.orange;
     return(
       <div style={{position:"fixed",inset:0,background:"#fff",zIndex:100,display:"flex",flexDirection:"column"}}>
