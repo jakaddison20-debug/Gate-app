@@ -5288,6 +5288,98 @@ function buildRivals(list,sums,meId){
   }).sort((a,b)=>(b.battles.length-a.battles.length)||(b.last-a.last));
 }
 const rivalFirst=n=>(n||"Rider").split(" ")[0];
+// Rivl Pro is free for everyone until launch. At launch set this to false and Pro comes from the rider's subscription.
+const PRO_FOR_EVERYONE=true;
+function rivalDeep(r){
+  let sw=0,sl=0,close=null,big=null;const st={};
+  r.battles.forEach(({s})=>{
+    sw+=s.meWins;sl+=s.themWins;
+    (s.stages||[]).forEach(x=>{
+      const g=Math.abs(x.me-x.them);
+      if(x.me!==x.them&&(!close||g<close.ms))close={ms:g,name:x.name};
+      if(x.me<x.them&&(!big||x.them-x.me>big.ms))big={ms:x.them-x.me,name:x.name};
+      const o=st[x.id]||(st[x.id]={id:x.id,name:x.name,w:0,l:0,me:Infinity,them:Infinity,n:0});
+      o.n++;if(x.me<x.them)o.w++;else if(x.them<x.me)o.l++;
+      o.me=Math.min(o.me,x.me);o.them=Math.min(o.them,x.them);
+    });
+  });
+  // streak counts back from the most recent battle
+  const who=r.battles[0]?r.battles[0].s.winner:null;let streak=0;
+  if(who&&who!=="draw")for(const b of r.battles){if(b.s.winner===who)streak++;else break;}
+  return{sw,sl,close,big,streak,who,stages:Object.values(st).sort((a,b)=>b.n-a.n||a.name.localeCompare(b.name))};
+}
+function RivalPro({r,onOpenBattle,isPro}){
+  const [diff,setDiff]=useState({});
+  const [asked,setAsked]=useState(false);
+  const d=useMemo(()=>rivalDeep(r),[r]);
+  useEffect(()=>{
+    const ids=d.stages.map(s=>s.id).filter(Boolean);if(!ids.length)return;
+    supabase.from('stages').select('id,difficulty').in('id',ids).then(({data})=>{if(data){const m={};data.forEach(x=>{m[x.id]=x.difficulty;});setDiff(m);}});
+  },[d]);
+  const first=rivalFirst(r.name);
+  const sec=ms=>`${(ms/1000).toFixed(1)}s`;
+  const lab=t=><div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>{t}</div>;
+  const tile=(t,b,sub)=>(
+    <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"11px 12px",minWidth:0}}>
+      <div style={{fontSize:10,fontWeight:600,color:C.muted,letterSpacing:0.6,textTransform:"uppercase"}}>{t}</div>
+      <div style={{fontSize:15,fontWeight:700,color:C.text,marginTop:4}}>{b}</div>
+      <div style={{fontSize:11.5,color:C.muted,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sub}</div>
+    </div>
+  );
+  const crown=<svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M3 18h18l-1.5-9-4.5 4-3-7-3 7-4.5-4z"/></svg>;
+  const streakSub=d.streak>1?`${d.who==="me"?"You've":`${first}'s`} won the last ${d.streak}`:d.who==="draw"?"Last one was a draw":d.who==="me"?"You won the last one":`${first} won the last one`;
+  const deep=(
+    <div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:18}}>
+        {tile("Stages won",`${d.sw} – ${d.sl}`,"Across every battle")}
+        {tile("Streak",d.streak>1?`${d.streak} in a row`:"—",streakSub)}
+        {tile("Closest",d.close?sec(d.close.ms):"—",d.close?d.close.name:"No stage battles yet")}
+        {tile("Biggest win",d.big?sec(d.big.ms):"—",d.big?d.big.name:"Not yet")}
+      </div>
+      {d.stages.length>0&&<>
+        {lab("Your battle stages")}
+        <div style={{border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden",marginBottom:18}}>
+          {d.stages.map((s,i)=>(
+            <div key={s.id||i} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderBottom:i<d.stages.length-1?`1px solid ${C.border}`:"none"}}>
+              <TallDiamond color={(DIFFICULTIES.find(x=>x.val===diff[s.id])||{color:"#C4C4C4"}).color} size={13}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:14,fontWeight:600,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.name}</div>
+                <div style={{fontSize:12,color:C.muted}}>You won {s.w} · {first} won {s.l}</div>
+              </div>
+              <div style={{textAlign:"right"}}><H2hPill d={s.me-s.them}/><div style={{fontSize:10.5,color:"#9A9A9A",marginTop:3}}>best vs best</div></div>
+            </div>
+          ))}
+        </div>
+      </>}
+      {lab("History")}
+      {r.battles.map(({c,s})=>{
+        const won=s.winner==="me",lost=s.winner==="them";
+        return(
+          <button key={c.id} className="tap" onClick={()=>onOpenBattle(c.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:"#fff",border:`1px solid ${C.border}`,borderRadius:12,marginBottom:8,textAlign:"left"}}>
+            <div style={{width:26,height:26,borderRadius:"50%",background:won?"#E2B13C":"#AEB4BE",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{crown}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:14,fontWeight:600,color:C.text}}>{won?"You won":lost?`${first} won`:"Draw"} {s.meWins}–{s.themWins}</div>
+              <div style={{fontSize:12,color:C.muted,marginTop:2}}>{new Date(c.finished_at||c.ends_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</div>
+            </div>
+            <Icon.ChevronRight size={16} color={C.mutedL}/>
+          </button>
+        );
+      })}
+    </div>
+  );
+  if(PRO_FOR_EVERYONE||isPro)return deep;
+  return(
+    <div style={{position:"relative"}}>
+      <div style={{filter:"blur(5px)",opacity:0.55,pointerEvents:"none",userSelect:"none"}}>{deep}</div>
+      <div style={{position:"absolute",left:8,right:8,top:40,background:"#fff",border:`1px solid ${C.border}`,borderRadius:16,padding:16,textAlign:"center",boxShadow:"0 10px 30px rgba(0,0,0,0.12)"}}>
+        <span style={{display:"inline-flex",background:C.blue,color:"#fff",fontSize:10.5,fontWeight:800,letterSpacing:"0.06em",borderRadius:6,padding:"3px 7px"}}>PRO</span>
+        <div style={{fontSize:16,fontWeight:700,color:C.text,marginTop:10}}>See the whole rivalry</div>
+        <div style={{fontSize:13,color:C.muted,lineHeight:1.45,marginTop:6}}>Stages won, streaks, your closest battles, best vs best on every stage and every head to head you've had with {first}.</div>
+        <button className="tap" onClick={()=>setAsked(true)} style={{marginTop:14,width:"100%",background:"rgba(250,250,248,0.95)",border:"1.5px solid #E2E2DE",borderRadius:14,padding:11,fontSize:14,fontWeight:700,color:C.text}}>{asked?"Rivl Pro is coming soon":"Try Pro free for a month"}</button>
+      </div>
+    </div>
+  );
+}
 function RivalHeader({title,sub,onBack}){
   return(
     <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
@@ -5470,7 +5562,7 @@ function H2hScreen({user,onBack,onActivity,units,heightUnit,startId}){
     const r=rivals.find(x=>x.id===view.id);
     if(r){
       const live=(list||[]).find(c=>(c.status==="active"||c.status==="pending")&&(c.challenger_id===r.id||c.opponent_id===r.id));
-      return <RivalRecord r={r} meAvatar={meAvatar} live={live} onBack={()=>setView({name:"rivals"})} onOpenLive={()=>live&&setView({name:"detail",id:live.id,from:r.id})} onChallenge={async()=>{const{error}=await supabase.rpc("create_challenge",{p_opponent:r.id});if(error){alert(error.message);return false;}reload();return true;}}/>;
+      return <RivalRecord r={r} meAvatar={meAvatar} live={live} onBack={()=>setView({name:"rivals"})} onOpenLive={()=>live&&setView({name:"detail",id:live.id,from:r.id})} onChallenge={async()=>{const{error}=await supabase.rpc("create_challenge",{p_opponent:r.id});if(error){alert(error.message);return false;}reload();return true;}}><RivalPro r={r} onOpenBattle={id=>setView({name:"detail",id,from:r.id})}/></RivalRecord>;
     }
   }
 
