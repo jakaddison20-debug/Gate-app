@@ -5266,6 +5266,103 @@ function ChallengeIcon({type,count,bg,size=44}){
   );
 }
 
+// ── Rivals: everyone you've gone head to head with, built from your finished head to heads
+const RIVAL_CACHE="rivl_h2h_sums_v1"; // finished head to heads never change, so their results are kept on the phone
+function readRivalCache(uid){try{const all=JSON.parse(localStorage.getItem(RIVAL_CACHE)||"{}");return all[uid]||{};}catch(e){return {};}}
+function writeRivalCache(uid,m){try{const all=JSON.parse(localStorage.getItem(RIVAL_CACHE)||"{}");all[uid]=m;localStorage.setItem(RIVAL_CACHE,JSON.stringify(all));}catch(e){}}
+function compactSum(s){return{meWins:s.meWins,themWins:s.themWins,gap:s.gap,both:s.both,winner:s.winner,stages:s.stages.filter(x=>x.ready).map(x=>({id:x.stageId,name:x.name,me:x.me.time_ms,them:x.them.time_ms}))};}
+function buildRivals(list,sums,meId){
+  const by={};
+  (list||[]).filter(c=>c.status==="finished"&&sums[c.id]).forEach(c=>{
+    const oid=c.challenger_id===meId?c.opponent_id:c.challenger_id;
+    const r=by[oid]||(by[oid]={id:oid,w:0,l:0,d:0,battles:[]});
+    const s=sums[c.id];
+    if(s.winner==="me")r.w++;else if(s.winner==="them")r.l++;else r.d++;
+    r.battles.push({c,s,at:new Date(c.finished_at||c.ends_at).getTime()});
+  });
+  return Object.values(by).map(r=>{
+    r.battles.sort((a,b)=>b.at-a.at);
+    r.last=r.battles[0].at;r.first=r.battles[r.battles.length-1].at;
+    r.name=r.battles[0].c.other_name||"Rider";r.avatar=r.battles[0].c.other_avatar||null;
+    return r;
+  }).sort((a,b)=>(b.battles.length-a.battles.length)||(b.last-a.last));
+}
+const rivalFirst=n=>(n||"Rider").split(" ")[0];
+function RivalHeader({title,sub,onBack}){
+  return(
+    <div style={{padding:"16px 16px 12px",background:"white",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+      <button className="tap" onClick={onBack} style={{background:"none",border:"none",color:C.blue,fontSize:14,fontWeight:600}}>← Back</button>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:17,fontWeight:700,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{title}</div>
+        {sub&&<div style={{fontSize:12,color:C.muted}}>{sub}</div>}
+      </div>
+    </div>
+  );
+}
+function RivalsList({rivals,onBack,onOpen}){
+  return(
+    <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
+      <RivalHeader title="Rivals" sub="Everyone you've gone head to head with" onBack={onBack}/>
+      <div style={{flex:1,overflowY:"auto",padding:"16px 16px 30px"}}>
+        <div style={{fontSize:11,fontWeight:600,color:C.muted,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>Most battles</div>
+        {rivals.map(r=>{
+          const n=r.battles.length,col=r.w>r.l?C.green:r.l>r.w?C.red:C.muted;
+          return(
+            <button key={r.id} className="tap" onClick={()=>onOpen(r.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,marginBottom:8,textAlign:"left"}}>
+              <Avatar size={40} url={r.avatar}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:14,fontWeight:600,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.name}</div>
+                <div style={{fontSize:12,color:C.muted,marginTop:2}}>{n} head to head{n===1?"":"s"} · last {timeAgo(new Date(r.last).toISOString())}</div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:17,fontWeight:800,color:C.text,fontVariantNumeric:"tabular-nums"}}>{r.w} – {r.l}</div>
+                <div style={{fontSize:11,fontWeight:600,color:col,marginTop:2}}>{r.w>r.l?"You lead":r.l>r.w?`${rivalFirst(r.name)} leads`:"Level"}</div>
+              </div>
+            </button>
+          );
+        })}
+        <div style={{fontSize:12,color:C.muted,textAlign:"center",marginTop:10,lineHeight:1.5}}>Your record counts head to heads won.<br/>Draws show in each rival's record.</div>
+      </div>
+    </div>
+  );
+}
+function RivalRecord({r,meAvatar,live,onBack,onOpenLive,onChallenge,children}){
+  const [sent,setSent]=useState(false);
+  const [busy,setBusy]=useState(false);
+  const n=r.battles.length;
+  const f=new Date(r.first);
+  const since=f.toLocaleDateString('en-GB',f.getFullYear()===new Date().getFullYear()?{month:'long'}:{month:'long',year:'numeric'});
+  const challenge=async()=>{if(busy)return;setBusy(true);const ok=await onChallenge();setBusy(false);if(ok)setSent(true);};
+  const pill={display:"inline-flex",alignItems:"center",gap:6,background:"rgba(250,250,248,0.95)",border:"1.5px solid #E2E2DE",borderRadius:14,padding:"7px 14px",fontSize:14,fontWeight:700,color:C.text};
+  const bolt=<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>;
+  return(
+    <div style={{height:"100%",display:"flex",flexDirection:"column",background:"#fff"}}>
+      <RivalHeader title={`You vs ${r.name}`} sub="Rival record" onBack={onBack}/>
+      <div style={{flex:1,overflowY:"auto",padding:"16px 16px 30px"}}>
+        <div style={{border:`1px solid ${C.border}`,borderRadius:14,padding:"16px 14px 14px",marginBottom:16}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 10px"}}>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,width:70}}><Avatar size={38} url={meAvatar}/><div style={{fontSize:12,fontWeight:700,color:C.text}}>You</div></div>
+            <div style={{display:"flex",alignItems:"center",gap:14}}>
+              <div style={{fontSize:44,fontWeight:800,lineHeight:1,color:C.text}}>{r.w}</div>
+              <div style={{fontSize:24,fontWeight:300,color:"#C4C4C4"}}>–</div>
+              <div style={{fontSize:44,fontWeight:800,lineHeight:1,color:C.text}}>{r.l}</div>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,width:70}}><Avatar size={38} url={r.avatar}/><div style={{fontSize:12,fontWeight:500,color:C.text,maxWidth:70,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{rivalFirst(r.name)}</div></div>
+          </div>
+          <div style={{textAlign:"center",fontSize:11,fontWeight:600,color:C.muted,letterSpacing:0.5,textTransform:"uppercase",marginTop:12}}>Head to heads won</div>
+          <div style={{textAlign:"center",fontSize:12.5,color:C.muted,marginTop:4}}>{n} battle{n===1?"":"s"} since {since}{r.d?` · ${r.d} draw${r.d===1?"":"s"}`:""}</div>
+          <div style={{display:"flex",justifyContent:"center",marginTop:12,paddingTop:12,borderTop:`1px solid ${C.border}`}}>
+            {live&&live.status==="active"?<button className="tap" onClick={onOpenLive} style={pill}>{bolt}Head to head on · Open</button>
+            :live||sent?<div style={{...pill,color:C.muted}}>Challenge sent</div>
+            :<button className="tap" onClick={challenge} disabled={busy} style={pill}>{bolt}{busy?"Sending…":"Challenge again"}</button>}
+          </div>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function H2hScreen({user,onBack,onActivity,units,heightUnit,startId}){
   const [list,setList]=useState(null);
   const [view,setView]=useState(startId?{name:"detail",id:startId}:{name:"home"});
@@ -5299,6 +5396,21 @@ function H2hScreen({user,onBack,onActivity,units,heightUnit,startId}){
     onActivity&&onActivity();
   },[onActivity]);
   useEffect(()=>{reload();supabase.from("profiles").select("avatar_url").eq("id",user.id).single().then(({data})=>{if(data)setMeAvatar(data.avatar_url||null);});},[user.id]);
+
+  // rivals: results of every finished head to head (kept on the phone once fetched)
+  const [rsums,setRsums]=useState(()=>readRivalCache(user.id));
+  useEffect(()=>{
+    if(!list)return;
+    const need=list.filter(c=>c.status==="finished"&&!rsums[c.id]).slice(0,40);
+    if(!need.length)return;
+    let off=false;
+    Promise.all(need.map(c=>supabase.rpc("get_challenge_runs",{p_id:c.id}).then(({data,error})=>(!error&&Array.isArray(data))?[c.id,compactSum(h2hSummarise(data,user.id))]:null,()=>null))).then(res=>{
+      if(off)return;
+      setRsums(prev=>{const m={...prev};res.forEach(x=>{if(x)m[x[0]]=x[1];});writeRivalCache(user.id,m);return m;});
+    });
+    return()=>{off=true;};
+  },[list,user.id]);
+  const rivals=useMemo(()=>buildRivals(list,rsums,user.id),[list,rsums,user.id]);
 
   // lead text for active + finished rows
   useEffect(()=>{
@@ -5352,10 +5464,20 @@ function H2hScreen({user,onBack,onActivity,units,heightUnit,startId}){
     return s.winner==="me"&&s.both>0?<div style={{fontSize:13,fontWeight:700,color:C.green}}>You lead {sc}</div>:s.winner==="them"?<div style={{fontSize:13,fontWeight:700,color:C.red}}>{c.other_name} leads {sc}</div>:<div style={{fontSize:13,fontWeight:700,color:C.muted}}>All square</div>;
   };
 
+  // ── rivals list + rival record
+  if(view.name==="rivals")return <RivalsList rivals={rivals} onBack={()=>setView({name:"home"})} onOpen={id=>setView({name:"rival",id})}/>;
+  if(view.name==="rival"){
+    const r=rivals.find(x=>x.id===view.id);
+    if(r){
+      const live=(list||[]).find(c=>(c.status==="active"||c.status==="pending")&&(c.challenger_id===r.id||c.opponent_id===r.id));
+      return <RivalRecord r={r} meAvatar={meAvatar} live={live} onBack={()=>setView({name:"rivals"})} onOpenLive={()=>live&&setView({name:"detail",id:live.id,from:r.id})} onChallenge={async()=>{const{error}=await supabase.rpc("create_challenge",{p_opponent:r.id});if(error){alert(error.message);return false;}reload();return true;}}/>;
+    }
+  }
+
   // ── detail
   if(view.name==="detail"&&list){
     const c=list.find(x=>x.id===view.id);
-    if(c)return <H2hDetail c={c} user={user} units={units} heightUnit={heightUnit} meAvatar={meAvatar} onBack={()=>setView({name:"home"})} onReload={reload} onActivity={onActivity}/>;
+    if(c)return <H2hDetail c={c} user={user} units={units} heightUnit={heightUnit} meAvatar={meAvatar} onBack={()=>setView(view.from?{name:"rival",id:view.from}:{name:"home"})} onReload={reload} onActivity={onActivity}/>;
   }
 
   // ── pick a mate
@@ -5513,6 +5635,16 @@ function H2hScreen({user,onBack,onActivity,units,heightUnit,startId}){
             </div>
           ):(
             <>
+              {rivals.length>0&&(()=>{const tw=rivals.reduce((a,r)=>a+r.w,0),tl=rivals.reduce((a,r)=>a+r.l,0);return(
+                <button className="tap" onClick={()=>setView({name:"rivals"})} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:14,background:"#fff",border:`1px solid ${C.border}`,borderRadius:16,marginBottom:18,textAlign:"left"}}>
+                  <div style={{display:"flex"}}>{rivals.slice(0,3).map((r,i)=><div key={r.id} style={{marginLeft:i?-10:0,border:"2px solid #fff",borderRadius:"50%",display:"flex"}}><Avatar size={32} url={r.avatar}/></div>)}</div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:14,fontWeight:600,color:C.text}}>Your rivals</div>
+                    <div style={{fontSize:12,color:C.muted,marginTop:2}}>{rivals.length} rider{rivals.length===1?"":"s"} · {tw} won · {tl} lost</div>
+                  </div>
+                  <Icon.ChevronRight size={16} color={C.mutedL}/>
+                </button>
+              );})()}
               {nInv>0&&<>{label("Invites")}
                 {gInv.map(g=>invite(g.id,"group",g.rider_count+g.invited_count,gTitle(g),`${g.rider_count} joined`,()=>respondG(g,true),()=>respondG(g,false),inRide))}
                 {hReq.map(c=>invite(c.id,"h2h",2,`${c.other_name||"Rider"} challenged you`,"24 hours to ride",()=>respond(c,true),()=>respond(c,false),false))}
