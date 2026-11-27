@@ -9429,6 +9429,9 @@ export default function App(){
   const [flyToTrigger,setFlyToTrigger]=useState(null);
   const [zoom,setZoom]=useState(13);
   const [stages,setStages]=useState(SAMPLE_STAGES);
+  const [stagesReady,setStagesReady]=useState(false); // the feed waits for your stages so cards don't flash the old style first
+  useEffect(()=>{if(stages!==SAMPLE_STAGES)setStagesReady(true);},[stages]);
+  useEffect(()=>{const t=setTimeout(()=>setStagesReady(true),4000);return()=>clearTimeout(t);},[]);
   const [courses,setCourses]=useState([]);   const [sheet,setSheet]=useState(null);
   const [editingCourse,setEditingCourse]=useState(null);
   const [showCourseBuilder,setShowCourseBuilder]=useState(false);
@@ -9641,7 +9644,10 @@ useEffect(()=>{if(!user)return;supabase.from('stages').select('*').or(`privacy.e
     const [recentStageTimes,setRecentStageTimes]=useState([]);
     const [streak,setStreak]=useState(null);
     useEffect(()=>{if(!user)return;supabase.rpc('my_weekly_streak',{p_tz:Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'}).then(({data,error})=>{if(error){console.log('streak failed',error.message);return;}const r=Array.isArray(data)?data[0]:data;if(r)setStreak({cur:r.current_streak,best:r.best_streak,rode:r.rode_this_week});});},[user,refreshTick]);
-const [feed,setFeed]=useState([]);
+const [feed,setFeedRaw]=useState([]);
+const [feedLoaded,setFeedLoaded]=useState(false);
+const setFeed=v=>{setFeedLoaded(true);setFeedRaw(v);};
+const feedReady=feedLoaded&&stagesReady;
 useEffect(()=>{if(!user)return;const loadFeed=cols=>supabase.from('app_events').select(cols).in('event_type',FEED_TYPES).order('created_at',{ascending:false}).limit(50);loadFeed('id,event_type,message,created_at,stage_id,context,profiles(display_name,avatar_url)').then(async({data,error})=>{let rows=data;if(error){console.log('feed query failed, retrying without the rider name lookup',error);logEvent(user.id,'feed_error',error.message||String(error),null,{code:error.code});const r=await supabase.from('app_events').select('id,event_type,message,created_at,stage_id,user_id').in('event_type',FEED_TYPES).order('created_at',{ascending:false}).limit(50);rows=r.data;if(r.error)logEvent(user.id,'feed_error_retry',r.error.message||String(r.error),null,{code:r.error.code});}if(rows)setFeed(rows.map(e=>({id:e.id,event_type:e.event_type,message:e.message,stage_id:e.stage_id,userName:e.profiles?.display_name||'Rider',avatarUrl:e.profiles?.avatar_url||null,context:e.context,ago:timeAgo(e.created_at)})));});},[user,refreshTick]);
   const [pushState,setPushState]=useState('hidden');
 useEffect(()=>{
@@ -10027,7 +10033,7 @@ if(showBikeSetup)return(
             </div>
           )}
           <H2hLiveStrip user={user} list={h2hList} onOpen={id=>{setH2hStart(id);setH2hFromFeed(true);setShowH2h(true);}}/>
-          {feed.length===0?<div style={{textAlign:"center",padding:"48px 20px",color:C.muted,fontSize:13}}>No activity yet — set a record, finish a course, or add a stage to get things started.</div>:feed.map(item=><div key={item.id} className="feedItem">{(item.event_type==='course_finish'&&item.context&&Array.isArray(item.context.splits))?<CourseFinishFeedCard item={item} stages={stages} courses={courses} onOpenCourse={openCourse}/>:(item.event_type==='course_created'&&feedCourse(item))?<CourseFeedCard item={item} course={feedCourse(item)} stages={stages} onOpen={openCourse}/>:<FeedCard item={item} stage={stages.find(s=>String(s.id)===String(item.stage_id))} onViewStage={goToStage} units={settings.units} onOpenH2h={id=>{setH2hStart(id);setH2hFromFeed(true);setShowH2h(true);}} h2hIds={h2hList.map(c=>c.id)}/>}</div>)}
+          {!feedReady?<div style={{textAlign:"center",padding:"48px 20px",color:C.muted,fontSize:13}}>Loading…</div>:feed.length===0?<div style={{textAlign:"center",padding:"48px 20px",color:C.muted,fontSize:13}}>No activity yet — set a record, finish a course, or add a stage to get things started.</div>:feed.map(item=><div key={item.id} className="feedItem">{(item.event_type==='course_finish'&&item.context&&Array.isArray(item.context.splits))?<CourseFinishFeedCard item={item} stages={stages} courses={courses} onOpenCourse={openCourse}/>:(item.event_type==='course_created'&&feedCourse(item))?<CourseFeedCard item={item} course={feedCourse(item)} stages={stages} onOpen={openCourse}/>:<FeedCard item={item} stage={stages.find(s=>String(s.id)===String(item.stage_id))} onViewStage={goToStage} units={settings.units} onOpenH2h={id=>{setH2hStart(id);setH2hFromFeed(true);setShowH2h(true);}} h2hIds={h2hList.map(c=>c.id)}/>}</div>)}
         </div>
       )}
 
