@@ -6162,7 +6162,105 @@ function HowItWorksScreen({onClose}){
 }
 
 const GPS_GOOD_M=10,GPS_FAIR_M=25;
+// ── Location: is the phone letting Rivl use GPS? Shared by the map, race screen and setup sheets
+const LOC_KEY="rivl_loc"; // "asked" once we've asked for location, "skipped" if they tapped Not now
+const locStore={state:null,subs:new Set()}; // null = fine (or not known yet), "blocked", "skipped"
+function setLocState(s){if(locStore.state===s)return;locStore.state=s;locStore.subs.forEach(f=>f(s));}
+function useLocState(){const [s,setS]=useState(locStore.state);useEffect(()=>{locStore.subs.add(setS);setS(locStore.state);return()=>{locStore.subs.delete(setS);};},[]);return s;}
+function locAsk(){
+  try{localStorage.setItem(LOC_KEY,"asked");}catch(e){}
+  return new Promise(res=>{
+    if(!navigator.geolocation){res(false);return;}
+    navigator.geolocation.getCurrentPosition(()=>{setLocState(null);res(true);},err=>{setLocState(err&&err.code===1?"blocked":locStore.state==="skipped"?null:locStore.state);res(false);},{enableHighAccuracy:true,timeout:15000,maximumAge:0});
+  });
+}
+const locSheetBg={position:"fixed",inset:0,zIndex:9600,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"flex-end"};
+const locSheet={width:"100%",maxHeight:"92%",overflowY:"auto",background:"#fff",color:C.text,borderRadius:"24px 24px 0 0",padding:"12px 20px calc(26px + env(safe-area-inset-bottom))"};
+const locGrab=<div style={{width:36,height:5,borderRadius:3,background:"#DADAD6",margin:"0 auto 14px"}}/>;
+const locBtn={marginTop:20,width:"100%",border:"none",borderRadius:14,padding:15,fontSize:15,fontWeight:800,background:C.blue,color:"#fff"};
+const locGhost={marginTop:10,width:"100%",border:"1.5px solid #E2E2DE",background:"#fff",borderRadius:14,padding:13,fontSize:14,fontWeight:700,color:C.text};
+// First open: explain why, then let the phone ask
+function LocIntroSheet({onDone}){
+  const [busy,setBusy]=useState(false);
+  const tick=t=><div style={{display:"flex",gap:10,alignItems:"flex-start",fontSize:13.5,lineHeight:1.4}}><span style={{width:22,height:22,borderRadius:"50%",background:"#F0FDF4",color:"#15803D",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,flexShrink:0}}>✓</span><span>{t}</span></div>;
+  return(
+    <div style={locSheetBg}>
+      <div style={locSheet}>
+        {locGrab}
+        <div style={{width:64,height:64,borderRadius:20,background:"#EFF6FF",display:"flex",alignItems:"center",justifyContent:"center",margin:"6px auto 14px"}}><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.6"/></svg></div>
+        <div style={{fontSize:20,fontWeight:800,textAlign:"center"}}>Turn on your location</div>
+        <div style={{fontSize:14,color:C.muted,lineHeight:1.45,textAlign:"center",margin:"8px auto 0",maxWidth:300}}>Rivl uses your phone's GPS to time your runs and show stages near you.</div>
+        <div style={{margin:"18px 0 0",display:"flex",flexDirection:"column",gap:10}}>{tick("Starts and stops the timer at the gates")}{tick("Shows where you are on the map")}{tick("Only used while Rivl is open")}</div>
+        <button className="tap" disabled={busy} onClick={async()=>{setBusy(true);onDone(true);await locAsk();}} style={locBtn}>Allow location</button>
+        <button className="tap" onClick={()=>{try{localStorage.setItem(LOC_KEY,"skipped");}catch(e){}setLocState("skipped");onDone(false);}} style={locGhost}>Not now</button>
+        <div style={{fontSize:12,color:"#9A9A9A",textAlign:"center",marginTop:12}}>Your phone will ask next. Tap <b>Allow</b>.</div>
+      </div>
+    </div>
+  );
+}
+// Location blocked: step by step for their phone
+function LocFixSheet({onClose}){
+  const [os,setOs]=useState(()=>/android/i.test(navigator.userAgent||"")?"and":"ios");
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState("");
+  const path=t=><span style={{display:"inline-block",background:"#F5F5F5",border:"1px solid #E6E6E6",borderRadius:6,padding:"1px 6px",fontSize:12.5,fontWeight:600,marginTop:4}}>{t}</span>;
+  const steps=os==="ios"?[
+    <>Open <b>Settings</b> and go to<br/>{path("Privacy & Security › Location Services")}</>,
+    <>Scroll down, tap <b>Safari Websites</b> and choose <b>While Using the App</b><br/>Make sure <b>Precise Location</b> is on, so your times are accurate</>,
+    <>Come back here and tap <b>Try again</b></>
+  ]:[
+    <>Tap the <b>lock</b> or <b>settings</b> icon left of the web address</>,
+    <>Tap <b>Permissions</b> (or Site settings)<br/>{path("Location › Allow")}</>,
+    <>Check location is on for the phone<br/>{path("Settings › Location › On")}</>,
+    <>Come back here and tap <b>Try again</b></>
+  ];
+  const tab=(k,t)=><button className="tap" onClick={()=>setOs(k)} style={{flex:1,border:"none",borderRadius:9,padding:8,fontSize:13,fontWeight:600,background:os===k?"#fff":"transparent",color:os===k?C.text:C.muted,boxShadow:os===k?"0 1px 3px rgba(0,0,0,0.1)":"none"}}>{t}</button>;
+  const retry=async()=>{setBusy(true);setMsg("");const ok=await locAsk();setBusy(false);if(ok)onClose();else setMsg("Still blocked. Check the steps above, then try again.");};
+  return(
+    <div style={locSheetBg} onClick={onClose}>
+      <div style={locSheet} onClick={e=>e.stopPropagation()}>
+        {locGrab}
+        <div style={{fontSize:20,fontWeight:800,textAlign:"center"}}>Turn location on</div>
+        <div style={{fontSize:14,color:C.muted,lineHeight:1.45,textAlign:"center",margin:"8px auto 0",maxWidth:300}}>Your phone is blocking location for Rivl. It takes about a minute to fix.</div>
+        <div style={{display:"flex",background:"#F2F2F0",borderRadius:12,padding:3,margin:"16px 0 14px"}}>{tab("ios","iPhone")}{tab("and","Android")}</div>
+        <div style={{border:"1px solid #E6E6E6",borderRadius:14,overflow:"hidden"}}>
+          {steps.map((s,i)=>(
+            <div key={i} style={{display:"flex",gap:12,padding:"12px 14px",borderBottom:i<steps.length-1?"1px solid #E6E6E6":"none",fontSize:13.5,lineHeight:1.4}}>
+              <div style={{width:24,height:24,borderRadius:"50%",background:C.blue,color:"#fff",fontSize:12,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{i+1}</div>
+              <div>{s}</div>
+            </div>
+          ))}
+        </div>
+        {msg&&<div style={{fontSize:13,color:C.red,textAlign:"center",marginTop:12}}>{msg}</div>}
+        <button className="tap" disabled={busy} onClick={retry} style={locBtn}>{busy?"Checking…":"Try again"}</button>
+        <button className="tap" onClick={onClose} style={locGhost}>Close</button>
+      </div>
+    </div>
+  );
+}
+// "Location is off" banner (map + race screen). Shows nothing when location is fine.
+function LocOffBanner({style}){
+  const s=useLocState();
+  const [fix,setFix]=useState(false);
+  if(!s)return null;
+  const skipped=s==="skipped";
+  return(
+    <>
+      <div style={{background:"#fff",borderRadius:14,padding:"11px 12px",display:"flex",gap:10,alignItems:"center",boxShadow:"0 4px 18px rgba(0,0,0,0.14)",fontSize:13,lineHeight:1.35,textAlign:"left",...(style||{})}}>
+        <div style={{width:34,height:34,borderRadius:10,background:"#FEF2F2",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-11.5-5.4"/><path d="M5.2 7.5A7 7 0 0 0 5 10c0 5.8 7 12 7 12"/><path d="M3 3l18 18"/></svg></div>
+        <div style={{flex:1,minWidth:0}}><div style={{fontSize:13.5,fontWeight:700,color:C.text}}>Location is off</div><div style={{color:C.muted}}>The map can't find you or time runs</div></div>
+        <button className="tap" onClick={()=>skipped?locAsk():setFix(true)} style={{background:C.blue,color:"#fff",border:"none",borderRadius:10,padding:"8px 12px",fontSize:13,fontWeight:700,flexShrink:0}}>{skipped?"Turn on":"Fix it"}</button>
+      </div>
+      {fix&&<LocFixSheet onClose={()=>setFix(false)}/>}
+    </>
+  );
+}
 function GpsPill({acc}){
+  const ls=useLocState();
+  if(ls)return <LocOffBanner style={{marginBottom:16,maxWidth:340,boxShadow:"none",border:`1px solid ${C.border}`}}/>;
+  return <GpsPillV1 acc={acc}/>;
+}
+function GpsPillV1({acc}){
   if(typeof acc!=="number")return null;
   const lvl=acc<=GPS_GOOD_M?{c:C.green,t:"GPS good"}:acc<=GPS_FAIR_M?{c:"#D97706",t:"GPS settling"}:{c:C.red,t:"GPS weak"};
   return(
@@ -8050,7 +8148,7 @@ function RaceScreen({course,stages,user,onFinish,onActivity,liveChallenges}){
 
   useEffect(()=>{
     if(phase!=="transfer"||armed||!navigator.geolocation)return;
-    const id=navigator.geolocation.watchPosition(pos=>setGpsAcc(pos.coords.accuracy),()=>{},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
+    const id=navigator.geolocation.watchPosition(pos=>{setLocState(null);setGpsAcc(pos.coords.accuracy);},err=>{if(err&&err.code===1)setLocState("blocked");},{enableHighAccuracy:true,maximumAge:0,timeout:10000});
     return()=>navigator.geolocation.clearWatch(id);
   },[phase,armed]);
 
@@ -9540,7 +9638,22 @@ export default function App(){
   const [userPos,setUserPos]=useState(DEFAULT_CENTER);
   const [userHeading,setUserHeading]=useState(null);
 
-  useEffect(()=>{if(!navigator.geolocation)return;let centered=false;const id=navigator.geolocation.watchPosition(pos=>{const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};setUserPos(loc);if(typeof pos.coords.heading==='number'&&!isNaN(pos.coords.heading))setUserHeading(pos.coords.heading);if(!centered){setMapCenter(loc);centered=true;}},err=>console.log(err),{enableHighAccuracy:true,maximumAge:2000,timeout:10000});return()=>navigator.geolocation.clearWatch(id);},[]);
+    // location: new riders see the intro first; after that the map follows you
+  const [locGo,setLocGo]=useState(()=>{try{return localStorage.getItem(LOC_KEY)==="asked";}catch(e){return true;}});
+  const [locIntro,setLocIntro]=useState(false);
+  const locState=useLocState();
+  useEffect(()=>{
+    if(locGo)return;
+    let key=null;try{key=localStorage.getItem(LOC_KEY);}catch(e){}
+    const decide=st=>{
+      if(st==="granted"||st==="denied"){try{localStorage.setItem(LOC_KEY,"asked");}catch(e){}if(st==="denied")setLocState("blocked");setLocGo(true);}
+      else if(key==="skipped")setLocState("skipped");
+      else setLocIntro(true);
+    };
+    try{navigator.permissions.query({name:"geolocation"}).then(p=>decide(p.state),()=>decide("prompt"));}catch(e){decide("prompt");}
+  },[locGo]);
+  useEffect(()=>{if(locGo||locState)return;let k=null;try{k=localStorage.getItem(LOC_KEY);}catch(e){}if(k==="asked")setLocGo(true);},[locState]); // tapped Turn on from the banner
+  useEffect(()=>{if(!navigator.geolocation||!locGo)return;let centered=false;const id=navigator.geolocation.watchPosition(pos=>{setLocState(null);const loc={lat:pos.coords.latitude,lng:pos.coords.longitude};setUserPos(loc);if(typeof pos.coords.heading==='number'&&!isNaN(pos.coords.heading))setUserHeading(pos.coords.heading);if(!centered){setMapCenter(loc);centered=true;}},err=>{console.log(err);if(err&&err.code===1)setLocState("blocked");},{enableHighAccuracy:true,maximumAge:2000,timeout:10000});return()=>navigator.geolocation.clearWatch(id);},[locGo,locState]);
 
 useEffect(()=>{window.__gateBusy=!!activeRace;return()=>{window.__gateBusy=false;};},[activeRace]);
 useEffect(()=>{
@@ -10038,12 +10151,14 @@ if(showBikeSetup)return(
       )}
 
       {/* MAP */}
+      {locIntro&&<LocIntroSheet onDone={go=>{setLocIntro(false);if(go)setLocGo(true);}}/>}
       {tab==="map"&&(
         <div style={{position:"absolute",inset:0}}>
           <div style={{position:"absolute",inset:0,cursor:"grab",touchAction:"none"}} onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
               <MapboxStyleMap center={mapCenter} zoom={zoom} flyToTrigger={flyToTrigger} width={mapSize.w} height={mapSize.h} stages={stages} courses={courses} userPos={userPos} userHeading={userHeading} diffFilter={diffFilter} onStagePress={s=>pickingGroup?handlePickStage(s):setSelectedStage(s)}/>
           </div>
                        <div style={{position:"absolute",top:"calc(env(safe-area-inset-top, 0px) + 12px)",left:16,right:16,zIndex:10}}>
+            <LocOffBanner style={{marginBottom:10}}/>
             {pickingGroup?(
               <div style={{background:C.blue,borderRadius:12,padding:"12px 14px",boxShadow:"0 2px 10px rgba(0,0,0,0.15)",display:"flex",alignItems:"center",gap:10}}>
                 <div style={{flex:1}}>
