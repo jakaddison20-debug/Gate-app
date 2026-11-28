@@ -6215,7 +6215,7 @@ function LocFixSheet({onClose}){
     <>Come back here and tap <b>Try again</b></>
   ];
   const tab=(k,t)=><button className="tap" onClick={()=>setOs(k)} style={{flex:1,border:"none",borderRadius:9,padding:8,fontSize:13,fontWeight:600,background:os===k?"#fff":"transparent",color:os===k?C.text:C.muted,boxShadow:os===k?"0 1px 3px rgba(0,0,0,0.1)":"none"}}>{t}</button>;
-  const retry=async()=>{setBusy(true);setMsg("");const ok=await locAsk();setBusy(false);if(ok)onClose();else setMsg("Still blocked. Check the steps above, then try again.");};
+  const retry=async()=>{setBusy(true);setMsg("");const ok=await locAsk();setBusy(false);if(ok)onClose();else setMsg("Still blocked. Check the steps above. If you've changed it, close Rivl fully and open it again.");};
   return(
     <div style={locSheetBg} onClick={onClose}>
       <div style={locSheet} onClick={e=>e.stopPropagation()}>
